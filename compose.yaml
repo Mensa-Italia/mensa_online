@@ -1,0 +1,29 @@
+version: "3.1"
+
+services:
+  mensa_app_server:
+    image: ghcr.io/mensa-italia/mensa_app_database:main
+    networks:
+      - traefik
+    volumes:
+      - mensa_app_server_storage:/pb/main/pb_data/
+    environment:
+      - PASSWORD_UUID=${PASSWORD_UUID}
+      - PASSWORD_SALT=${PASSWORD_SALT}
+    deploy:
+      replicas: 1
+      labels:
+        - "traefik.enable=true"
+        - "traefik.docker.network=traefik"
+        - "traefik.http.routers.${HOSTNAME}-front.rule=Host(`${DOMAIN}`)"
+        - "traefik.http.routers.${HOSTNAME}-front.entrypoints=websecure"
+        - "traefik.http.routers.${HOSTNAME}-front.service=${HOSTNAME}-front-svc"
+        - "traefik.http.routers.${HOSTNAME}-front.tls.certresolver=secure"
+        - "traefik.http.services.${HOSTNAME}-front-svc.loadbalancer.server.port=8080"
+
+networks:
+  traefik:
+    external: true
+
+volumes:
+  mensa_app_server_storage:
