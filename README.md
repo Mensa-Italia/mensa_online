@@ -25,6 +25,7 @@ The following ENV variables are required to run the database:
 |------|----------------------------|
 |PASSWORD_UUID| The uuid used into uuid v5 |
 |PASSWORD_SALT| The salt used to hash the password |
+|PASSWORD_SALT| The salt used to hash the password |
 
 
 
