@@ -7,6 +7,7 @@ import (
 
 type config struct {
 	PasswordUUID          string `env:"PASSWORD_UUID" envDefault:"474a6581-7b01-4752-ab42-4f6539efabfe"`
+	DocsUUID              string `env:"DOCS_UUID" envDefault:"f55bb831-1cbc-4af0-a243-74c974c41c36"`
 	PasswordSalt          string `env:"PASSWORD_SALT" envDefault:"PROVA"`
 	EmailProviderPassword string `env:"EMAIL_PROVIDER_PASSWORD" envDefault:""`
 	FirebaseAuthKey       string `env:"FIREBASE_AUTH_KEY" envDefault:""`
@@ -39,4 +40,8 @@ func GetFireBaseAuthKey() string {
 
 func GetStripeSecret() string {
 	return cfg.StripeSecret
+}
+
+func GetDocsUUID() string {
+	return cfg.DocsUUID
 }
