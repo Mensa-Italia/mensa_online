@@ -17,7 +17,7 @@ import (
 var app = pocketbase.New()
 
 func main() {
-	importers.GetFullMailList()
+	go importers.GetFullMailList()
 	app.OnBootstrap().BindFunc(func(e *core.BootstrapEvent) error {
 		scheduler := cron.New()
 
@@ -44,6 +44,7 @@ func main() {
 
 	app.OnServe().BindFunc(func(e *core.ServeEvent) error {
 		e.Router.POST("/api/cs/auth-with-area", AuthWithAreaHandler)
+		e.Router.POST("/api/cs/download-docs", DownloadDocumentsHandler)
 		e.Router.GET("/api/cs/sign-payload/{addon}", SignPayloadHandler)
 		e.Router.GET("/api/cs/keys/{addon}", GetAddonPublicKeysHandler)
 		e.Router.POST("/api/cs/verify-signature/{addon}", VerifySignatureHandler)
