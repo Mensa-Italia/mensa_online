@@ -4,7 +4,10 @@ import (
 	"errors"
 	"github.com/PuerkitoBio/goquery"
 	"github.com/go-resty/resty/v2"
+	"github.com/pocketbase/pocketbase/tools/filesystem"
+	"io"
 	"net/http/cookiejar"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -181,4 +184,99 @@ func checkIsTestMaker(doc *goquery.Document) bool {
 		})
 	})
 	return res
+}
+
+func (api *ScraperApi) GetDocumentByPage(page int) ([]map[string]any, error) {
+	resp, err := api.client.R().
+		Get("https://www.cloud32.it/Associazioni/utenti/documenti/docs?page=" + strconv.Itoa(page))
+
+	if err != nil {
+
+		return nil, err
+	}
+
+	doc, err := goquery.NewDocumentFromReader(resp.RawBody())
+	if err != nil {
+		return nil, err
+	}
+	var documents []map[string]any
+	doc.Find("table").Each(func(i int, s *goquery.Selection) {
+		s.Find("tr").Each(func(i int, s *goquery.Selection) {
+			if i == 0 {
+				return
+			}
+			var document = make(map[string]any)
+			s.Find("td").Each(func(i int, s *goquery.Selection) {
+				switch i {
+				case 1:
+					document["description"] = s.Text()
+				case 4:
+					document["image"] = "https://www.cloud32.it" + s.Find("img").AttrOr("src", "")
+					document["link"] = "https://www.cloud32.it" + s.Find("a").AttrOr("href", "")
+				case 6:
+					document["dimension"] = s.Text()
+				}
+			})
+			documents = append(documents, document)
+		})
+	})
+	return documents, nil
+}
+
+func (api *ScraperApi) GetAllDocuments(fn func(map[string]any)) ([]map[string]any, error) {
+	var documents []map[string]any
+	for i := 1; ; i++ {
+		pageDocuments, err := api.GetDocumentByPage(i)
+		if err != nil {
+			return nil, err
+		}
+		if len(pageDocuments) == 0 {
+			break
+		}
+		documents = append(documents, pageDocuments...)
+	}
+	documents = invertArray(documents)
+	for i, document := range documents {
+		var err error
+		documents[i]["file"], err = api.DownloadFile(document["link"].(string))
+		if err != nil {
+			return nil, err
+		}
+		fn(document)
+	}
+	return documents, nil
+}
+
+func invertArray(arr []map[string]any) []map[string]any {
+	for i, j := 0, len(arr)-1; i < j; i, j = i+1, j-1 {
+		arr[i], arr[j] = arr[j], arr[i]
+	}
+	return arr
+}
+
+func (api *ScraperApi) DownloadFile(url string) (*filesystem.File, error) {
+	resp, err := api.client.R().Head(url)
+	if err != nil {
+		return nil, err
+	}
+	fileName := resp.Header().Get("content-disposition")
+	if fileName == "" {
+		fileName = "filedownloaded"
+	} else {
+		fileName = strings.Split(fileName, "filename=")[1]
+		fileName = strings.ReplaceAll(fileName, `"`, "")
+	}
+	resp, err = api.client.R().Get(url)
+	if err != nil {
+		return nil, err
+	}
+	all, err := io.ReadAll(resp.RawBody())
+	if err != nil {
+		return nil, err
+	}
+	file, err := filesystem.NewFileFromBytes(all, fileName)
+	if err != nil {
+		return nil, err
+	}
+	return file, nil
 }
