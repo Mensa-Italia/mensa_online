@@ -208,6 +208,13 @@ func (api *ScraperApi) GetDocumentByPage(page int) ([]map[string]any, error) {
 			var document = make(map[string]any)
 			s.Find("td").Each(func(i int, s *goquery.Selection) {
 				switch i {
+				case 0:
+					if s.Text() == "" {
+					} else {
+						loc, _ := time.LoadLocation("Europe/Rome")
+						date, _ := time.ParseInLocation("02/01/2006", s.Text(), loc)
+						document["date"] = date
+					}
 				case 1:
 					document["description"] = s.Text()
 				case 4:
@@ -234,6 +241,7 @@ func (api *ScraperApi) GetAllDocuments(fn func(map[string]any)) ([]map[string]an
 			break
 		}
 		documents = append(documents, pageDocuments...)
+		break
 	}
 	documents = invertArray(documents)
 	for i, document := range documents {
