@@ -208,7 +208,7 @@ func UpdateDocuments(documentsInside []*core.Record) func(document map[string]an
 		}
 		newDocument := core.NewRecord(collection)
 		newDocument.Set("name", document["description"].(string))
-		newDocument.Set("category", document["image"].(string))
+		newDocument.Set("category", []string{getIconBasedOnCategory(document["image"].(string))})
 		newDocument.Set("uid", uid)
 		if document["date"] != nil {
 			newDocument.Set("published", document["date"].(time.Time))
@@ -216,5 +216,30 @@ func UpdateDocuments(documentsInside []*core.Record) func(document map[string]an
 		newDocument.Set("file", document["file"].(*filesystem.File))
 		newDocument.Set("uploaded_by", "5366")
 		_ = app.Save(newDocument)
+	}
+}
+
+func getIconBasedOnCategory(category string) string {
+	switch category {
+	case "https://www.cloud32.it/Associazioni2/Documenti/170734/TipoDoc/004.jpg":
+		return "bilanci"
+	case "https://www.cloud32.it/Associazioni2/Documenti/170734/TipoDoc/011.jpg":
+		return "elezioni"
+	case "https://www.cloud32.it/Associazioni2/Documenti/170734/TipoDoc/006.jpg":
+		return "eventi_progetti"
+	case "https://www.cloud32.it/Associazioni2/Documenti/170734/TipoDoc/007.jpg":
+		return "materiale_comunicazione"
+	case "https://www.cloud32.it/Associazioni2/Documenti/170734/TipoDoc/002.jpg":
+		return "modulistica_contratti"
+	case "https://www.cloud32.it/Associazioni2/Documenti/170734/TipoDoc/005.jpg":
+		return "news_pubblicazioni"
+	case "https://www.cloud32.it/Associazioni2/Documenti/170734/TipoDoc/001.jpg":
+		return "normativa_interna"
+	case "https://www.cloud32.it/Associazioni2/Documenti/170734/TipoDoc/003.jpg":
+		return "verbali_delibere"
+	case "https://www.cloud32.it/Associazioni2/Documenti/170734/TipoDoc/012.jpg":
+		return "tesoreria_contabilit1"
+	default:
+		return "document"
 	}
 }
