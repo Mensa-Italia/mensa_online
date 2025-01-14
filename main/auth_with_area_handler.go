@@ -238,7 +238,7 @@ func getIconBasedOnCategory(category string) string {
 	case "https://www.cloud32.it/Associazioni2/Documenti/170734/TipoDoc/003.jpg":
 		return "verbali_delibere"
 	case "https://www.cloud32.it/Associazioni2/Documenti/170734/TipoDoc/012.jpg":
-		return "tesoreria_contabilit1"
+		return "tesoreria_contabilita"
 	default:
 		return "document"
 	}
