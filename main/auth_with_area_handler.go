@@ -16,6 +16,7 @@ import (
 	"mensadb/tools/env"
 	"slices"
 	"strings"
+	"time"
 )
 
 func DownloadDocumentsHandler(e *core.RequestEvent) error {
@@ -209,6 +210,7 @@ func UpdateDocuments(documentsInside []*core.Record) func(document map[string]an
 		newDocument.Set("name", document["description"].(string))
 		newDocument.Set("category", document["image"].(string))
 		newDocument.Set("uid", uid)
+		newDocument.Set("published", document["date"].(time.Time))
 		newDocument.Set("file", document["file"].(*filesystem.File))
 		newDocument.Set("uploaded_by", "5366")
 		_ = app.Save(newDocument)
