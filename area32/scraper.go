@@ -210,6 +210,7 @@ func (api *ScraperApi) GetDocumentByPage(page int) ([]map[string]any, error) {
 				switch i {
 				case 0:
 					if s.Text() == "" {
+						document["date"] = nil
 					} else {
 						loc, _ := time.LoadLocation("Europe/Rome")
 						date, _ := time.ParseInLocation("02/01/2006", s.Text(), loc)
