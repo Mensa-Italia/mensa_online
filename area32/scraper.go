@@ -242,6 +242,7 @@ func (api *ScraperApi) GetAllDocuments(fn func(map[string]any)) ([]map[string]an
 			break
 		}
 		documents = append(documents, pageDocuments...)
+		break
 	}
 	documents = invertArray(documents)
 	for i, document := range documents {

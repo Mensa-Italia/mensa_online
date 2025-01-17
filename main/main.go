@@ -1,6 +1,9 @@
 package main
 
 import (
+	"encoding/json"
+	"github.com/go-resty/resty/v2"
+	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
@@ -9,6 +12,7 @@ import (
 	"log"
 	"mensadb/importers"
 	_ "mensadb/migrations"
+	"mensadb/tools/env"
 	"mensadb/tools/signatures"
 	"os"
 	"time"
@@ -112,5 +116,34 @@ func VerifySignatureHandler(e *core.RequestEvent) error {
 		return e.String(200, "OK")
 	}
 	return apis.NewBadRequestError("Invalid signature", nil)
+
+}
+
+func updateDocDescription() {
+	collection, _ := app.FindCollectionByNameOrId("documents")
+	documentsInside, _ := app.FindAllRecords(collection.Id, dbx.NewExp(`file_data = ''`))
+	for _, doc := range documentsInside {
+		key := doc.BaseFilesPath() + "/" + doc.GetString("file")
+		fsys, _ := app.NewFilesystem()
+		defer fsys.Close()
+		blob, _ := fsys.GetFile(key)
+		defer blob.Close()
+
+		post, err := resty.New().R().SetFileReader("file", doc.GetString("file"), blob).SetFormData(map[string]string{
+			"token": env.GetDocsUUID(),
+		}).Post("http://127.0.0.1:8000/convert")
+		if err != nil {
+			log.Println(err)
+			continue
+		}
+		var mapPost map[string]interface{}
+		_ = json.Unmarshal(post.Body(), &mapPost)
+		doc.Set("file_data", mapPost["result"])
+		err = app.Save(doc)
+		if err != nil {
+			log.Println(err)
+			continue
+		}
+	}
 
 }
