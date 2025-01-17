@@ -20,7 +20,7 @@ func webhookStripe(e *core.RequestEvent) error {
 
 	event, err := webhook.ConstructEvent(payload, e.Request.Header.Get("Stripe-Signature"), env.GetStripeWebhookSignature())
 	if err != nil {
-		return e.JSON(400, e.Request.Header)
+		return e.JSON(400, err.Error())
 	}
 
 	if strings.Contains(string(event.Type), "payment_intent") {
