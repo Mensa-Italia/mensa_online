@@ -5,7 +5,7 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/stripe/stripe-go/v81/webhook"
 	"io"
-	"os"
+	"mensadb/tools/env"
 	"strings"
 )
 
@@ -15,7 +15,7 @@ func webhookStripe(e *core.RequestEvent) error {
 		return e.String(400, "Invalid payload")
 	}
 
-	event, err := webhook.ConstructEvent(payload, e.Request.Header.Get("Stripe-Signature"), os.Getenv("STRIPE_WEBHOOK_SECRET"))
+	event, err := webhook.ConstructEvent(payload, e.Request.Header.Get("Stripe-Signature"), env.GetStripeWebhookSignature())
 	if err != nil {
 		return e.String(400, "Invalid signature")
 	}
