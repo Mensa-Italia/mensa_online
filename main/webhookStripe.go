@@ -1,22 +1,23 @@
 package main
 
 import (
-	"encoding/json"
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
-	"github.com/stripe/stripe-go/v81"
+	"github.com/stripe/stripe-go/v81/webhook"
 	"io"
+	"mensadb/tools/env"
 	"strings"
 )
 
 func webhookStripe(e *core.RequestEvent) error {
-	event := stripe.Event{}
 	payload, err := io.ReadAll(e.Request.Body)
 	if err != nil {
 		return e.String(400, "Invalid payload")
 	}
-	if err := json.Unmarshal(payload, &event); err != nil {
-		return e.String(400, "Invalid payload format")
+
+	event, err := webhook.ConstructEvent(payload, e.Request.Header.Get("Stripe-Signature"), env.GetStripeWebhookSignature())
+	if err != nil {
+		return e.String(400, "Invalid signature")
 	}
 
 	if strings.Contains(string(event.Type), "payment_intent") {
