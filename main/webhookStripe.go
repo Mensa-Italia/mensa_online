@@ -6,16 +6,19 @@ import (
 	"github.com/stripe/stripe-go/v81/webhook"
 	"io"
 	"mensadb/tools/env"
+	"net/http"
 	"strings"
 )
 
 func webhookStripe(e *core.RequestEvent) error {
-	payload, err := io.ReadAll(e.Request.Body)
+	const MaxBodyBytes = int64(65536)
+	payloadToRead := http.MaxBytesReader(e.Response, e.Request.Body, MaxBodyBytes)
+	payload, err := io.ReadAll(payloadToRead)
 	if err != nil {
 		return e.String(400, "Invalid payload")
 	}
 
-	event, err := webhook.ConstructEvent(payload, e.Request.Header.Get("stripe-signature"), env.GetStripeWebhookSignature())
+	event, err := webhook.ConstructEvent(payload, e.Request.Header.Get("Stripe-Signature"), env.GetStripeWebhookSignature())
 	if err != nil {
 		return e.JSON(400, e.Request.Header)
 	}
