@@ -15,9 +15,9 @@ func webhookStripe(e *core.RequestEvent) error {
 		return e.String(400, "Invalid payload")
 	}
 
-	event, err := webhook.ConstructEvent(payload, e.Request.Header.Get("Stripe-Signature"), env.GetStripeWebhookSignature())
+	event, err := webhook.ConstructEvent(payload, e.Request.Header.Get("stripe-signature"), env.GetStripeWebhookSignature())
 	if err != nil {
-		return e.String(400, "Invalid signature")
+		return e.JSON(400, e.Request.Header)
 	}
 
 	if strings.Contains(string(event.Type), "payment_intent") {
