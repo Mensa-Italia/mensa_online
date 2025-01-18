@@ -41,8 +41,9 @@ func DownloadDocumentsHandler(e *core.RequestEvent) error {
 			documentsInside, err := app.FindAllRecords(id)
 			_, _ = scraperApi.GetAllDocuments(UpdateDocuments(documentsInside))
 		}(scraperApi)
+		return e.JSON(200, areaUser)
 	}
-	return e.JSON(200, areaUser)
+	return e.String(200, "OK")
 }
 
 // Funzione principale per gestire l'autenticazione di un utente con Area32
