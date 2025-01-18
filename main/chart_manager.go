@@ -21,9 +21,9 @@ func LogUserChart(e *core.RecordEvent) error {
 	key1 := fmt.Sprintf("%s_%s", e.Record.Id, nowData.Format("2006-01-02"))
 	// key2 composed by user id and year-week
 	year, week := nowData.ISOWeek()
-	key2 := fmt.Sprintf("%s_%d-%d", e.Record.Id, year, week)
+	key2 := fmt.Sprintf("%s_%d-%d-week", e.Record.Id, year, week)
 	// key3 composed by user id and year-month
-	key3 := fmt.Sprintf("%s_%d-%d", e.Record.Id, nowData.Year(), nowData.Month())
+	key3 := fmt.Sprintf("%s_%d-%d-month", e.Record.Id, nowData.Year(), nowData.Month())
 	go addToChart(key1, nowData.Format("2006-01-02"), "users_login")
 	go addToChart(key2, fmt.Sprintf("%d-%d", year, week), "users_login_week")
 	go addToChart(key3, fmt.Sprintf("%d-%d", nowData.Year(), nowData.Month()), "users_login_month")
