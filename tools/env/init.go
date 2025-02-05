@@ -13,6 +13,8 @@ type config struct {
 	FirebaseAuthKey        string `env:"FIREBASE_AUTH_KEY" envDefault:""`
 	StripeSecret           string `env:"STRIPE_SECRET" envDefault:""`
 	StripeWebhookSignature string `env:"STRIPE_WEBHOOK_SIGNATURE" envDefault:""`
+	Area32InternalEmail    string `env:"AREA32_INTERNAL_EMAIL" envDefault:""`
+	Area32InternalPassword string `env:"AREA32_INTERNAL_PASSWORD" envDefault:""`
 }
 
 var cfg = config{}
@@ -49,4 +51,12 @@ func GetDocsUUID() string {
 
 func GetStripeWebhookSignature() string {
 	return cfg.StripeWebhookSignature
+}
+
+func GetArea32InternalEmail() string {
+	return cfg.Area32InternalEmail
+}
+
+func GetArea32InternalPassword() string {
+	return cfg.Area32InternalPassword
 }
