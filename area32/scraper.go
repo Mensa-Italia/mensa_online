@@ -4,9 +4,12 @@ import (
 	"errors"
 	"github.com/PuerkitoBio/goquery"
 	"github.com/go-resty/resty/v2"
+	"github.com/google/uuid"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
 	"io"
+	"mensadb/tools/env"
 	"net/http/cookiejar"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -231,7 +234,7 @@ func (api *ScraperApi) GetDocumentByPage(page int) ([]map[string]any, error) {
 	return documents, nil
 }
 
-func (api *ScraperApi) GetAllDocuments(fn func(map[string]any)) ([]map[string]any, error) {
+func (api *ScraperApi) GetAllDocuments(excludedUID []string) ([]map[string]any, error) {
 	var documents []map[string]any
 	for i := 1; ; i++ {
 		pageDocuments, err := api.GetDocumentByPage(i)
@@ -245,15 +248,19 @@ func (api *ScraperApi) GetAllDocuments(fn func(map[string]any)) ([]map[string]an
 		break
 	}
 	documents = invertArray(documents)
+	resultDocuments := []map[string]any{}
 	for i, document := range documents {
 		var err error
-		documents[i]["file"], err = api.DownloadFile(document["link"].(string))
-		if err != nil {
-			return nil, err
+		uid := uuid.NewMD5(uuid.MustParse(env.GetDocsUUID()), []byte(document["link"].(string))).String()
+		if !slices.Contains(excludedUID, uid) {
+			documents[i]["file"], err = api.DownloadFile(document["link"].(string))
+			if err != nil {
+				return nil, err
+			}
+			resultDocuments = append(resultDocuments, documents[i])
 		}
-		fn(document)
 	}
-	return documents, nil
+	return resultDocuments, nil
 }
 
 func invertArray(arr []map[string]any) []map[string]any {
