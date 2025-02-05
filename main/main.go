@@ -33,6 +33,9 @@ func main() {
 				updateStateManagers()
 			}()
 		})
+		scheduler.MustAdd("updateDocumentsData", "0 9,15,18,21 * * *", func() {
+			go UpdateDocumentsFromArea32()
+		})
 
 		scheduler.Start()
 
@@ -48,7 +51,6 @@ func main() {
 
 	app.OnServe().BindFunc(func(e *core.ServeEvent) error {
 		e.Router.POST("/api/cs/auth-with-area", AuthWithAreaHandler)
-		e.Router.POST("/api/cs/download-docs", DownloadDocumentsHandler)
 		e.Router.POST("/api/cs/send-update-notify", SendUpdateNotifyHandler)
 		e.Router.GET("/api/cs/sign-payload/{addon}", SignPayloadHandler)
 		e.Router.GET("/api/cs/keys/{addon}", GetAddonPublicKeysHandler)
