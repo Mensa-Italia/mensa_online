@@ -33,7 +33,7 @@ func main() {
 				updateStateManagers()
 			}()
 		})
-		scheduler.MustAdd("updateDocumentsData", "0 9,15,18,21 * * *", func() {
+		scheduler.MustAdd("updateDocumentsData", "0 8,14,17,20 * * *", func() {
 			go UpdateDocumentsFromArea32()
 		})
 
