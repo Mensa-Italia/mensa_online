@@ -42,7 +42,7 @@ func UpdateDocumentsFromArea32() {
 
 	if len(newDocuments) > 1 {
 		go notifyAllUsers("Nuovi documenti disponibili!", fmt.Sprintf("Sono stati aggiunti %d nuovi documenti", len(newDocuments)))
-	} else {
+	} else if len(newDocuments) == 1 {
 		go notifyAllUsers("Nuovo documento disponibile!", fmt.Sprintf("E' stato aggiunto un nuovo documento"))
 	}
 
