@@ -42,6 +42,9 @@ func UpdateDocumentsFromArea32() {
 
 	go notifyAllUsers("Nuovi documenti disponibili!", fmt.Sprintf("Sono stati aggiunti %d nuovi documenti", len(newDocuments)))
 
+	app.Logger().Info(
+		fmt.Sprintf("[CRON] Downloaded %d new documents from Area32", len(newDocuments)),
+	)
 }
 
 func UpdateDocuments(document map[string]any) {
