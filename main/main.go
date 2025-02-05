@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/go-resty/resty/v2"
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase"
@@ -31,13 +32,18 @@ func main() {
 			go func() {
 				importers.GetFullMailList()
 				updateStateManagers()
+				app.Logger().Info(
+					fmt.Sprintf("[CRON] Updated the powers of all the users based on the segretari list"),
+				)
 			}()
 		})
-		scheduler.MustAdd("updateDocumentsData", "0 9,15,18,21 * * *", func() {
+		scheduler.MustAdd("updateDocumentsData", "0 8,11,14,17,20 * * *", func() {
 			go UpdateDocumentsFromArea32()
 		})
-
 		scheduler.Start()
+		app.Logger().Info(
+			"[CRON] Scheduled all crons jobs",
+		)
 
 		if err := e.Next(); err != nil {
 			return err
