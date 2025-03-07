@@ -16,6 +16,7 @@ import (
 	"mensadb/tools/env"
 	"mensadb/tools/signatures"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -73,6 +74,7 @@ func main() {
 		e.Router.POST("/api/payment/webhook", webhookStripe)
 		e.Router.GET("/api/payment/receipt/{id}", retrieveReceiptHandler)
 		e.Router.GET("/api/payment/{id}", getPaymentIntentHandler)
+		e.Router.POST("/api/telegram/check", checkTelegram)
 		e.Router.POST("/api/payment/boutique", createBoutiquePaymentHandler)
 		e.Router.GET("/static/{path...}", apis.Static(os.DirFS("./pb_public"), false))
 
@@ -155,4 +157,20 @@ func updateDocDescription() {
 		}
 	}
 
+}
+
+func checkTelegram(e *core.RequestEvent) error {
+	userId := e.Request.FormValue("member_id")
+	userEmail := e.Request.FormValue("email")
+
+	user, err := app.FindRecordById("users", userId)
+	if err != nil {
+		return apis.NewBadRequestError("Invalid", err)
+	}
+
+	if strings.ToLower(user.GetString("email")) != strings.ToLower(userEmail) {
+		return apis.NewBadRequestError("Invalid", nil)
+	}
+
+	return e.String(200, "OK")
 }
