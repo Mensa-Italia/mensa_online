@@ -160,6 +160,10 @@ func updateDocDescription() {
 }
 
 func checkTelegram(e *core.RequestEvent) error {
+	authKey := e.Request.Header.Get("Authorization")
+	if !CheckKey(authKey, "CHECK_USER_EXISTENCE") {
+		return e.String(401, "Unauthorized")
+	}
 	userId := e.Request.FormValue("member_id")
 	userEmail := e.Request.FormValue("email")
 
