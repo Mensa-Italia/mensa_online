@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
 	"io"
+	"mensadb/tools/aipower"
 	"mensadb/tools/env"
 	"net/http/cookiejar"
 	"slices"
@@ -250,10 +251,14 @@ func (api *ScraperApi) GetAllDocuments(excludedUID []string) ([]map[string]any, 
 	documents = invertArray(documents)
 	resultDocuments := []map[string]any{}
 	for i, document := range documents {
-		var err error
 		uid := uuid.NewMD5(uuid.MustParse(env.GetDocsUUID()), []byte(document["link"].(string))).String()
 		if !slices.Contains(excludedUID, uid) {
-			documents[i]["file"], err = api.DownloadFile(document["link"].(string))
+			fs, err := api.DownloadFile(document["link"].(string))
+			if err != nil {
+				return nil, err
+			}
+			documents[i]["file"] = fs
+			documents[i]["resume"] = aipower.AskResume(fs)
 			if err != nil {
 				return nil, err
 			}

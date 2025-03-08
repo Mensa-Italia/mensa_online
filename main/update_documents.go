@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-func UpdateDocumentsFromArea32() {
+func UpdateDocumentsFromArea32(forced ...bool) {
 	// Recupera le credenziali dal form della richiesta HTTP
 	email := env.GetArea32InternalEmail()
 	password := env.GetArea32InternalPassword()
@@ -40,10 +40,12 @@ func UpdateDocumentsFromArea32() {
 		go UpdateDocuments(document)
 	}
 
-	if len(newDocuments) > 1 {
-		go notifyAllUsers("Nuovi documenti disponibili!", fmt.Sprintf("Sono stati aggiunti %d nuovi documenti", len(newDocuments)))
-	} else if len(newDocuments) == 1 {
-		go notifyAllUsers("Nuovo documento disponibile!", fmt.Sprintf("E' stato aggiunto un nuovo documento"))
+	if len(forced) > 0 && !forced[0] {
+		if len(newDocuments) > 1 {
+			go notifyAllUsers("Nuovi documenti disponibili!", fmt.Sprintf("Sono stati aggiunti %d nuovi documenti", len(newDocuments)))
+		} else if len(newDocuments) == 1 {
+			go notifyAllUsers("Nuovo documento disponibile!", newDocuments[0]["description"].(string))
+		}
 	}
 
 	app.Logger().Info(
@@ -65,6 +67,7 @@ func UpdateDocuments(document map[string]any) {
 		newDocument.Set("published", document["date"].(time.Time))
 	}
 	newDocument.Set("file", document["file"].(*filesystem.File))
+	newDocument.Set("file_data", document["resume"].(string))
 	newDocument.Set("uploaded_by", "5366")
 	_ = app.Save(newDocument)
 }
