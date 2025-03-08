@@ -141,11 +141,12 @@ func forceUpdateDocumentHandler(e *core.RequestEvent) error {
 		if document.GetString("file_data") != "" {
 			continue
 		}
-
 		// construct the full file key by concatenating the record storage path with the specific filename
 		fileKey := document.BaseFilesPath() + "/" + document.GetString("file")
+		log.Println(fileKey)
 		fsToUser, err := filesystem.NewFileFromURL(context.Background(), fileKey)
 		if err != nil {
+			log.Println(err)
 			continue
 		}
 		// read the file data
