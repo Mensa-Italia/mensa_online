@@ -132,36 +132,35 @@ func VerifySignatureHandler(e *core.RequestEvent) error {
 }
 
 func forceUpdateDocumentHandler(e *core.RequestEvent) error {
-	collDocs, err := app.FindCollectionByNameOrId("documents")
-	record, err := app.FindRecordsByFilter(
-		collDocs,
-		"file_data = ''",
-		"-created",
-		0,
-		0,
-	)
-	if err != nil {
-		return err
-	}
+	go func() {
+		collDocs, _ := app.FindCollectionByNameOrId("documents")
+		record, _ := app.FindRecordsByFilter(
+			collDocs,
+			"file_data = ''",
+			"-created",
+			0,
+			0,
+		)
 
-	for _, document := range record {
-		if document.GetString("file_data") != "" {
-			continue
+		for _, document := range record {
+			if document.GetString("file_data") != "" {
+				continue
+			}
+			// construct the full file key by concatenating the record storage path with the specific filename
+			fileKey := "https://svc.mensa.it/api/files/" + document.BaseFilesPath() + "/" + document.GetString("file")
+			log.Println(fileKey)
+			fsToUser, err := filesystem.NewFileFromURL(context.Background(), fileKey)
+			if err != nil {
+				log.Println(err)
+				continue
+			}
+			// read the file data
+			resume := aipower.AskResume(fsToUser)
+			document.Set("file_data", resume)
+			_ = app.Save(document)
+			time.Sleep(5 * time.Second)
 		}
-		// construct the full file key by concatenating the record storage path with the specific filename
-		fileKey := "https://svc.mensa.it/api/files/" + document.BaseFilesPath() + "/" + document.GetString("file")
-		log.Println(fileKey)
-		fsToUser, err := filesystem.NewFileFromURL(context.Background(), fileKey)
-		if err != nil {
-			log.Println(err)
-			continue
-		}
-		// read the file data
-		resume := aipower.AskResume(fsToUser)
-		document.Set("file_data", resume)
-		_ = app.Save(document)
-		break
-	}
+	}()
 	return e.String(200, "OK")
 }
 
