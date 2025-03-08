@@ -65,12 +65,11 @@ func AskResume(fileSystemData *filesystem.File) string {
 			Role: "user",
 			Parts: []genai.Part{
 				genai.FileData{URI: fileURIs[0]},
-				genai.Text("Dobbiamo creare il riassunto e il titolo per la pagina di un'app che precede il documento caricato dal consiglio. Mi serve che mi crei un riassunto del documento che abbia al suo interno tutti gli elementi per comprendere il documento senza leggerlo in italiano."),
 			},
 		},
 	}
 
-	resp, err := session.SendMessage(ctx, genai.Text("Dobbiamo creare il riassunto e il titolo per la pagina di un'app che precede il documento caricato dal consiglio. Mi serve che mi crei un riassunto del documento che abbia al suo interno tutti gli elementi per comprendere il documento senza leggerlo in italiano."))
+	resp, err := session.SendMessage(ctx, genai.Text(env.GetGeminiResumePrompt()))
 	if err != nil {
 		return ""
 	}
