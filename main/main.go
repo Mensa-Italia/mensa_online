@@ -132,7 +132,14 @@ func VerifySignatureHandler(e *core.RequestEvent) error {
 }
 
 func forceUpdateDocumentHandler(e *core.RequestEvent) error {
-	record, err := app.FindAllRecords("documents")
+	collDocs, err := app.FindCollectionByNameOrId("documents")
+	record, err := app.FindRecordsByFilter(
+		collDocs,
+		"file_data = ''",
+		"-created",
+		0,
+		0,
+	)
 	if err != nil {
 		return err
 	}
