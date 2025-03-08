@@ -1,7 +1,11 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"github.com/google/uuid"
 	"github.com/pocketbase/dbx"
+	"github.com/pocketbase/pocketbase/core"
 	"strings"
 )
 
@@ -28,4 +32,15 @@ func CheckKey(key, requiredPerm string) bool {
 		}
 	}
 	return false
+}
+
+func OnKeyCreated(e *core.RecordEvent) error {
+	uuidUnique := uuid.New().String()
+	e.Record.Set("key", "sk_"+Sha256Hash(uuidUnique))
+	return e.Next()
+}
+
+func Sha256Hash(input string) string {
+	hash := sha256.Sum256([]byte(input))
+	return hex.EncodeToString(hash[:])
 }
