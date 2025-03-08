@@ -29,7 +29,7 @@ func EventsNotifyUsersAsync(e *core.RecordEvent) error {
 func EventsNotifyUsers(e *core.RecordEvent) error {
 	// Controllo se l'evento è nazionale
 	if e.Record.Get("is_national") == true {
-		return notifyAllUsers("Nuovo evento NAZIONALE!", "C'è un nuovo evento nazionale disponibile!")
+		return notifyAllUsers("Nuovo evento NAZIONALE!", e.Record.GetString("name"))
 	}
 
 	// Recupera la posizione dell'evento
@@ -54,7 +54,7 @@ func EventsNotifyUsers(e *core.RecordEvent) error {
 	}
 
 	// Invia la notifica
-	err = sendNotification(tokens, "Nuovo evento in "+positionOfEvent.GetString("state")+"!", "C'è un nuovo evento disponibile!")
+	err = sendNotification(tokens, "Nuovo evento in "+positionOfEvent.GetString("state")+"!", e.Record.GetString("name"))
 	if err != nil {
 		log.Printf("Errore durante l'invio della notifica: %v", err)
 	}
