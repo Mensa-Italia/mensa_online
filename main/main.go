@@ -1,15 +1,18 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/cron"
+	"github.com/pocketbase/pocketbase/tools/filesystem"
 	"github.com/tidwall/gjson"
 	"log"
 	"mensadb/importers"
 	_ "mensadb/migrations"
+	"mensadb/tools/aipower"
 	"mensadb/tools/signatures"
 	"os"
 	"strings"
@@ -129,7 +132,28 @@ func VerifySignatureHandler(e *core.RequestEvent) error {
 }
 
 func forceUpdateDocumentHandler(e *core.RequestEvent) error {
-	go UpdateDocumentsFromArea32(true)
+	record, err := app.FindAllRecords("documents")
+	if err != nil {
+		return err
+	}
+
+	for _, document := range record {
+		if document.GetString("file_data") != "" {
+			continue
+		}
+
+		// construct the full file key by concatenating the record storage path with the specific filename
+		fileKey := document.BaseFilesPath() + "/" + document.GetString("file")
+		fsToUser, err := filesystem.NewFileFromURL(context.Background(), fileKey)
+		if err != nil {
+			continue
+		}
+		// read the file data
+		resume := aipower.AskResume(fsToUser)
+		document.Set("file_data", resume)
+		_ = app.Save(document)
+		break
+	}
 	return e.String(200, "OK")
 }
 
