@@ -29,7 +29,12 @@ func EventsNotifyUsersAsync(e *core.RecordEvent) error {
 func EventsNotifyUsers(e *core.RecordEvent) error {
 	// Controllo se l'evento è nazionale
 	if e.Record.Get("is_national") == true {
-		return notifyAllUsers("Nuovo evento NAZIONALE!", e.Record.GetString("name"))
+		return notifyAllUsers("Nuovo evento NAZIONALE!", e.Record.GetString("name"),
+			map[string]string{
+				"type":     "event",
+				"event_id": e.Record.GetString("id"),
+			},
+		)
 	}
 
 	// Recupera la posizione dell'evento
@@ -54,7 +59,14 @@ func EventsNotifyUsers(e *core.RecordEvent) error {
 	}
 
 	// Invia la notifica
-	err = sendNotification(tokens, "Nuovo evento in "+positionOfEvent.GetString("state")+"!", e.Record.GetString("name"))
+	err = sendNotification(
+		tokens,
+		"Nuovo evento in "+positionOfEvent.GetString("state")+"!", e.Record.GetString("name"),
+		map[string]string{
+			"type":     "event",
+			"event_id": e.Record.GetString("id"),
+		},
+	)
 	if err != nil {
 		log.Printf("Errore durante l'invio della notifica: %v", err)
 	}
@@ -62,7 +74,7 @@ func EventsNotifyUsers(e *core.RecordEvent) error {
 	return e.Next()
 }
 
-func notifyAllUsers(title, body string) error {
+func notifyAllUsers(title, body string, data ...map[string]string) error {
 	// Recupera tutti i token dei dispositivi
 	tokens, err := fetchAllDeviceTokens()
 	if err != nil {
@@ -70,7 +82,7 @@ func notifyAllUsers(title, body string) error {
 	}
 
 	// Invia la notifica
-	return sendNotification(tokens, title, body)
+	return sendNotification(tokens, title, body, data...)
 }
 
 func fetchUsersByState(state string) ([]string, error) {
@@ -124,7 +136,7 @@ func fetchAllDeviceTokens() ([]string, error) {
 	return tokens, nil
 }
 
-func sendNotification(tokens []string, title, body string) error {
+func sendNotification(tokens []string, title, body string, data ...map[string]string) error {
 	decodedKey, err := getDecodedFireBaseKey()
 	if err != nil {
 		return err
@@ -151,6 +163,7 @@ func sendNotification(tokens []string, title, body string) error {
 		response, err := fcmClient.SendEachForMulticast(context.Background(), &messaging.MulticastMessage{
 			Notification: &messaging.Notification{Title: title, Body: body},
 			Tokens:       tokens[i:end],
+			Data:         data[0],
 		})
 		if err != nil {
 			log.Printf("Errore nell'invio delle notifiche batch: %v", err)
@@ -174,12 +187,4 @@ func getDecodedFireBaseKey() ([]byte, error) {
 	}
 
 	return decodedKey, nil
-}
-
-func ShowEventsTest(e *core.RequestEvent) error {
-	users, _ := fetchUsersByState("Piemonte")
-	devices, _ := fetchDeviceTokens(users)
-	sendNotification(devices, "Test", "Test")
-
-	return e.JSON(200, devices)
 }
