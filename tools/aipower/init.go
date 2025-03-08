@@ -2,6 +2,7 @@ package aipower
 
 import (
 	"context"
+	"encoding/json"
 	"github.com/google/generative-ai-go/genai"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
 	"google.golang.org/api/option"
@@ -20,6 +21,7 @@ func uploadToGemini(ctx context.Context, client *genai.Client, fileSystemData *f
 	fileData, err := client.UploadFile(ctx, "", open, &options)
 	if err != nil {
 		log.Fatalf("Error uploading file: %v", err)
+		return ""
 	}
 	log.Printf("Uploaded file %s as: %s", fileData.DisplayName, fileData.URI)
 	return fileData.URI
@@ -70,16 +72,20 @@ func AskResume(fileSystemData *filesystem.File) string {
 
 	resp, err := session.SendMessage(ctx, genai.Text("Dobbiamo creare il riassunto e il titolo per la pagina di un'app che precede il documento caricato dal consiglio. Mi serve che mi crei un riassunto del documento che abbia al suo interno tutti gli elementi per comprendere il documento senza leggerlo in italiano."))
 	if err != nil {
-		log.Fatalf("Error sending message: %v", err)
+		return ""
 	}
 
 	if len(resp.Candidates) > 0 {
 		for _, part := range resp.Candidates[0].Content.Parts {
 			if textPart, ok := part.(genai.Text); ok {
-				return string(textPart)
+				var jsonData map[string]string
+				err = json.Unmarshal([]byte(textPart), &jsonData)
+				if err == nil {
+					return jsonData["resume_text"]
+				}
 			}
 		}
 	}
 
-	return "Errore nella generazione del riassunto"
+	return ""
 }
