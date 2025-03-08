@@ -15,6 +15,7 @@ type config struct {
 	StripeWebhookSignature string `env:"STRIPE_WEBHOOK_SIGNATURE" envDefault:""`
 	Area32InternalEmail    string `env:"AREA32_INTERNAL_EMAIL" envDefault:""`
 	Area32InternalPassword string `env:"AREA32_INTERNAL_PASSWORD" envDefault:""`
+	GeminiKey              string `env:"GEMINI_KEY" envDefault:""`
 }
 
 var cfg = config{}
@@ -59,4 +60,8 @@ func GetArea32InternalEmail() string {
 
 func GetArea32InternalPassword() string {
 	return cfg.Area32InternalPassword
+}
+
+func GetGeminiKey() string {
+	return cfg.GeminiKey
 }
