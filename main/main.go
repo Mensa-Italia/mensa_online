@@ -142,7 +142,7 @@ func forceUpdateDocumentHandler(e *core.RequestEvent) error {
 			continue
 		}
 		// construct the full file key by concatenating the record storage path with the specific filename
-		fileKey := document.BaseFilesPath() + "/" + document.GetString("file")
+		fileKey := "https://svc.mensa.it/api/files/" + document.BaseFilesPath() + "/" + document.GetString("file")
 		log.Println(fileKey)
 		fsToUser, err := filesystem.NewFileFromURL(context.Background(), fileKey)
 		if err != nil {
