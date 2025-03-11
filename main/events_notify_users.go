@@ -58,6 +58,19 @@ func EventsNotifyUsers(e *core.RecordEvent) error {
 		return e.Next()
 	}
 
+	for _, user := range users {
+		collection, _ := app.FindCollectionByNameOrId("user_notifications")
+		newNotify := core.NewRecord(collection)
+		newNotify.Set("user", user)
+		newNotify.Set("title", "Nuovo evento in "+positionOfEvent.GetString("state")+"!")
+		newNotify.Set("description", e.Record.GetString("name"))
+		newNotify.Set("data", map[string]string{
+			"type":     "event",
+			"event_id": e.Record.GetString("id"),
+		},
+		)
+	}
+
 	// Invia la notifica
 	err = sendNotification(
 		tokens,
@@ -79,6 +92,17 @@ func notifyAllUsers(title, body string, data ...map[string]string) error {
 	tokens, err := fetchAllDeviceTokens()
 	if err != nil {
 		return err
+	}
+
+	users, _ := fetchAllUsers()
+
+	for _, user := range users {
+		collection, _ := app.FindCollectionByNameOrId("user_notifications")
+		newNotify := core.NewRecord(collection)
+		newNotify.Set("user", user)
+		newNotify.Set("title", title)
+		newNotify.Set("description", body)
+		newNotify.Set("data", data[0])
 	}
 
 	// Invia la notifica
@@ -134,6 +158,19 @@ func fetchAllDeviceTokens() ([]string, error) {
 		tokens = append(tokens, record.GetString("firebase_id"))
 	}
 	return tokens, nil
+}
+
+func fetchAllUsers() ([]string, error) {
+	records, err := app.FindAllRecords("users")
+	if err != nil {
+		return nil, err
+	}
+
+	var users []string
+	for _, record := range records {
+		users = append(users, record.GetString("id"))
+	}
+	return users, nil
 }
 
 func sendNotification(tokens []string, title, body string, data ...map[string]string) error {
