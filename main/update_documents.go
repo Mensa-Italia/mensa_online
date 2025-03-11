@@ -36,15 +36,23 @@ func UpdateDocumentsFromArea32(forced ...bool) {
 		documentsUids = append(documentsUids, document.GetString("uid"))
 	}
 	newDocuments, _ := scraperApi.GetAllDocuments(documentsUids)
+	lastUploadedDocumentId := ""
 	for _, document := range newDocuments {
-		go UpdateDocuments(document)
+		lastUploadedDocumentId = UpdateDocuments(document)
 	}
 
 	if len(forced) > 0 && !forced[0] {
 		if len(newDocuments) > 1 {
-			go notifyAllUsers("Nuovi documenti disponibili!", fmt.Sprintf("Sono stati aggiunti %d nuovi documenti", len(newDocuments)))
+			go notifyAllUsers("Nuovi documenti disponibili!", fmt.Sprintf("Sono stati aggiunti %d nuovi documenti", len(newDocuments)),
+				map[string]string{
+					"type": "multiple_documents",
+				})
 		} else if len(newDocuments) == 1 {
-			go notifyAllUsers("Nuovo documento disponibile!", newDocuments[0]["description"].(string))
+			go notifyAllUsers("Nuovo documento disponibile!", newDocuments[0]["description"].(string),
+				map[string]string{
+					"type":        "single_document",
+					"document_id": lastUploadedDocumentId,
+				})
 		}
 	}
 
@@ -53,10 +61,10 @@ func UpdateDocumentsFromArea32(forced ...bool) {
 	)
 }
 
-func UpdateDocuments(document map[string]any) {
+func UpdateDocuments(document map[string]any) string {
 	collection, err := app.FindCollectionByNameOrId("documents")
 	if err != nil {
-		return
+		return ""
 	}
 	uid := uuid.NewMD5(uuid.MustParse(env.GetDocsUUID()), []byte(document["link"].(string))).String()
 	newDocument := core.NewRecord(collection)
@@ -70,6 +78,7 @@ func UpdateDocuments(document map[string]any) {
 	newDocument.Set("file_data", document["resume"].(string))
 	newDocument.Set("uploaded_by", "5366")
 	_ = app.Save(newDocument)
+	return newDocument.Id
 }
 
 func getIconBasedOnCategory(category string) string {
