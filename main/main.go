@@ -189,11 +189,11 @@ func checkTelegram(e *core.RequestEvent) error {
 	newNotify := core.NewRecord(collection)
 	newNotify.Set("user", user.Id)
 	newNotify.Set("title", "Richiesta di conferma dell'account")
-	newNotify.Set("description", "Mensa Telegram Bot ti ha inviato un messaggio per confermare il tuo account")
+	newNotify.Set("description", "Mensa Telegram Bot richiede la conferma del tuo account")
 	newNotify.Set("data", string(marshal))
 	_ = app.Save(newNotify)
 
-	sendNotification(tokens, "Richiesta di conferma dell'account", "Mensa Telegram Bot ti ha inviato un messaggio per confermare il tuo account",
+	sendNotification(tokens, "Richiesta di conferma dell'account", "Mensa Telegram Bot richiede la conferma del tuo account",
 		map[string]string{
 			"type":     "account_confirmation",
 			"keyAppId": keyAppId,
