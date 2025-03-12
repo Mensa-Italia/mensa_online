@@ -156,13 +156,15 @@ func forceUpdateDocumentHandler(e *core.RequestEvent) error {
 			}
 			// read the file data
 			resume := aipower.AskResume(fsToUser)
-			collectionElaborated, _ := app.FindCollectionByNameOrId("documents_elaborated")
-			recordElaborated := core.NewRecord(collectionElaborated)
-			recordElaborated.Set("document", document.Id)
-			recordElaborated.Set("ia_resume", resume)
-			_ = app.Save(recordElaborated)
-			document.Set("elaborated", recordElaborated.Id)
-			_ = app.Save(document)
+			if resume != "" {
+				collectionElaborated, _ := app.FindCollectionByNameOrId("documents_elaborated")
+				recordElaborated := core.NewRecord(collectionElaborated)
+				recordElaborated.Set("document", document.Id)
+				recordElaborated.Set("ia_resume", resume)
+				_ = app.Save(recordElaborated)
+				document.Set("elaborated", recordElaborated.Id)
+				_ = app.Save(document)
+			}
 			time.Sleep(5 * time.Second)
 		}
 	}()
