@@ -134,6 +134,17 @@ func forceNotification(e *core.RequestEvent) error {
 	if err != nil {
 		return err
 	}
+
+	collection, _ := app.FindCollectionByNameOrId("user_notifications")
+	newNotify := core.NewRecord(collection)
+	newNotify.Set("user", user)
+	newNotify.Set("title", "Nuovo documento disponibile!")
+	newNotify.Set("description", "Delibera CDG 2025.2 Consiglio Vs Gabriel Garofalo")
+	newNotify.Set("data", map[string]string{
+		"type":        "single_document",
+		"document_id": "5jsyp5i9cu9837v",
+	},
+	)
 	sendNotification(tokens, "Nuovo documento disponibile!", "Delibera CDG 2025.2 Consiglio Vs Gabriel Garofalo",
 		map[string]string{
 			"type":        "single_document",
