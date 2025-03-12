@@ -161,6 +161,7 @@ func checkTelegram(e *core.RequestEvent) error {
 	if !CheckKey(authKey, "CHECK_USER_EXISTENCE") {
 		return e.String(401, "Unauthorized")
 	}
+	keyAppId, _ := GetKeyAppId(authKey)
 	userId := e.Request.FormValue("member_id")
 	userEmail := e.Request.FormValue("email")
 	callmeURL := e.Request.FormValue("callme_url")
@@ -180,8 +181,9 @@ func checkTelegram(e *core.RequestEvent) error {
 	}
 
 	marshal, _ := json.Marshal(map[string]string{
-		"type": "account_confirmation",
-		"url":  callmeURL,
+		"type":     "account_confirmation",
+		"keyAppId": keyAppId,
+		"url":      callmeURL,
 	})
 	collection, _ := app.FindCollectionByNameOrId("user_notifications")
 	newNotify := core.NewRecord(collection)
@@ -193,8 +195,9 @@ func checkTelegram(e *core.RequestEvent) error {
 
 	sendNotification(tokens, "Richiesta di conferma dell'account", "Mensa Telegram Bot ti ha inviato un messaggio per confermare il tuo account",
 		map[string]string{
-			"type": "account_confirmation",
-			"url":  callmeURL,
+			"type":     "account_confirmation",
+			"keyAppId": keyAppId,
+			"url":      callmeURL,
 		})
 
 	return e.String(200, "OK")
