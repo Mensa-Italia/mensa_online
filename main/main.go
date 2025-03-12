@@ -142,7 +142,7 @@ func forceNotification(e *core.RequestEvent) error {
 	})
 	collection, _ := app.FindCollectionByNameOrId("user_notifications")
 	newNotify := core.NewRecord(collection)
-	newNotify.Set("user", user)
+	newNotify.Set("user", user.Id)
 	newNotify.Set("title", "Nuovo documento disponibile!")
 	newNotify.Set("description", "Delibera CDG 2025.2 Consiglio Vs Gabriel Garofalo")
 	newNotify.Set("data", string(marshal))
