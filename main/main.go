@@ -163,6 +163,7 @@ func checkTelegram(e *core.RequestEvent) error {
 	}
 	userId := e.Request.FormValue("member_id")
 	userEmail := e.Request.FormValue("email")
+	callmeURL := e.Request.FormValue("callme_url")
 
 	user, err := app.FindRecordById("users", userId)
 	if err != nil {
@@ -172,6 +173,29 @@ func checkTelegram(e *core.RequestEvent) error {
 	if strings.ToLower(user.GetString("email")) != strings.ToLower(userEmail) {
 		return apis.NewBadRequestError("Invalid", nil)
 	}
+
+	tokens, err := fetchDeviceTokens([]string{user.Id})
+	if err != nil {
+		return err
+	}
+
+	marshal, _ := json.Marshal(map[string]string{
+		"type": "account_confirmation",
+		"url":  callmeURL,
+	})
+	collection, _ := app.FindCollectionByNameOrId("user_notifications")
+	newNotify := core.NewRecord(collection)
+	newNotify.Set("user", user.Id)
+	newNotify.Set("title", "Richiesta di conferma dell'account")
+	newNotify.Set("description", "Mensa Telegram Bot ti ha inviato un messaggio per confermare il tuo account")
+	newNotify.Set("data", string(marshal))
+	_ = app.Save(newNotify)
+
+	sendNotification(tokens, "Richiesta di conferma dell'account", "Mensa Telegram Bot ti ha inviato un messaggio per confermare il tuo account",
+		map[string]string{
+			"type": "account_confirmation",
+			"url":  callmeURL,
+		})
 
 	return e.String(200, "OK")
 }
