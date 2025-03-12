@@ -1,18 +1,15 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/cron"
-	"github.com/pocketbase/pocketbase/tools/filesystem"
 	"github.com/tidwall/gjson"
 	"log"
 	"mensadb/importers"
 	_ "mensadb/migrations"
-	"mensadb/tools/aipower"
 	"mensadb/tools/signatures"
 	"os"
 	"strings"
