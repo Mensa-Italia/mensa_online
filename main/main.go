@@ -62,7 +62,7 @@ func main() {
 		e.Router.GET("/api/cs/keys/{addon}", GetAddonPublicKeysHandler)
 		e.Router.POST("/api/cs/verify-signature/{addon}", VerifySignatureHandler)
 		e.Router.GET("/api/cs/force-update-addons", ForceUpdateAddonsHandler)
-		e.Router.GET("/api/cs/force-document", forceUpdateDocumentHandler)
+		e.Router.GET("/api/cs/force-notification", forceNotification)
 		e.Router.GET("/api/cs/force-update-state-managers", ForceUpdateStateManagersHandler)
 		e.Router.GET("/ical/{hash}", RetrieveICAL)
 		e.Router.GET("/api/position/state", GetStateHandler)
@@ -131,43 +131,17 @@ func VerifySignatureHandler(e *core.RequestEvent) error {
 
 }
 
-func forceUpdateDocumentHandler(e *core.RequestEvent) error {
-	go func() {
-		collDocs, _ := app.FindCollectionByNameOrId("documents")
-		record, _ := app.FindRecordsByFilter(
-			collDocs,
-			"elaborated = ''",
-			"-created",
-			0,
-			0,
-		)
-
-		for _, document := range record {
-			if document.GetString("elaborated") != "" {
-				continue
-			}
-			// construct the full file key by concatenating the record storage path with the specific filename
-			fileKey := "https://svc.mensa.it/api/files/" + document.BaseFilesPath() + "/" + document.GetString("file")
-			log.Println(fileKey)
-			fsToUser, err := filesystem.NewFileFromURL(context.Background(), fileKey)
-			if err != nil {
-				log.Println(err)
-				continue
-			}
-			// read the file data
-			resume := aipower.AskResume(fsToUser)
-			if resume != "" {
-				collectionElaborated, _ := app.FindCollectionByNameOrId("documents_elaborated")
-				recordElaborated := core.NewRecord(collectionElaborated)
-				recordElaborated.Set("document", document.Id)
-				recordElaborated.Set("ia_resume", resume)
-				_ = app.Save(recordElaborated)
-				document.Set("elaborated", recordElaborated.Id)
-				_ = app.Save(document)
-			}
-			time.Sleep(5 * time.Second)
-		}
-	}()
+func forceNotification(e *core.RequestEvent) error {
+	user, _ := app.FindRecordById("users", "5366")
+	tokens, err := fetchDeviceTokens([]string{user.Id})
+	if err != nil {
+		return err
+	}
+	sendNotification(tokens, "Nuovo documento disponibile!", "Delibera CDG 2025.2 Consiglio Vs Gabriel Garofalo",
+		map[string]string{
+			"type":        "single_document",
+			"document_id": "5jsyp5i9cu9837v",
+		})
 	return e.String(200, "OK")
 }
 
