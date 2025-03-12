@@ -69,6 +69,7 @@ func EventsNotifyUsers(e *core.RecordEvent) error {
 			"event_id": e.Record.GetString("id"),
 		},
 		)
+		app.Save(newNotify)
 	}
 
 	// Invia la notifica
@@ -103,6 +104,7 @@ func notifyAllUsers(title, body string, data ...map[string]string) error {
 		newNotify.Set("title", title)
 		newNotify.Set("description", body)
 		newNotify.Set("data", data[0])
+		app.Save(newNotify)
 	}
 
 	// Invia la notifica
