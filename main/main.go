@@ -145,6 +145,7 @@ func forceNotification(e *core.RequestEvent) error {
 		"document_id": "5jsyp5i9cu9837v",
 	},
 	)
+	_ = app.Save(newNotify)
 	sendNotification(tokens, "Nuovo documento disponibile!", "[REDACTED]",
 		map[string]string{
 			"type":        "single_document",
