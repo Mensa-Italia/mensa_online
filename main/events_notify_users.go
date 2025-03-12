@@ -58,17 +58,18 @@ func EventsNotifyUsers(e *core.RecordEvent) error {
 		return e.Next()
 	}
 
+	marshal, _ := json.Marshal(map[string]string{
+		"type":     "event",
+		"event_id": e.Record.GetString("id"),
+	})
+
 	for _, user := range users {
 		collection, _ := app.FindCollectionByNameOrId("user_notifications")
 		newNotify := core.NewRecord(collection)
 		newNotify.Set("user", user)
 		newNotify.Set("title", "Nuovo evento in "+positionOfEvent.GetString("state")+"!")
 		newNotify.Set("description", e.Record.GetString("name"))
-		newNotify.Set("data", map[string]string{
-			"type":     "event",
-			"event_id": e.Record.GetString("id"),
-		},
-		)
+		newNotify.Set("data", string(marshal))
 		app.Save(newNotify)
 	}
 
@@ -98,12 +99,14 @@ func notifyAllUsers(title, body string, data ...map[string]string) error {
 	users, _ := fetchAllUsers()
 
 	for _, user := range users {
+		marshal, _ := json.Marshal(data[0])
+
 		collection, _ := app.FindCollectionByNameOrId("user_notifications")
 		newNotify := core.NewRecord(collection)
 		newNotify.Set("user", user)
 		newNotify.Set("title", title)
 		newNotify.Set("description", body)
-		newNotify.Set("data", data[0])
+		newNotify.Set("data", string(marshal))
 		app.Save(newNotify)
 	}
 

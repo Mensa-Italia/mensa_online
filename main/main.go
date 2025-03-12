@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/apis"
@@ -135,17 +136,18 @@ func forceNotification(e *core.RequestEvent) error {
 		return err
 	}
 
+	marshal, _ := json.Marshal(map[string]string{
+		"type":        "single_document",
+		"document_id": "5jsyp5i9cu9837v",
+	})
 	collection, _ := app.FindCollectionByNameOrId("user_notifications")
 	newNotify := core.NewRecord(collection)
 	newNotify.Set("user", user)
 	newNotify.Set("title", "Nuovo documento disponibile!")
 	newNotify.Set("description", "[REDACTED]")
-	newNotify.Set("data", map[string]string{
-		"type":        "single_document",
-		"document_id": "5jsyp5i9cu9837v",
-	},
-	)
+	newNotify.Set("data", string(marshal))
 	_ = app.Save(newNotify)
+
 	sendNotification(tokens, "Nuovo documento disponibile!", "[REDACTED]",
 		map[string]string{
 			"type":        "single_document",
