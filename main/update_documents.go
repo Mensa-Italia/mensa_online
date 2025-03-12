@@ -75,8 +75,16 @@ func UpdateDocuments(document map[string]any) string {
 		newDocument.Set("published", document["date"].(time.Time))
 	}
 	newDocument.Set("file", document["file"].(*filesystem.File))
-	newDocument.Set("file_data", document["resume"].(string))
 	newDocument.Set("uploaded_by", "5366")
+	_ = app.Save(newDocument)
+
+	collectionElaborated, _ := app.FindCollectionByNameOrId("documents_elaborated")
+	recordElaborated := core.NewRecord(collectionElaborated)
+	recordElaborated.Set("document", newDocument.Id)
+	recordElaborated.Set("ia_resume", document["resume"].(string))
+	_ = app.Save(recordElaborated)
+
+	newDocument.Set("elaborated", recordElaborated.Id)
 	_ = app.Save(newDocument)
 	return newDocument.Id
 }
