@@ -136,7 +136,7 @@ func forceUpdateDocumentHandler(e *core.RequestEvent) error {
 		collDocs, _ := app.FindCollectionByNameOrId("documents")
 		record, _ := app.FindRecordsByFilter(
 			collDocs,
-			"file_data = ''",
+			"elaborated = ''",
 			"-created",
 			0,
 			0,
