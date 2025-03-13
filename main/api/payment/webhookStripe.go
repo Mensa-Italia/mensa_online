@@ -1,4 +1,4 @@
-package main
+package payment
 
 import (
 	"github.com/pocketbase/dbx"
@@ -25,7 +25,7 @@ func webhookStripe(e *core.RequestEvent) error {
 
 	if strings.Contains(string(event.Type), "payment_intent") {
 		paymentIntent := event.Data.Object
-		records, err := app.FindAllRecords("payments", dbx.NewExp("stripe_code = {:id}", dbx.Params{"id": paymentIntent["id"]}))
+		records, err := e.App.FindAllRecords("payments", dbx.NewExp("stripe_code = {:id}", dbx.Params{"id": paymentIntent["id"]}))
 		if err != nil {
 			return err
 		}
@@ -34,7 +34,7 @@ func webhookStripe(e *core.RequestEvent) error {
 		}
 		record := records[0]
 		record.Set("status", paymentIntent["status"])
-		err = app.Save(record)
+		err = e.App.Save(record)
 		if err != nil {
 			return e.String(500, "Error saving payment")
 		}

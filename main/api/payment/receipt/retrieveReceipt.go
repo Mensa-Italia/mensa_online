@@ -1,4 +1,4 @@
-package main
+package receipt
 
 import (
 	"github.com/pocketbase/pocketbase/core"
@@ -17,12 +17,12 @@ func retrieveReceiptHandler(e *core.RequestEvent) error {
 	if id == "" {
 		return e.String(400, "Invalid id")
 	}
-	collection, err := app.FindCollectionByNameOrId("payments")
+	collection, err := e.App.FindCollectionByNameOrId("payments")
 	if err != nil {
 		return err
 	}
 
-	record, err := app.FindRecordById(collection, id)
+	record, err := e.App.FindRecordById(collection, id)
 	if err != nil {
 		return e.String(404, "Payment not found")
 	}

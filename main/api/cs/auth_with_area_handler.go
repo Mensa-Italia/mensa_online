@@ -1,4 +1,4 @@
-package main
+package cs
 
 import (
 	"context"
@@ -15,6 +15,7 @@ import (
 	"mensadb/importers"
 	"mensadb/tools/env"
 	"mensadb/tools/generic"
+	"mensadb/tools/payment"
 	"slices"
 	"strings"
 )
@@ -34,23 +35,23 @@ func AuthWithAreaHandler(e *core.RequestEvent) error {
 	}
 
 	// Cerca un record utente esistente nel database usando l'ID Area32
-	byUser, err := app.FindRecordById("users", areaUser.Id)
+	byUser, err := e.App.FindRecordById("users", areaUser.Id)
 
 	// Se non esiste un record utente, crea un nuovo utente
 	if byUser == nil || err != nil {
 		// Recupera la collezione "users" dal database
-		collection, _ := app.FindCollectionByNameOrId("users")
+		collection, _ := e.App.FindCollectionByNameOrId("users")
 		newUser := core.NewRecord(collection)
 
 		// Popola il nuovo record con i dati recuperati da Area32
 		newUser.Set("id", areaUser.Id)
 		newUser.SetEmail(email)
-		newUser.Set("username", suggestUniqueAuthRecordUsername("users", strings.Split(email, "@")[0])) // Suggerisce un username unico
-		newUser.SetPassword(generatePassword(areaUser.Id))                                              // Genera una password sicura
-		newUser.SetVerified(true)                                                                       // Segna l'utente come verificato
-		newUser.Set("name", areaUser.Fullname)                                                          // Imposta il nome dell'utente
-		newUser.Set("expire_membership", areaUser.ExpireDate)                                           // Data di scadenza della membership
-		newUser.Set("is_membership_active", areaUser.IsMembershipActive)                                // Stato attivo della membership
+		newUser.Set("username", suggestUniqueAuthRecordUsername(e.App, "users", strings.Split(email, "@")[0])) // Suggerisce un username unico
+		newUser.SetPassword(generatePassword(areaUser.Id))                                                     // Genera una password sicura
+		newUser.SetVerified(true)                                                                              // Segna l'utente come verificato
+		newUser.Set("name", areaUser.Fullname)                                                                 // Imposta il nome dell'utente
+		newUser.Set("expire_membership", areaUser.ExpireDate)                                                  // Data di scadenza della membership
+		newUser.Set("is_membership_active", areaUser.IsMembershipActive)                                       // Stato attivo della membership
 
 		// Gestione dei permessi (powers) basata sui ruoli di Area32
 		powerList := []string{}
@@ -73,21 +74,21 @@ func AuthWithAreaHandler(e *core.RequestEvent) error {
 		}
 
 		// Salva il nuovo utente nel database
-		if err := app.Save(newUser); err != nil {
+		if err := e.App.Save(newUser); err != nil {
 			log.Println("Invalid credentials on new save", err)
 			return apis.NewBadRequestError("Invalid credentials", err)
 		}
 
 		// Crea un nuovo record per il link del calendario associato all'utente
-		calendarLinkCollection, _ := app.FindCollectionByNameOrId("calendar_link")
+		calendarLinkCollection, _ := e.App.FindCollectionByNameOrId("calendar_link")
 		newCalendar := core.NewRecord(calendarLinkCollection)
 		newCalendar.Set("user", areaUser.Id)
 		newCalendar.Set("hash", generic.RandomHash()) // Genera un hash casuale per il calendario
-		_ = app.Save(newCalendar)
+		_ = e.App.Save(newCalendar)
 
 		// Risponde con i dati di autenticazione dell'utente appena creato
 		go func() {
-			_, _ = getCustomerId(areaUser.Id)
+			_, _ = payment.GetCustomerId(e.App, areaUser.Id)
 		}()
 		return apis.RecordAuthResponse(e, newUser, "password", nil)
 	} else {
@@ -109,13 +110,13 @@ func AuthWithAreaHandler(e *core.RequestEvent) error {
 		}
 
 		// Salva i dati aggiornati nel database
-		if err := app.Save(byUser); err != nil {
+		if err := e.App.Save(byUser); err != nil {
 			log.Println("Invalid credentials on update", err)
 			return apis.NewBadRequestError("Invalid credentials", err)
 		}
 
 		// Ricarica l'utente dal database per confermare gli aggiornamenti
-		byUser, err = app.FindRecordById("users", areaUser.Id)
+		byUser, err = e.App.FindRecordById("users", areaUser.Id)
 		if err != nil || !byUser.ValidatePassword(generatePassword(areaUser.Id)) {
 			data, _ := byUser.MarshalJSON()
 			log.Println("Invalid credentials on reload", string(data))
@@ -124,7 +125,7 @@ func AuthWithAreaHandler(e *core.RequestEvent) error {
 
 		// Risponde con i dati di autenticazione dell'utente esistente
 		go func() {
-			_, _ = getCustomerId(areaUser.Id)
+			_, _ = payment.GetCustomerId(e.App, areaUser.Id)
 		}()
 		return apis.RecordAuthResponse(e, byUser, "password", nil)
 	}
@@ -146,6 +147,7 @@ func removeFromSlice(slice []string, element string) []string {
 
 // Suggerisce un username unico per un record utente
 func suggestUniqueAuthRecordUsername(
+	app core.App,
 	collectionModelOrIdentifier string,
 	baseUsername string,
 ) string {
