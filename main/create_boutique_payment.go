@@ -3,10 +3,11 @@ package main
 import (
 	"encoding/json"
 	"github.com/pocketbase/pocketbase/core"
+	"mensadb/tools/dbtools"
 )
 
 func createBoutiquePaymentHandler(e *core.RequestEvent) error {
-	isLogged, authUser := isLoggedIn(e)
+	isLogged, authUser := dbtools.UserIsLoggedIn(e)
 	if !isLogged {
 		return e.String(401, "Unauthorized")
 	}
