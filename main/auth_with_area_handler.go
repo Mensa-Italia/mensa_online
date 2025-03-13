@@ -21,7 +21,7 @@ import (
 // Funzione principale per gestire l'autenticazione di un utente con Area32
 func AuthWithAreaHandler(e *core.RequestEvent) error {
 	// Recupera le credenziali dal form della richiesta HTTP
-	email := e.Request.FormValue("email")
+	email := strings.ToUpper(e.Request.FormValue("email"))
 	password := e.Request.FormValue("password")
 
 	// Inizializza l'API Area32 per autenticare l'utente e recuperare i suoi dati principali
