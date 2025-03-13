@@ -4,11 +4,12 @@ import (
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/stripe/stripe-go/v81"
+	"mensadb/tools/dbtools"
 	"mensadb/tools/payment"
 )
 
 func PaymentMethodCreateHandler(e *core.RequestEvent) error {
-	isLogged, authUser := isLoggedIn(e)
+	isLogged, authUser := dbtools.UserIsLoggedIn(e)
 	if !isLogged {
 		return e.String(401, "Unauthorized")
 	}
@@ -24,7 +25,7 @@ func PaymentMethodCreateHandler(e *core.RequestEvent) error {
 }
 
 func GetPaymentMethodsHandler(e *core.RequestEvent) error {
-	isLogged, authUser := isLoggedIn(e) //
+	isLogged, authUser := dbtools.UserIsLoggedIn(e)
 	if !isLogged {
 		return e.String(401, "Unauthorized ")
 	}
@@ -39,7 +40,7 @@ func GetPaymentMethodsHandler(e *core.RequestEvent) error {
 }
 
 func setDefaultPaymentMethod(e *core.RequestEvent) error {
-	isLogged, authUser := isLoggedIn(e)
+	isLogged, authUser := dbtools.UserIsLoggedIn(e)
 	paymentMethodId := e.Request.FormValue("payment_method_id")
 	if !isLogged {
 		return e.String(401, "Unauthorized")
@@ -60,7 +61,7 @@ func setDefaultPaymentMethod(e *core.RequestEvent) error {
 }
 
 func getCustomerHandler(e *core.RequestEvent) error {
-	isLogged, authUser := isLoggedIn(e)
+	isLogged, authUser := dbtools.UserIsLoggedIn(e)
 	if !isLogged {
 		return e.String(401, "Unauthorized")
 	}

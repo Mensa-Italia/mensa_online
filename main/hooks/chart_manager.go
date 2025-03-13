@@ -1,4 +1,4 @@
-package main
+package hooks
 
 import (
 	"fmt"
@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-func addToChart(key, data, chart string) {
+func addToChart(app core.App, key, data, chart string) {
 	collection, _ := app.FindCollectionByNameOrId("chart")
 	record := core.NewRecord(collection)
 	record.Set("key", key)
@@ -24,8 +24,8 @@ func LogUserChart(e *core.RecordEvent) error {
 	key2 := fmt.Sprintf("%s_%d-%d-week", e.Record.Id, year, week)
 	// key3 composed by user id and year-month
 	key3 := fmt.Sprintf("%s_%d-%d-month", e.Record.Id, nowData.Year(), nowData.Month())
-	go addToChart(key1, nowData.Format("2006-01-02"), "users_login")
-	go addToChart(key2, fmt.Sprintf("%d-%d", year, week), "users_login_week")
-	go addToChart(key3, fmt.Sprintf("%d-%d", nowData.Year(), nowData.Month()), "users_login_month")
+	go addToChart(e.App, key1, nowData.Format("2006-01-02"), "users_login")
+	go addToChart(e.App, key2, fmt.Sprintf("%d-%d", year, week), "users_login_week")
+	go addToChart(e.App, key3, fmt.Sprintf("%d-%d", nowData.Year(), nowData.Month()), "users_login_month")
 	return nil
 }

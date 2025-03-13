@@ -1,18 +1,10 @@
-package main
+package position
 
 import (
 	"github.com/pocketbase/pocketbase/core"
 	"mensadb/tools/spatial"
 	"strconv"
 )
-
-func PositionSetState(e *core.RecordEvent) error {
-	lat := e.Record.Get("lat").(float64)
-	lon := e.Record.Get("lon").(float64)
-	state := spatial.LoadState(lat, lon)
-	e.Record.Set("state", state)
-	return e.Next()
-}
 
 func GetStateHandler(e *core.RequestEvent) error {
 	latS := e.Request.URL.Query().Get("lat")
