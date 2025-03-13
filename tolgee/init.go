@@ -21,10 +21,6 @@ var ak = ""
 var translations map[string]Language
 var baseLanguage = "en"
 
-func main() {
-	Load("tgpak_geydomjsl42wsmrwom2wooljgbyhezdrmnyg2zzzge4wenbrgbsa")
-}
-
 func Load(apikey string) {
 	ak = apikey
 	_ = GetLanguages()
