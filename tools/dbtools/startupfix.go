@@ -2,7 +2,6 @@ package dbtools
 
 import (
 	"github.com/pocketbase/pocketbase"
-	"strings"
 )
 
 func StartupFix(app *pocketbase.PocketBase) {
@@ -13,9 +12,9 @@ func fixUsersEmails(app *pocketbase.PocketBase) {
 	userCollection, _ := app.FindCollectionByNameOrId("users")
 	records, _ := app.FindAllRecords(userCollection)
 	for _, record := range records {
-		email := record.GetString("email")
+		email := record.Email()
 		if email != "" {
-			record.Set("email", strings.ToLower(email))
+			record.SetEmail(email)
 		}
 		_ = app.Save(record)
 	}
