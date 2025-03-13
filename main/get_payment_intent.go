@@ -3,11 +3,12 @@ package main
 import (
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/stripe/stripe-go/v81"
+	"mensadb/tools/dbtools"
 	"mensadb/tools/payment"
 )
 
 func getPaymentIntentHandler(e *core.RequestEvent) error {
-	isLogged, authUser := isLoggedIn(e)
+	isLogged, authUser := dbtools.UserIsLoggedIn(e)
 	if !isLogged {
 		return e.String(401, "Unauthorized")
 	}

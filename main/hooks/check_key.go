@@ -1,4 +1,4 @@
-package main
+package hooks
 
 import (
 	"crypto/sha256"
@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-func GetKeyAppId(key string) (string, error) {
+func GetKeyAppId(app core.App, key string) (string, error) {
 	key = strings.ReplaceAll(key, "Bearer ", "")
 	key = strings.TrimSpace(key)
 	collection, err := app.FindCollectionByNameOrId("ex_keys")
@@ -28,7 +28,7 @@ func GetKeyAppId(key string) (string, error) {
 	return record[0].GetString("ex_app"), nil
 }
 
-func CheckKey(key, requiredPerm string) bool {
+func CheckKey(app core.App, key, requiredPerm string) bool {
 	key = strings.ReplaceAll(key, "Bearer ", "")
 	key = strings.TrimSpace(key)
 	collection, err := app.FindCollectionByNameOrId("ex_keys")

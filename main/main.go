@@ -7,6 +7,8 @@ import (
 	"github.com/tidwall/gjson"
 	"log"
 	"mensadb/importers"
+	"mensadb/main/api"
+	"mensadb/main/hooks"
 	_ "mensadb/migrations"
 	"mensadb/tolgee"
 	"mensadb/tools/dbtools"
@@ -34,16 +36,20 @@ func main() {
 	//})
 
 	app.OnServe().BindFunc(func(e *core.ServeEvent) error {
+
+		api.Load(e.Router.Group("api/"))
+
+		//e.Router.GET("/api/cs/keys/{addon}", keys.GetAddonPublicKeysHandler)
+		//e.Router.GET("/api/position/state", position.GetStateHandler)
+
 		e.Router.POST("/api/cs/auth-with-area", AuthWithAreaHandler)
 		e.Router.POST("/api/cs/send-update-notify", SendUpdateNotifyHandler)
 		e.Router.GET("/api/cs/sign-payload/{addon}", SignPayloadHandler)
-		e.Router.GET("/api/cs/keys/{addon}", GetAddonPublicKeysHandler)
 		e.Router.POST("/api/cs/verify-signature/{addon}", VerifySignatureHandler)
 		e.Router.GET("/api/cs/force-update-addons", ForceUpdateAddonsHandler)
 		e.Router.GET("/api/cs/force-notification", forceNotification)
 		e.Router.GET("/api/cs/force-update-state-managers", ForceUpdateStateManagersHandler)
 		e.Router.GET("/ical/{hash}", RetrieveICAL)
-		e.Router.GET("/api/position/state", GetStateHandler)
 		e.Router.POST("/api/payment/method", PaymentMethodCreateHandler)
 		e.Router.GET("/api/payment/method", GetPaymentMethodsHandler)
 		e.Router.POST("/api/payment/default", setDefaultPaymentMethod)
@@ -58,26 +64,13 @@ func main() {
 
 		return e.Next()
 	})
-	app.OnRecordAfterUpdateSuccess("users").BindFunc(LogUserChart)
-	app.OnRecordAfterCreateSuccess("addons").BindFunc(GeneratePublicPrivateKeys)
-	app.OnRecordCreate("positions").BindFunc(PositionSetState)
-	app.OnRecordCreate("ex_keys").BindFunc(OnKeyCreated)
-	app.OnRecordAfterCreateSuccess("calendar_link").BindFunc(CalendarSetHash)
-	app.OnRecordAfterCreateSuccess("events").BindFunc(EventsNotifyUsersAsync)
+
+	// Hooks to table events
+	hooks.Load(app)
 
 	if err := app.Start(); err != nil {
 		log.Fatal(err)
 	}
-}
-
-func GetAddonPublicKeysHandler(e *core.RequestEvent) error {
-	addon := e.Request.PathValue("addon")
-	record, err := app.FindRecordById("addons", addon)
-	if err != nil {
-		return apis.NewBadRequestError("Invalid addon", err)
-	}
-
-	return e.String(200, record.Get("public_key").(string))
 }
 
 func VerifySignatureHandler(e *core.RequestEvent) error {
@@ -128,10 +121,10 @@ func forceNotification(e *core.RequestEvent) error {
 
 func externalAppRequireConfirmation(e *core.RequestEvent) error {
 	authKey := e.Request.Header.Get("Authorization")
-	if !CheckKey(authKey, "CHECK_USER_EXISTENCE") {
+	if !hooks.CheckKey(e.App, authKey, "CHECK_USER_EXISTENCE") {
 		return e.String(401, "Unauthorized")
 	}
-	keyAppId, _ := GetKeyAppId(authKey)
+	keyAppId, _ := hooks.GetKeyAppId(e.App, authKey)
 	userId := e.Request.FormValue("member_id")
 	userEmail := e.Request.FormValue("email")
 	callmeURL := e.Request.FormValue("callme_url")
