@@ -68,7 +68,7 @@ func SendPushNotificationToUser(app core.App, notificationData PushNotification)
 		}
 	}
 
-	collectionNotifications, _ := app.FindCollectionByNameOrId("notifications")
+	collectionNotifications, _ := app.FindCollectionByNameOrId("user_notifications")
 	notification := core.NewRecord(collectionNotifications)
 	notification.Set("user", notificationData.UserId)
 	notification.Set("data", notificationData.GetDataAsString())
