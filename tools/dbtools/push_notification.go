@@ -72,6 +72,7 @@ func SendPushNotificationToUser(app core.App, notificationData PushNotification)
 	_ = app.Save(notification)
 
 	notificationData.Data["internal_id"] = notification.Id
+	notification.Set("data", notificationData.GetDataAsString())
 	_ = app.Save(notification)
 
 	for language, tokens := range listOfFirebaseTokensWithTrTag {
