@@ -14,6 +14,7 @@ import (
 	"mensadb/area32"
 	"mensadb/importers"
 	"mensadb/tools/env"
+	"mensadb/tools/generic"
 	"slices"
 	"strings"
 )
@@ -21,7 +22,7 @@ import (
 // Funzione principale per gestire l'autenticazione di un utente con Area32
 func AuthWithAreaHandler(e *core.RequestEvent) error {
 	// Recupera le credenziali dal form della richiesta HTTP
-	email := strings.ToUpper(e.Request.FormValue("email"))
+	email := strings.ToLower(e.Request.FormValue("email"))
 	password := e.Request.FormValue("password")
 
 	// Inizializza l'API Area32 per autenticare l'utente e recuperare i suoi dati principali
@@ -81,7 +82,7 @@ func AuthWithAreaHandler(e *core.RequestEvent) error {
 		calendarLinkCollection, _ := app.FindCollectionByNameOrId("calendar_link")
 		newCalendar := core.NewRecord(calendarLinkCollection)
 		newCalendar.Set("user", areaUser.Id)
-		newCalendar.Set("hash", randomHash()) // Genera un hash casuale per il calendario
+		newCalendar.Set("hash", generic.RandomHash()) // Genera un hash casuale per il calendario
 		_ = app.Save(newCalendar)
 
 		// Risponde con i dati di autenticazione dell'utente appena creato

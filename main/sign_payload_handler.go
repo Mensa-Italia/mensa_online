@@ -6,6 +6,7 @@ import (
 	"errors"
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
+	"mensadb/tools/dbtools"
 	"mensadb/tools/signatures"
 	"slices"
 	"time"
@@ -13,7 +14,7 @@ import (
 
 func SignPayloadHandler(e *core.RequestEvent) error {
 
-	isLogged, authUser := isLoggedIn(e)
+	isLogged, authUser := dbtools.UserIsLoggedIn(e)
 	if !isLogged {
 		return apis.NewUnauthorizedError("Unauthorized", errors.New("Unauthorized"))
 	}
