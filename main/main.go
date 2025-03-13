@@ -8,7 +8,9 @@ import (
 	"log"
 	"mensadb/importers"
 	_ "mensadb/migrations"
+	"mensadb/tolgee"
 	"mensadb/tools/dbtools"
+	"mensadb/tools/env"
 	"mensadb/tools/signatures"
 	"os"
 	"strings"
@@ -18,7 +20,9 @@ import (
 var app = pocketbase.New()
 
 func main() {
+	tolgee.Load(env.GetTolgeeKey())
 	go importers.GetFullMailList()
+
 	app.OnBootstrap().BindFunc(func(e *core.BootstrapEvent) error {
 		dbtools.StartupFix(app)
 		dbtools.CronTasks(app)
