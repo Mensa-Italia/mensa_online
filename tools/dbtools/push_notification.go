@@ -59,22 +59,29 @@ func SendPushNotificationToUser(app core.App, notificationData PushNotification)
 		}
 	}
 
+	translationTitle := tolgee.GetTranslation(notificationData.TrTag+".title", "it", notificationData.TrNamedParams)
+	translationBody := tolgee.GetTranslation(notificationData.TrTag+".body", "it", notificationData.TrNamedParams)
+	collectionNotifications, _ := app.FindCollectionByNameOrId("user_notifications")
+	notification := core.NewRecord(collectionNotifications)
+	notification.Set("user", notificationData.UserId)
+	notification.Set("data", notificationData.GetDataAsString())
+	notification.Set("title", translationTitle)
+	notification.Set("description", translationBody)
+	notification.Set("tr", notificationData.TrTag)
+	notification.Set("tr_named_params", notificationData.GetTrNamedParamsAsString())
+	_ = app.Save(notification)
+
+	notificationData.Data["internal_id"] = notification.Id
+	_ = app.Save(notification)
+
 	for language, tokens := range listOfFirebaseTokensWithTrTag {
-		translationTitle := tolgee.GetTranslation(notificationData.TrTag+".title", language, notificationData.TrNamedParams)
-		translationBody := tolgee.GetTranslation(notificationData.TrTag+".body", language, notificationData.TrNamedParams)
+		translationTitle = tolgee.GetTranslation(notificationData.TrTag+".title", language, notificationData.TrNamedParams)
+		translationBody = tolgee.GetTranslation(notificationData.TrTag+".body", language, notificationData.TrNamedParams)
 		err := sendNotification(tokens, translationTitle, translationBody, notificationData.Data)
 		if err != nil {
 			app.Logger().Error(err.Error())
 		}
 	}
-
-	collectionNotifications, _ := app.FindCollectionByNameOrId("user_notifications")
-	notification := core.NewRecord(collectionNotifications)
-	notification.Set("user", notificationData.UserId)
-	notification.Set("data", notificationData.GetDataAsString())
-	notification.Set("tr", notificationData.TrTag)
-	notification.Set("tr_named_params", notificationData.GetTrNamedParamsAsString())
-	_ = app.Save(notification)
 
 }
 

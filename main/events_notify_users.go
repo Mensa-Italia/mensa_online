@@ -1,117 +1,67 @@
 package main
 
 import (
-	"context"
-	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"log"
+	"mensadb/tools/dbtools"
 	"slices"
 
-	firebase "firebase.google.com/go/v4"
-	"firebase.google.com/go/v4/messaging"
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
-	"google.golang.org/api/option"
-	"mensadb/tools/env"
 )
 
 func EventsNotifyUsersAsync(e *core.RecordEvent) error {
-	go func(e core.RecordEvent) {
-		err := EventsNotifyUsers(&e)
-		if err != nil {
-			log.Printf("Errore nell'invio delle notifiche: %v", err)
-		}
-	}(*e)
+	go func(e *core.RecordEvent) {
+		EventsNotifyUsers(e)
+	}(e)
 	return e.Next()
 }
 
-func EventsNotifyUsers(e *core.RecordEvent) error {
+func EventsNotifyUsers(e *core.RecordEvent) {
 	// Controllo se l'evento è nazionale
 	if e.Record.Get("is_national") == true {
-		return notifyAllUsers("Nuovo evento NAZIONALE!", e.Record.GetString("name"),
-			map[string]string{
+		dbtools.SendPushNotificationToAllUsers(e.App, dbtools.PushNotification{
+			TrTag: "push_notification.new_national_event",
+			TrNamedParams: map[string]string{
+				"name": e.Record.GetString("name"),
+			},
+			Data: map[string]string{
 				"type":     "event",
 				"event_id": e.Record.GetString("id"),
 			},
-		)
+		})
+		return
 	}
 
 	// Recupera la posizione dell'evento
 	positionOfEvent, err := e.App.FindRecordById("positions", e.Record.GetString("position"))
 	if err != nil {
 		log.Printf("Errore nel recupero della posizione dell'evento: %v", err)
-		return e.Next()
 	}
 
 	// Filtra gli utenti in base allo stato
 	users, err := fetchUsersByState(positionOfEvent.GetString("state"))
 	if err != nil {
 		log.Printf("Errore nel recupero degli utenti: %v", err)
-		return e.Next()
 	}
 
-	// Recupera i token dei dispositivi per gli utenti
-	tokens, err := fetchDeviceTokens(users)
-	if err != nil {
-		log.Printf("Errore nel recupero dei token dei dispositivi: %v", err)
-		return e.Next()
-	}
-
-	marshal, _ := json.Marshal(map[string]string{
-		"type":     "event",
-		"event_id": e.Record.GetString("id"),
-	})
-
+	pushNotifications := []dbtools.PushNotification{}
 	for _, user := range users {
-		collection, _ := app.FindCollectionByNameOrId("user_notifications")
-		newNotify := core.NewRecord(collection)
-		newNotify.Set("user", user)
-		newNotify.Set("title", "Nuovo evento in "+positionOfEvent.GetString("state")+"!")
-		newNotify.Set("description", e.Record.GetString("name"))
-		newNotify.Set("data", string(marshal))
-		app.Save(newNotify)
+		pushNotifications = append(pushNotifications, dbtools.PushNotification{
+			UserId: user,
+			TrTag:  "push_notification.new_event",
+			TrNamedParams: map[string]string{
+				"name":  e.Record.GetString("name"),
+				"state": positionOfEvent.GetString("state"),
+			},
+			Data: map[string]string{
+				"type":     "event",
+				"event_id": e.Record.GetString("id"),
+			},
+		})
 	}
 
-	// Invia la notifica
-	err = sendNotification(
-		tokens,
-		"Nuovo evento in "+positionOfEvent.GetString("state")+"!", e.Record.GetString("name"),
-		map[string]string{
-			"type":     "event",
-			"event_id": e.Record.GetString("id"),
-		},
-	)
-	if err != nil {
-		log.Printf("Errore durante l'invio della notifica: %v", err)
-	}
-
-	return e.Next()
-}
-
-func notifyAllUsers(title, body string, data ...map[string]string) error {
-	// Recupera tutti i token dei dispositivi
-	tokens, err := fetchAllDeviceTokens()
-	if err != nil {
-		return err
-	}
-
-	users, _ := fetchAllUsers()
-
-	for _, user := range users {
-		marshal, _ := json.Marshal(data[0])
-
-		collection, _ := app.FindCollectionByNameOrId("user_notifications")
-		newNotify := core.NewRecord(collection)
-		newNotify.Set("user", user)
-		newNotify.Set("title", title)
-		newNotify.Set("description", body)
-		newNotify.Set("data", string(marshal))
-		app.Save(newNotify)
-	}
-
-	// Invia la notifica
-	return sendNotification(tokens, title, body, data...)
+	dbtools.SendPushNotificationToUsers(e.App, pushNotifications)
 }
 
 func fetchUsersByState(state string) ([]string, error) {
@@ -132,101 +82,4 @@ func fetchUsersByState(state string) ([]string, error) {
 		}
 	}
 	return userIDs, nil
-}
-
-func fetchDeviceTokens(userIDs []string) ([]string, error) {
-	var tokens []string
-	for _, id := range userIDs {
-		records, err := app.FindAllRecords("users_devices",
-			dbx.NewExp(`firebase_id != {:id} AND user = {:user_ids}`, dbx.Params{"id": "NOTOKEN", "user_ids": id}),
-		)
-		if err != nil {
-			log.Println(err)
-			continue
-		}
-
-		for _, record := range records {
-			tokens = append(tokens, record.GetString("firebase_id"))
-		}
-	}
-	return tokens, nil
-}
-
-func fetchAllDeviceTokens() ([]string, error) {
-	records, err := app.FindAllRecords("users_devices", dbx.NewExp(`firebase_id != {:id}`, dbx.Params{"id": "NOTOKEN"}))
-	if err != nil {
-		return nil, err
-	}
-
-	var tokens []string
-	for _, record := range records {
-		tokens = append(tokens, record.GetString("firebase_id"))
-	}
-	return tokens, nil
-}
-
-func fetchAllUsers() ([]string, error) {
-	records, err := app.FindAllRecords("users")
-	if err != nil {
-		return nil, err
-	}
-
-	var users []string
-	for _, record := range records {
-		users = append(users, record.GetString("id"))
-	}
-	return users, nil
-}
-
-func sendNotification(tokens []string, title, body string, data ...map[string]string) error {
-	decodedKey, err := getDecodedFireBaseKey()
-	if err != nil {
-		return err
-	}
-
-	opts := []option.ClientOption{option.WithCredentialsJSON(decodedKey)}
-	appFirebase, err := firebase.NewApp(context.Background(), nil, opts...)
-	if err != nil {
-		return err
-	}
-
-	fcmClient, err := appFirebase.Messaging(context.Background())
-	if err != nil {
-		return err
-	}
-
-	// Invio notifiche in batch da 400 token
-	for i := 0; i < len(tokens); i += 400 {
-		end := i + 400
-		if end > len(tokens) {
-			end = len(tokens)
-		}
-
-		response, err := fcmClient.SendEachForMulticast(context.Background(), &messaging.MulticastMessage{
-			Notification: &messaging.Notification{Title: title, Body: body},
-			Tokens:       tokens[i:end],
-			Data:         data[0],
-		})
-		if err != nil {
-			log.Printf("Errore nell'invio delle notifiche batch: %v", err)
-		} else {
-			log.Printf("Notifiche inviate correttamente: %d successi, %d fallimenti", response.SuccessCount, response.FailureCount)
-		}
-	}
-
-	return nil
-}
-
-func getDecodedFireBaseKey() ([]byte, error) {
-	fireBaseAuthKey := env.GetFireBaseAuthKey()
-	if fireBaseAuthKey == "" {
-		return nil, errors.New("Firebase Auth Key non configurata")
-	}
-
-	decodedKey, err := base64.StdEncoding.DecodeString(fireBaseAuthKey)
-	if err != nil {
-		return nil, err
-	}
-
-	return decodedKey, nil
 }

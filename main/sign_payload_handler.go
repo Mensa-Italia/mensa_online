@@ -20,7 +20,7 @@ func SignPayloadHandler(e *core.RequestEvent) error {
 
 	addonsId := e.Request.PathValue("addon")
 
-	user, err := app.FindRecordById("users", authUser.Id)
+	user, err := e.App.FindRecordById("users", authUser.Id)
 	if err != nil {
 		return err
 	}
@@ -39,7 +39,7 @@ func SignPayloadHandler(e *core.RequestEvent) error {
 
 	if !slices.Contains(user.GetStringSlice("addons"), addonsId) {
 		user.Set("addons", append(user.GetStringSlice("addons"), addonsId))
-		err = app.Save(user)
+		err = e.App.Save(user)
 		if err != nil {
 			return err
 		}
@@ -47,7 +47,7 @@ func SignPayloadHandler(e *core.RequestEvent) error {
 
 	payload, _ := json.Marshal(payloadJSON)
 
-	record, err := app.FindFirstRecordByData("addons_private_keys", "addon", addonsId)
+	record, err := e.App.FindFirstRecordByData("addons_private_keys", "addon", addonsId)
 	if err != nil {
 		return apis.NewBadRequestError("Invalid addon", err)
 	}
