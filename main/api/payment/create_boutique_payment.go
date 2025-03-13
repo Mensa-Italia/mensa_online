@@ -1,4 +1,4 @@
-package main
+package payment
 
 import (
 	"encoding/json"
@@ -18,17 +18,17 @@ func createBoutiquePaymentHandler(e *core.RequestEvent) error {
 		return e.String(400, "Invalid products")
 	}
 
-	collectionBoutique, err := app.FindCollectionByNameOrId("boutique")
+	collectionBoutique, err := e.App.FindCollectionByNameOrId("boutique")
 	total := 0
 	for _, product := range products {
-		prod, err := app.FindRecordById(collectionBoutique, product)
+		prod, err := e.App.FindRecordById(collectionBoutique, product)
 		if err != nil {
 			return e.String(404, "Product not found")
 		}
 		total += prod.GetInt("amount")
 	}
 
-	collectionBoutiqueOrders, err := app.FindCollectionByNameOrId("boutique_orders")
+	collectionBoutiqueOrders, err := e.App.FindCollectionByNameOrId("boutique_orders")
 	if err != nil {
 		return e.String(500, "Error finding collection")
 	}
@@ -36,7 +36,7 @@ func createBoutiquePaymentHandler(e *core.RequestEvent) error {
 	record.Set("user", authUser.Id)
 	record.Set("boutique_products", products)
 
-	paymentRecord, paymentIntent, err := createPayment(authUser.Id, total)
+	paymentRecord, paymentIntent, err := createPayment(e.App, authUser.Id, total)
 	if err != nil {
 		return e.String(500, "Error creating payment intent")
 	}
@@ -45,7 +45,7 @@ func createBoutiquePaymentHandler(e *core.RequestEvent) error {
 	record.Set("total", total)
 	record.Set("status", "processing")
 
-	err = app.Save(record)
+	err = e.App.Save(record)
 	if err != nil {
 		print(err.Error())
 		return e.String(500, "Error saving order")
