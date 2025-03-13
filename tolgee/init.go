@@ -21,6 +21,10 @@ var ak = ""
 var translations map[string]Language
 var baseLanguage = "en"
 
+func main() {
+	Load("tgpak_geydomjsl42wsmrwom2wooljgbyhezdrmnyg2zzzge4wenbrgbsa")
+}
+
 func Load(apikey string) {
 	ak = apikey
 	_ = GetLanguages()
@@ -79,7 +83,7 @@ func GetTranslation(key string, lang string, namedArgs ...map[string]string) str
 	if _, ok := translations[lang]; ok {
 		existinglangauge = lang
 	} else {
-		if strings.Contains(lang, "_") {
+		if len(strings.Split(lang, "_")) > 1 {
 			lang = strings.Split(lang, "_")[0]
 			if _, ok := translations[lang]; ok {
 				existinglangauge = lang
