@@ -1,4 +1,4 @@
-package main
+package payment
 
 import (
 	"github.com/pocketbase/pocketbase/core"
@@ -24,18 +24,18 @@ func donateHandler(e *core.RequestEvent) error {
 		return e.String(400, "Invalid amount")
 	}
 
-	_, paymentIntent, err := createPayment(authUser.Id, int(intAmount))
+	_, paymentIntent, err := createPayment(e.App, authUser.Id, int(intAmount))
 
 	return e.JSON(200, paymentIntent)
 }
 
-func createPayment(userId string, amount int) (*core.Record, *stripe.PaymentIntent, error) {
+func createPayment(app core.App, userId string, amount int) (*core.Record, *stripe.PaymentIntent, error) {
 	collection, err := app.FindCollectionByNameOrId("payments")
 	if err != nil {
 		return nil, nil, err
 	}
 
-	paymentIntent, err := stripeCreatePaymentIntent(userId, int64(amount))
+	paymentIntent, err := stripeCreatePaymentIntent(app, userId, int64(amount))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -51,8 +51,8 @@ func createPayment(userId string, amount int) (*core.Record, *stripe.PaymentInte
 	return record, paymentIntent, nil
 }
 
-func stripeCreatePaymentIntent(userId string, amount int64) (*stripe.PaymentIntent, error) {
-	customerId, err := getCustomerId(userId)
+func stripeCreatePaymentIntent(app core.App, userId string, amount int64) (*stripe.PaymentIntent, error) {
+	customerId, err := payment.GetCustomerId(app, userId)
 	if err != nil {
 		return nil, err
 	}

@@ -1,4 +1,4 @@
-package main
+package cs
 
 import (
 	"github.com/pocketbase/pocketbase/core"
