@@ -23,7 +23,7 @@ func main() {
 	tolgee.Load(env.GetTolgeeKey())
 	go importers.GetFullMailList()
 
-	app.OnBootstrap().BindFunc(func(e *core.BootstrapEvent) error {
+	app.OnServe().BindFunc(func(e *core.ServeEvent) error {
 		dbtools.StartupFix(app)
 		dbtools.CronTasks(app)
 		return e.Next()
