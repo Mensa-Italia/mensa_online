@@ -6,5 +6,5 @@ import (
 )
 
 func Load(e *router.RouterGroup[*core.RequestEvent]) {
-	e.GET("/{addon}", VerifySignatureHandler)
+	e.POST("/{addon}", VerifySignatureHandler)
 }
