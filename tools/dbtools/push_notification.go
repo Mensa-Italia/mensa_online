@@ -40,6 +40,25 @@ func (p PushNotification) GetTrNamedParamsAsString() string {
 
 func SendPushNotificationToUser(app core.App, notificationData PushNotification) {
 	//userCollection, _ := app.FindCollectionByNameOrId("users")
+
+	translationTitle := tolgee.GetTranslation(notificationData.TrTag+".title", "it", notificationData.TrNamedParams)
+	translationBody := tolgee.GetTranslation(notificationData.TrTag+".body", "it", notificationData.TrNamedParams)
+	collectionNotifications, _ := app.FindCollectionByNameOrId("user_notifications")
+	notification := core.NewRecord(collectionNotifications)
+	notification.Set("user", notificationData.UserId)
+	notification.Set("data", notificationData.GetDataAsString())
+	notification.Set("title", translationTitle)
+	notification.Set("description", translationBody)
+	notification.Set("tr", notificationData.TrTag)
+	notification.Set("tr_named_params", notificationData.GetTrNamedParamsAsString())
+	_ = app.Save(notification)
+
+	notificationData.Data["internal_id"] = notification.Id
+	notification.Set("data", notificationData.GetDataAsString())
+	_ = app.Save(notification)
+
+	// Send push notification to device
+
 	devicesCollection, _ := app.FindCollectionByNameOrId("users_devices")
 
 	devicesOfUser, _ := app.FindAllRecords(devicesCollection,
@@ -58,22 +77,6 @@ func SendPushNotificationToUser(app core.App, notificationData PushNotification)
 			listOfFirebaseTokensWithTrTag[deviceLanguage] = append(listOfFirebaseTokensWithTrTag[deviceLanguage], firebaseToken)
 		}
 	}
-
-	translationTitle := tolgee.GetTranslation(notificationData.TrTag+".title", "it", notificationData.TrNamedParams)
-	translationBody := tolgee.GetTranslation(notificationData.TrTag+".body", "it", notificationData.TrNamedParams)
-	collectionNotifications, _ := app.FindCollectionByNameOrId("user_notifications")
-	notification := core.NewRecord(collectionNotifications)
-	notification.Set("user", notificationData.UserId)
-	notification.Set("data", notificationData.GetDataAsString())
-	notification.Set("title", translationTitle)
-	notification.Set("description", translationBody)
-	notification.Set("tr", notificationData.TrTag)
-	notification.Set("tr_named_params", notificationData.GetTrNamedParamsAsString())
-	_ = app.Save(notification)
-
-	notificationData.Data["internal_id"] = notification.Id
-	notification.Set("data", notificationData.GetDataAsString())
-	_ = app.Save(notification)
 
 	for language, tokens := range listOfFirebaseTokensWithTrTag {
 		translationTitle = tolgee.GetTranslation(notificationData.TrTag+".title", language, notificationData.TrNamedParams)
