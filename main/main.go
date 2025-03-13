@@ -37,7 +37,7 @@ func main() {
 
 	app.OnServe().BindFunc(func(e *core.ServeEvent) error {
 
-		api.Load(e.Router.Group("api/"))
+		api.Load(e.Router.Group("/api"))
 
 		//e.Router.GET("/api/cs/keys/{addon}", keys.GetAddonPublicKeysHandler)
 		//e.Router.GET("/api/position/state", position.GetStateHandler)
