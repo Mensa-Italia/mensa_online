@@ -16,6 +16,7 @@ func fixUsersEmails(app *pocketbase.PocketBase) {
 		email := record.Email()
 		if email != "" {
 			record.SetEmail(strings.ToLower(email))
+			record.Set("username", strings.ToLower(record.GetString("username")))
 		}
 		_ = app.Save(record)
 	}
