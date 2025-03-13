@@ -17,6 +17,7 @@ type config struct {
 	Area32InternalPassword string `env:"AREA32_INTERNAL_PASSWORD" envDefault:""`
 	GeminiKey              string `env:"GEMINI_KEY" envDefault:""`
 	GeminiResumePrompt     string `env:"GEMINI_RESUME_PROMPT" envDefault:"PARLI SOLO ITALIANO"`
+	TolgeeKey              string `env:"TOLGEE_KEY" envDefault:""`
 }
 
 var cfg = config{}
@@ -69,4 +70,8 @@ func GetGeminiKey() string {
 
 func GetGeminiResumePrompt() string {
 	return cfg.GeminiResumePrompt
+}
+
+func GetTolgeeKey() string {
+	return cfg.TolgeeKey
 }

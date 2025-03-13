@@ -1,16 +1,14 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
-	"github.com/pocketbase/pocketbase/tools/cron"
 	"github.com/tidwall/gjson"
 	"log"
 	"mensadb/importers"
 	_ "mensadb/migrations"
+	"mensadb/tools/dbtools"
 	"mensadb/tools/signatures"
 	"os"
 	"strings"
@@ -22,31 +20,9 @@ var app = pocketbase.New()
 func main() {
 	go importers.GetFullMailList()
 	app.OnBootstrap().BindFunc(func(e *core.BootstrapEvent) error {
-		scheduler := cron.New()
-
-		// Update addons data every day at 3:01
-		scheduler.MustAdd("updateAddonsData", "1 3 * * *", func() {
-			go updateAddonsData()
-			go func() {
-				importers.GetFullMailList()
-				updateStateManagers()
-				app.Logger().Info(
-					fmt.Sprintf("[CRON] Updated the powers of all the users based on the segretari list"),
-				)
-			}()
-		})
-		scheduler.MustAdd("updateDocumentsData", "0 8,11,14,17,20 * * *", func() {
-			go UpdateDocumentsFromArea32()
-		})
-		scheduler.Start()
-		app.Logger().Info(
-			"[CRON] Scheduled all crons jobs",
-		)
-
-		if err := e.Next(); err != nil {
-			return err
-		}
-		return nil
+		dbtools.StartupFix(app)
+		dbtools.CronTasks(app)
+		return e.Next()
 	})
 
 	//migratecmd.MustRegister(app, app.RootCmd, migratecmd.Config{
@@ -72,7 +48,7 @@ func main() {
 		e.Router.POST("/api/payment/webhook", webhookStripe)
 		e.Router.GET("/api/payment/receipt/{id}", retrieveReceiptHandler)
 		e.Router.GET("/api/payment/{id}", getPaymentIntentHandler)
-		e.Router.POST("/api/telegram/check", checkTelegram)
+		e.Router.POST("/api/telegram/check", externalAppRequireConfirmation)
 		e.Router.POST("/api/payment/boutique", createBoutiquePaymentHandler)
 		e.Router.GET("/static/{path...}", apis.Static(os.DirFS("./pb_public"), false))
 
@@ -131,32 +107,22 @@ func VerifySignatureHandler(e *core.RequestEvent) error {
 
 func forceNotification(e *core.RequestEvent) error {
 	user, _ := app.FindRecordById("users", "5366")
-	tokens, err := fetchDeviceTokens([]string{user.Id})
-	if err != nil {
-		return err
-	}
 
-	marshal, _ := json.Marshal(map[string]string{
-		"type":        "single_document",
-		"document_id": "5jsyp5i9cu9837v",
-	})
-	collection, _ := app.FindCollectionByNameOrId("user_notifications")
-	newNotify := core.NewRecord(collection)
-	newNotify.Set("user", user.Id)
-	newNotify.Set("title", "Nuovo documento disponibile!")
-	newNotify.Set("description", "Delibera CDG 2025.2 Consiglio Vs Gabriel Garofalo")
-	newNotify.Set("data", string(marshal))
-	_ = app.Save(newNotify)
-
-	sendNotification(tokens, "Nuovo documento disponibile!", "Delibera CDG 2025.2 Consiglio Vs Gabriel Garofalo",
-		map[string]string{
+	dbtools.SendPushNotificationToUser(e.App, dbtools.PushNotification{
+		UserId: user.Id,
+		TrTag:  "push_notification.new_document_available",
+		TrNamedParams: map[string]string{
+			"name": "Delibera CDG 2025.2 Consiglio Vs Gabriel Garofalo",
+		},
+		Data: map[string]string{
 			"type":        "single_document",
 			"document_id": "5jsyp5i9cu9837v",
-		})
+		},
+	})
 	return e.String(200, "OK")
 }
 
-func checkTelegram(e *core.RequestEvent) error {
+func externalAppRequireConfirmation(e *core.RequestEvent) error {
 	authKey := e.Request.Header.Get("Authorization")
 	if !CheckKey(authKey, "CHECK_USER_EXISTENCE") {
 		return e.String(401, "Unauthorized")
@@ -165,6 +131,8 @@ func checkTelegram(e *core.RequestEvent) error {
 	userId := e.Request.FormValue("member_id")
 	userEmail := e.Request.FormValue("email")
 	callmeURL := e.Request.FormValue("callme_url")
+
+	exApp, _ := app.FindRecordById("ex_apps", keyAppId)
 
 	user, err := app.FindRecordById("users", userId)
 	if err != nil {
@@ -175,30 +143,17 @@ func checkTelegram(e *core.RequestEvent) error {
 		return apis.NewBadRequestError("Invalid", nil)
 	}
 
-	tokens, err := fetchDeviceTokens([]string{user.Id})
-	if err != nil {
-		return err
-	}
-
-	marshal, _ := json.Marshal(map[string]string{
-		"type":     "account_confirmation",
-		"keyAppId": keyAppId,
-		"url":      callmeURL,
-	})
-	collection, _ := app.FindCollectionByNameOrId("user_notifications")
-	newNotify := core.NewRecord(collection)
-	newNotify.Set("user", user.Id)
-	newNotify.Set("title", "Richiesta di conferma dell'account")
-	newNotify.Set("description", "Mensa Telegram Bot richiede la conferma del tuo account")
-	newNotify.Set("data", string(marshal))
-	_ = app.Save(newNotify)
-
-	sendNotification(tokens, "Richiesta di conferma dell'account", "Mensa Telegram Bot richiede la conferma del tuo account",
-		map[string]string{
+	dbtools.SendPushNotificationToUser(e.App, dbtools.PushNotification{
+		UserId: user.Id,
+		TrTag:  "push_notification.confirm_external_resource",
+		TrNamedParams: map[string]string{
+			"name": exApp.GetString("name"),
+		},
+		Data: map[string]string{
 			"type":     "account_confirmation",
 			"keyAppId": keyAppId,
 			"url":      callmeURL,
-		})
-
+		},
+	})
 	return e.String(200, "OK")
 }
