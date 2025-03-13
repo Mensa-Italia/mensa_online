@@ -4,6 +4,7 @@ import (
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
 	"mensadb/area32"
+	"mensadb/tools/dbtools"
 )
 
 func SendUpdateNotifyHandler(e *core.RequestEvent) error {
@@ -20,9 +21,9 @@ func SendUpdateNotifyHandler(e *core.RequestEvent) error {
 	}
 
 	if areaUser.Id == "5366" {
-		go notifyAllUsers("Nuovo aggiornamento disponibile!", "C'è un nuovo aggiornamento disponibile! Aggiorna ora per scoprire le nuove funzioni!")
-
-		return e.JSON(200, areaUser)
+		dbtools.SendPushNotificationToAllUsers(e.App, dbtools.PushNotification{
+			TrTag: "push_notification.new_document_available",
+		})
 	}
 	return e.String(200, "OK")
 }

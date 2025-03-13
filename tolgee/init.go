@@ -60,10 +60,10 @@ func GetLanguages() error {
 		if err == nil {
 			_ = json.Unmarshal(translationData.Body(), &buildLang.Tranlsations)
 		}
-		languageList = append(languageList, buildLang)
 		if buildLang.Base {
 			baseLanguage = buildLang.Tag
 		}
+		languageList = append(languageList, buildLang)
 	}
 	translations = make(map[string]Language)
 	for _, lang := range languageList {
@@ -76,13 +76,15 @@ func GetTranslation(key string, lang string, namedArgs ...map[string]string) str
 	existinglangauge := baseLanguage
 
 	// check if the language exists
-	if _, ok := translations[lang]; ok {
-		existinglangauge = lang
-	} else {
-		if len(strings.Split(lang, "_")) > 1 {
-			lang = strings.Split(lang, "_")[0]
-			if _, ok := translations[lang]; ok {
-				existinglangauge = lang
+	if len(strings.TrimSpace(lang)) > 1 {
+		if _, ok := translations[lang]; ok {
+			existinglangauge = lang
+		} else {
+			if len(strings.Split(lang, "_")) > 1 {
+				lang = strings.Split(lang, "_")[0]
+				if _, ok := translations[lang]; ok {
+					existinglangauge = lang
+				}
 			}
 		}
 	}
