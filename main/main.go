@@ -27,7 +27,6 @@ func main() {
 	})
 
 	app.OnServe().BindFunc(func(e *core.ServeEvent) error {
-		dbtools.StartupFix(app)
 		dbtools.CronTasks(app)
 		api.Load(e.Router.Group("/api"))
 		e.Router.GET("/ical/{hash}", RetrieveICAL)
