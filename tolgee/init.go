@@ -98,6 +98,37 @@ func GetTranslation(key string, lang string, namedArgs ...map[string]string) str
 		}
 		return translationToUse
 	} else {
+		_ = GetLanguages()
+		return getTranslationInternal(key, lang, namedArgs...)
+	}
+}
+
+func getTranslationInternal(key string, lang string, namedArgs ...map[string]string) string {
+	existinglangauge := baseLanguage
+
+	// check if the language exists
+	if len(strings.TrimSpace(lang)) > 1 {
+		if _, ok := translations[lang]; ok {
+			existinglangauge = lang
+		} else {
+			if len(strings.Split(lang, "_")) > 1 {
+				lang = strings.Split(lang, "_")[0]
+				if _, ok := translations[lang]; ok {
+					existinglangauge = lang
+				}
+			}
+		}
+	}
+
+	if _, ok := translations[existinglangauge].Tranlsations[key]; ok {
+		translationToUse := translations[existinglangauge].Tranlsations[key]
+		if len(namedArgs) > 0 {
+			for k, v := range namedArgs[0] {
+				translationToUse = strings.ReplaceAll(translationToUse, "{"+k+"}", v)
+			}
+		}
+		return translationToUse
+	} else {
 		return key
 	}
 }

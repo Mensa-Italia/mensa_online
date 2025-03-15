@@ -38,24 +38,26 @@ func (p PushNotification) GetTrNamedParamsAsString() string {
 	return string(marshal)
 }
 
-func SendPushNotificationToUser(app core.App, notificationData PushNotification) {
+func SendPushNotificationToUser(app core.App, notificationData PushNotification, store ...bool) {
 	//userCollection, _ := app.FindCollectionByNameOrId("users")
 
-	translationTitle := tolgee.GetTranslation(notificationData.TrTag+".title", "it", notificationData.TrNamedParams)
-	translationBody := tolgee.GetTranslation(notificationData.TrTag+".body", "it", notificationData.TrNamedParams)
-	collectionNotifications, _ := app.FindCollectionByNameOrId("user_notifications")
-	notification := core.NewRecord(collectionNotifications)
-	notification.Set("user", notificationData.UserId)
-	notification.Set("data", notificationData.GetDataAsString())
-	notification.Set("title", translationTitle)
-	notification.Set("description", translationBody)
-	notification.Set("tr", notificationData.TrTag)
-	notification.Set("tr_named_params", notificationData.GetTrNamedParamsAsString())
-	_ = app.Save(notification)
+	if store == nil || len(store) == 0 || store[0] { // if store is not provided or is true
+		translationTitle := tolgee.GetTranslation(notificationData.TrTag+".title", "it", notificationData.TrNamedParams)
+		translationBody := tolgee.GetTranslation(notificationData.TrTag+".body", "it", notificationData.TrNamedParams)
+		collectionNotifications, _ := app.FindCollectionByNameOrId("user_notifications")
+		notification := core.NewRecord(collectionNotifications)
+		notification.Set("user", notificationData.UserId)
+		notification.Set("data", notificationData.GetDataAsString())
+		notification.Set("title", translationTitle)
+		notification.Set("description", translationBody)
+		notification.Set("tr", notificationData.TrTag)
+		notification.Set("tr_named_params", notificationData.GetTrNamedParamsAsString())
+		_ = app.Save(notification)
 
-	notificationData.Data["internal_id"] = notification.Id
-	notification.Set("data", notificationData.GetDataAsString())
-	_ = app.Save(notification)
+		notificationData.Data["internal_id"] = notification.Id
+		notification.Set("data", notificationData.GetDataAsString())
+		_ = app.Save(notification)
+	}
 
 	// Send push notification to device
 
@@ -79,8 +81,8 @@ func SendPushNotificationToUser(app core.App, notificationData PushNotification)
 	}
 
 	for language, tokens := range listOfFirebaseTokensWithTrTag {
-		translationTitle = tolgee.GetTranslation(notificationData.TrTag+".title", language, notificationData.TrNamedParams)
-		translationBody = tolgee.GetTranslation(notificationData.TrTag+".body", language, notificationData.TrNamedParams)
+		translationTitle := tolgee.GetTranslation(notificationData.TrTag+".title", language, notificationData.TrNamedParams)
+		translationBody := tolgee.GetTranslation(notificationData.TrTag+".body", language, notificationData.TrNamedParams)
 		err := sendNotification(tokens, translationTitle, translationBody, notificationData.Data)
 		if err != nil {
 			app.Logger().Error(err.Error())
@@ -89,18 +91,18 @@ func SendPushNotificationToUser(app core.App, notificationData PushNotification)
 
 }
 
-func SendPushNotificationToUsers(app core.App, notificationsData []PushNotification) {
+func SendPushNotificationToUsers(app core.App, notificationsData []PushNotification, store ...bool) {
 	for _, notificationData := range notificationsData {
-		SendPushNotificationToUser(app, notificationData)
+		SendPushNotificationToUser(app, notificationData, store...)
 	}
 }
 
-func SendPushNotificationToAllUsers(app core.App, notificationData PushNotification) {
+func SendPushNotificationToAllUsers(app core.App, notificationData PushNotification, store ...bool) {
 	userCollection, _ := app.FindCollectionByNameOrId("users")
 	users, _ := app.FindAllRecords(userCollection)
 	for _, user := range users {
 		notificationData.UserId = user.GetString("id")
-		SendPushNotificationToUser(app, notificationData)
+		SendPushNotificationToUser(app, notificationData, store...)
 	}
 }
 
