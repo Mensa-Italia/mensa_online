@@ -18,8 +18,13 @@ import (
 var app = pocketbase.New()
 
 func main() {
-	tolgee.Load(env.GetTolgeeKey())
-	go importers.GetFullMailList()
+
+	app.OnBootstrap().BindFunc(func(e *core.BootstrapEvent) error {
+		tolgee.Load(env.GetTolgeeKey())
+		go importers.GetFullMailList()
+
+		return e.Next()
+	})
 
 	app.OnServe().BindFunc(func(e *core.ServeEvent) error {
 		dbtools.StartupFix(app)

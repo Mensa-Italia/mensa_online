@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"github.com/go-resty/resty/v2"
 	"github.com/tidwall/gjson"
+	"log"
 	"strings"
 )
 
@@ -22,8 +23,10 @@ var translations map[string]Language
 var baseLanguage = "en"
 
 func Load(apikey string) {
+	log.Println("Loading Tolgee translations")
 	ak = apikey
 	_ = GetLanguages()
+	log.Println("Tolgee translations loaded total languages: ", len(translations))
 }
 
 func GetLanguages() error {
