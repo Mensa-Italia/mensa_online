@@ -23,7 +23,7 @@ func CronTasks(app *pocketbase.PocketBase) {
 				fmt.Sprintf("[CRON] Updated the powers of all the users based on the segretari list"),
 			)
 		}()
-		go tolgee.Load(env.GetPasswordSalt())
+		go tolgee.Load(env.GetTolgeeKey())
 	})
 	scheduler.MustAdd("updateDocumentsData", "0 8,11,14,17,20 * * *", func() {
 		go RemoteRetrieveDocumentsFromArea32(app)
