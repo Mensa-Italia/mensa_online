@@ -29,6 +29,14 @@ func externalAppRequireConfirmation(e *core.RequestEvent) error {
 		return apis.NewBadRequestError("Invalid", nil)
 	}
 
+	exGrantedCollection, _ := e.App.FindCollectionByNameOrId("ex_granted_permissions")
+
+	newEntry := core.NewRecord(exGrantedCollection)
+	newEntry.Set("user", userId)
+	newEntry.Set("ex_app", keyAppId)
+	newEntry.Set("permissions", []string{})
+	_ = e.App.Save(newEntry)
+
 	dbtools.SendPushNotificationToUser(e.App, dbtools.PushNotification{
 		UserId: user.Id,
 		TrTag:  "push_notification.confirm_external_resource",
