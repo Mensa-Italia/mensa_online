@@ -1,6 +1,7 @@
 package exapp
 
 import (
+	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
 	"mensadb/main/hooks"
@@ -30,12 +31,13 @@ func externalAppRequireConfirmation(e *core.RequestEvent) error {
 	}
 
 	exGrantedCollection, _ := e.App.FindCollectionByNameOrId("ex_granted_permissions")
-
-	newEntry := core.NewRecord(exGrantedCollection)
-	newEntry.Set("user", userId)
-	newEntry.Set("ex_app", keyAppId)
-	newEntry.Set("permissions", []string{})
-	_ = e.App.Save(newEntry)
+	records, _ := e.App.FindAllRecords(exGrantedCollection,
+		dbx.NewExp("user = {:user}", dbx.Params{"user": userId}),
+		dbx.NewExp("ex_app = {:exapp}", dbx.Params{"exapp": keyAppId}),
+	)
+	if len(records) == 1 {
+		_ = e.App.Delete(records[0])
+	}
 
 	dbtools.SendPushNotificationToUser(e.App, dbtools.PushNotification{
 		UserId: user.Id,
