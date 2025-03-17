@@ -23,7 +23,7 @@ func SendUpdateNotifyHandler(e *core.RequestEvent) error {
 	if areaUser.Id == "5366" {
 		dbtools.SendPushNotificationToAllUsers(e.App, dbtools.PushNotification{
 			TrTag: "push_notification.new_document_available",
-		})
+		}, false)
 	}
 	return e.String(200, "OK")
 }
