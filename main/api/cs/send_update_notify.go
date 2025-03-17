@@ -5,6 +5,7 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"mensadb/area32"
 	"mensadb/tools/dbtools"
+	"time"
 )
 
 func SendUpdateNotifyHandler(e *core.RequestEvent) error {
@@ -22,6 +23,14 @@ func SendUpdateNotifyHandler(e *core.RequestEvent) error {
 
 	if areaUser.Id == "5366" {
 		go func() {
+
+			dbtools.SendPushNotificationToUser(e.App, dbtools.PushNotification{
+				UserId: areaUser.Id,
+				TrTag:  "push_notification.new_update_available",
+			}, false)
+
+			time.Sleep(30 * time.Second)
+
 			dbtools.SendPushNotificationToAllUsers(e.App, dbtools.PushNotification{
 				TrTag: "push_notification.new_update_available",
 			}, false)
