@@ -20,4 +20,5 @@ func Load(e *router.RouterGroup[*core.RequestEvent]) {
 	e.GET("/api/cs/force-update-addons", ForceUpdateAddonsHandler)
 	e.GET("/api/cs/force-notification", forceNotification)
 	e.GET("/api/cs/force-update-state-managers", ForceUpdateStateManagersHandler)
+	e.GET("/api/cs/force-update-docs", ForceUpdateDocsHandler)
 }

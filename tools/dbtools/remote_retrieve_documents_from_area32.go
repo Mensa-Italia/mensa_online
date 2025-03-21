@@ -44,8 +44,9 @@ func RemoteRetrieveDocumentsFromArea32(app core.App) {
 
 	// Recupera i nuovi documenti da Area32 che non sono già nel database
 	newDocuments, _ := scraperApi.GetAllDocuments(documentsUids)
+	idOfDocument := ""
 	for _, document := range newDocuments {
-		go UpdateDocuments(app, document) // Aggiorna i documenti in modo concorrente
+		idOfDocument = UpdateDocuments(app, document) // Aggiorna i documenti in modo concorrente
 	}
 
 	// Notifica gli utenti se sono stati aggiunti nuovi documenti
@@ -55,12 +56,19 @@ func RemoteRetrieveDocumentsFromArea32(app core.App) {
 			TrNamedParams: map[string]string{
 				"count": fmt.Sprintf("%d", len(newDocuments)),
 			},
+			Data: map[string]string{
+				"type": "multiple_documents",
+			},
 		})
 	} else if len(newDocuments) == 1 {
 		SendPushNotificationToAllUsers(app, PushNotification{
 			TrTag: "push_notification.new_document_available",
 			TrNamedParams: map[string]string{
 				"name": newDocuments[0]["description"].(string),
+			},
+			Data: map[string]string{
+				"type":        "single_document",
+				"document_id": idOfDocument,
 			},
 		})
 	}
@@ -72,10 +80,10 @@ func RemoteRetrieveDocumentsFromArea32(app core.App) {
 }
 
 // UpdateDocuments aggiorna il database con un nuovo documento recuperato da Area32
-func UpdateDocuments(app core.App, document map[string]any) {
+func UpdateDocuments(app core.App, document map[string]any) string {
 	collection, err := app.FindCollectionByNameOrId("documents")
 	if err != nil {
-		return
+		return ""
 	}
 
 	// Genera un UID univoco per il documento basato sul link
@@ -95,10 +103,12 @@ func UpdateDocuments(app core.App, document map[string]any) {
 	// Imposta il file e i relativi dati
 	newDocument.Set("file", document["file"].(*filesystem.File))
 	newDocument.Set("file_data", document["resume"].(string))
-	newDocument.Set("uploaded_by", "5366")
+	newDocument.Set("uploaded_by", "5031")
 
 	// Salva il nuovo documento nel database
 	_ = app.Save(newDocument)
+
+	return newDocument.Id
 }
 
 // getIconBasedOnCategory assegna un'icona in base alla categoria del documento
