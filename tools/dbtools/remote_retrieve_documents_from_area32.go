@@ -102,11 +102,23 @@ func UpdateDocuments(app core.App, document map[string]any) string {
 
 	// Imposta il file e i relativi dati
 	newDocument.Set("file", document["file"].(*filesystem.File))
-	newDocument.Set("file_data", document["resume"].(string))
 	newDocument.Set("uploaded_by", "5031")
 
 	// Salva il nuovo documento nel database
 	_ = app.Save(newDocument)
+
+	if document["resume"] != nil {
+		// Crea un nuovo record nella collezione "resumes"
+		resumeCollection, _ := app.FindCollectionByNameOrId("documents_elaborated")
+		newResume := core.NewRecord(resumeCollection)
+		newResume.Set("document", newDocument.Id)
+		newResume.Set("ia_resume", document["resume"].(string))
+		_ = app.Save(newResume)
+
+		// Aggiorna il documento con il riferimento al resume
+		newDocument.Set("elaborated", newResume.Id)
+		_ = app.Save(newDocument)
+	}
 
 	return newDocument.Id
 }
