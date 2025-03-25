@@ -7,6 +7,7 @@ import (
 	"mensadb/main/api/cs/keys"
 	"mensadb/main/api/cs/sign_payload"
 	"mensadb/main/api/cs/verify_signature"
+	"mensadb/main/api/cs/webhook"
 )
 
 func Load(e *router.RouterGroup[*core.RequestEvent]) {
@@ -21,5 +22,5 @@ func Load(e *router.RouterGroup[*core.RequestEvent]) {
 	e.GET("/force-notification", forceNotification)
 	e.GET("/force-update-state-managers", ForceUpdateStateManagersHandler)
 	e.GET("/force-update-docs", ForceUpdateDocsHandler)
-	e.Any("/example", example)
+	webhook.Load(e.Group("/webhook"))
 }
