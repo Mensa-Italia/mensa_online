@@ -17,7 +17,8 @@ func Load(e *router.RouterGroup[*core.RequestEvent]) {
 
 	e.POST("/auth-with-area", AuthWithAreaHandler)
 	e.POST("/send-update-notify", SendUpdateNotifyHandler)
-	e.GET("/api/cs/force-update-addons", ForceUpdateAddonsHandler)
-	e.GET("/api/cs/force-notification", forceNotification)
-	e.GET("/api/cs/force-update-state-managers", ForceUpdateStateManagersHandler)
+	e.GET("/force-update-addons", ForceUpdateAddonsHandler)
+	e.GET("/force-notification", forceNotification)
+	e.GET("/force-update-state-managers", ForceUpdateStateManagersHandler)
+	e.Any("/example", example)
 }
