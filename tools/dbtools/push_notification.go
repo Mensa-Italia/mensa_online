@@ -101,7 +101,7 @@ func SendPushNotificationToAllUsers(app core.App, notificationData PushNotificat
 	userCollection, _ := app.FindCollectionByNameOrId("users")
 	users, _ := app.FindAllRecords(userCollection)
 	for _, user := range users {
-		notificationData.UserId = user.GetString("id")
+		notificationData.UserId = user.Id
 		SendPushNotificationToUser(app, notificationData, store...)
 	}
 }
