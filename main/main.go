@@ -9,6 +9,7 @@ import (
 	"mensadb/main/api"
 	"mensadb/main/hooks"
 	_ "mensadb/migrations"
+	"mensadb/printful"
 	"mensadb/tolgee"
 	"mensadb/tools/dbtools"
 	"mensadb/tools/env"
@@ -21,6 +22,8 @@ func main() {
 
 	app.OnBootstrap().BindFunc(func(e *core.BootstrapEvent) error {
 		tolgee.Load(env.GetTolgeeKey())
+		printful.Setup(env.GetPrintfulKey())
+		printful.SetupWebhook(env.GetWebhookURL())
 		go importers.GetFullMailList()
 
 		return e.Next()

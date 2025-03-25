@@ -18,6 +18,8 @@ type config struct {
 	GeminiKey              string `env:"GEMINI_KEY" envDefault:""`
 	GeminiResumePrompt     string `env:"GEMINI_RESUME_PROMPT" envDefault:"PARLI SOLO ITALIANO"`
 	TolgeeKey              string `env:"TOLGEE_KEY" envDefault:""`
+	PrintfulKey            string `env:"PRINTFUL_KEY" envDefault:""`
+	PrintfulWebhookURL     string `env:"PRINTFUL_WEBHOOK_URL" envDefault:""`
 }
 
 var cfg = config{}
@@ -74,4 +76,12 @@ func GetGeminiResumePrompt() string {
 
 func GetTolgeeKey() string {
 	return cfg.TolgeeKey
+}
+
+func GetPrintfulKey() string {
+	return cfg.PrintfulKey
+}
+
+func GetPrintfulWebhookURL() string {
+	return cfg.PrintfulWebhookURL
 }
