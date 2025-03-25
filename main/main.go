@@ -23,7 +23,7 @@ func main() {
 	app.OnBootstrap().BindFunc(func(e *core.BootstrapEvent) error {
 		tolgee.Load(env.GetTolgeeKey())
 		printful.Setup(env.GetPrintfulKey())
-		printful.SetupWebhook(env.GetWebhookURL())
+		printful.SetupWebhook(env.GetPrintfulWebhookURL())
 		go importers.GetFullMailList()
 
 		return e.Next()
