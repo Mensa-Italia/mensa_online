@@ -9,17 +9,49 @@ func PrintfulWebhookHandler(e *core.RequestEvent) error {
 	var bodyBytes []byte
 	_, _ = e.Request.Body.Read(bodyBytes)
 
-	model := printful.ParseWebhookModel(bodyBytes)
-
-	switch model.GetType() {
-	case "product_synced":
-		_, _ = printful.ParseProductSyncedWebhook(bodyBytes)
-	case "product_updated":
-		_, _ = printful.ParseProductUpdateWebhook(bodyBytes)
-	case "product_deleted":
-		_, _ = printful.ParseProductDeleteWebhook(bodyBytes)
-		
-	}
+	printful.HandleWebhook(printful.PrintfulHandlers{
+		ProductSyncedHandler:  handleBodyUpdate(e.App),
+		ProductUpdatedHandler: handleBodyUpdate(e.App),
+		ProductDeletedHandler: handleBodyDelete(e.App),
+	}, bodyBytes)
 
 	return nil
+}
+
+/*
+	{
+	  "collectionId": "pbc_3781977165",
+	  "collectionName": "boutique",
+	  "id": "test",
+	  "uid": "test",
+	  "name": "test",
+	  "description": "test",
+	  "image": [
+	    "filename.jpg"
+	  ],
+	  "amount": 123,
+	  "alternative_of": "RELATION_RECORD_ID",
+	  "show": true,
+	  "created": "2022-01-01 10:00:00.123Z",
+	  "updated": "2022-01-01 10:00:00.123Z"
+	}
+*/
+func handleBodyUpdate(app core.App) func(model printful.WebhookProductModel) error {
+	return func(model printful.WebhookProductModel) error {
+		boutiqueCollection, _ := app.FindCollectionByNameOrId("boutique")
+		if boutiqueCollection == nil {
+			record := core.NewRecord(boutiqueCollection)
+			record.Set("name", model.Data.SyncProduct.Name)
+			record.Set("description", model.Data.SyncProduct.Name)
+		}
+		return nil
+	}
+
+}
+
+func handleBodyDelete(app core.App) func(model printful.WebhookProductModel) error {
+	return func(model printful.WebhookProductModel) error {
+		return nil
+	}
+
 }
