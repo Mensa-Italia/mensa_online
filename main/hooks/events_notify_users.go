@@ -34,9 +34,11 @@ func EventsNotifyUsersAsync(e *core.RecordEvent) error {
 		eventsNotifyUsers(e)
 	}(e)
 
-	go func(e *core.RecordEvent) {
-		createEventStamp(e)
-	}(e)
+	if !e.Record.GetBool("is_spot") {
+		go func(e *core.RecordEvent) {
+			createEventStamp(e)
+		}(e)
+	}
 
 	return e.Next()
 }
