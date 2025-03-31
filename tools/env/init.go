@@ -15,6 +15,11 @@ type config struct {
 	StripeWebhookSignature string `env:"STRIPE_WEBHOOK_SIGNATURE" envDefault:""`
 	Area32InternalEmail    string `env:"AREA32_INTERNAL_EMAIL" envDefault:""`
 	Area32InternalPassword string `env:"AREA32_INTERNAL_PASSWORD" envDefault:""`
+	GeminiKey              string `env:"GEMINI_KEY" envDefault:""`
+	GeminiResumePrompt     string `env:"GEMINI_RESUME_PROMPT" envDefault:"PARLI SOLO ITALIANO"`
+	TolgeeKey              string `env:"TOLGEE_KEY" envDefault:""`
+	PrintfulKey            string `env:"PRINTFUL_KEY" envDefault:""`
+	PrintfulWebhookURL     string `env:"PRINTFUL_WEBHOOK_URL" envDefault:""`
 }
 
 var cfg = config{}
@@ -59,4 +64,24 @@ func GetArea32InternalEmail() string {
 
 func GetArea32InternalPassword() string {
 	return cfg.Area32InternalPassword
+}
+
+func GetGeminiKey() string {
+	return cfg.GeminiKey
+}
+
+func GetGeminiResumePrompt() string {
+	return cfg.GeminiResumePrompt
+}
+
+func GetTolgeeKey() string {
+	return cfg.TolgeeKey
+}
+
+func GetPrintfulKey() string {
+	return cfg.PrintfulKey
+}
+
+func GetPrintfulWebhookURL() string {
+	return cfg.PrintfulWebhookURL
 }
