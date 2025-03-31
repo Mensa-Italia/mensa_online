@@ -47,6 +47,12 @@ func EventsNotifyUsersAsync(e *core.RecordEvent) error {
 // 3. Genera un QR code associato al timbro e al suo codice segreto.
 // 4. Invia un'email all'utente con il timbro allegato.
 func createEventStamp(e *core.RecordEvent) {
+
+	userRecord, err := dbtools.GetUserById(e.App, e.Record.GetString("user"))
+	if err != nil {
+		return
+	}
+
 	stampCollection, _ := e.App.FindCollectionByNameOrId("stamp")
 	newRecord := core.NewRecord(stampCollection)
 
@@ -95,7 +101,7 @@ func createEventStamp(e *core.RecordEvent) {
 			Name:    e.App.Settings().Meta.SenderName,
 		},
 		To: []mail.Address{{
-			Address: "matteo.sipione@mensa.it",
+			Address: userRecord.Email(),
 		}},
 		Subject: "Ciao creatore di eventi!", Attachments: map[string]io.Reader{
 			"stamp_qr.png": stampImage,
