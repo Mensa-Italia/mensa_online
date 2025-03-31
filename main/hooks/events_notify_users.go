@@ -48,7 +48,7 @@ func EventsNotifyUsersAsync(e *core.RecordEvent) error {
 // 4. Invia un'email all'utente con il timbro allegato.
 func createEventStamp(e *core.RecordEvent) {
 
-	userRecord, err := dbtools.GetUserById(e.App, e.Record.GetString("user"))
+	userRecord, err := dbtools.GetUserById(e.App, e.Record.GetString("owner"))
 	if err != nil {
 		return
 	}
