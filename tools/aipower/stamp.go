@@ -43,16 +43,8 @@ func GenerateStamp(prompt string) ([]byte, error) {
 	}
 
 	session := model.StartChat()
-	session.History = []*genai.Content{
-		{
-			Role: "user",
-			Parts: []genai.Part{
-				genai.Text(fmt.Sprintf("Event Maker: Mensa Italia\n-----\n%s\n\n----\n\nMake a prompt to generate an image that is a circular stamp, black on white with a drawing that represent the event.\nDon't use names describe everything\nDefine what kind of text is need to be written on the outer ring, top and bottom, in Italian. include the event maker.\nBe descriptive", prompt)),
-			},
-		},
-	}
 
-	resp, err := session.SendMessage(ctx, genai.Text("INSERT_INPUT_HERE"))
+	resp, err := session.SendMessage(ctx, genai.Text(fmt.Sprintf("Event Maker: Mensa Italia\n-----\n%s\n\n----\n\nMake a prompt to generate an image that is a circular stamp, black on white with a drawing that represent the event.\nDon't use names describe everything\nDefine what kind of text is need to be written on the outer ring, top and bottom, in Italian. include the event maker.\nBe descriptive", prompt)))
 	if err != nil {
 		log.Fatalf("Error sending message: %v", err)
 	}
@@ -110,14 +102,18 @@ Make a cricular stmap, black on white.`, prompt)},
 
 	bounds := img.Bounds()
 	newImg := image.NewNRGBA(bounds)
-
+	isImageWhite, _ := isImageMostlyWhite(img)
 	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 		for x := bounds.Min.X; x < bounds.Max.X; x++ {
 			pixel := img.At(x, y)
 			r, g, b, _ := pixel.RGBA()
 			brightness := (r + g + b) / 3 >> 8
 
-			newImg.SetNRGBA(x, y, color.NRGBA{uint8(0), uint8(0), uint8(0), uint8(255 - brightness)})
+			if isImageWhite {
+				newImg.SetNRGBA(x, y, color.NRGBA{uint8(0), uint8(0), uint8(0), uint8(255 - brightness)})
+			} else {
+				newImg.SetNRGBA(x, y, color.NRGBA{uint8(0), uint8(0), uint8(0), uint8(brightness)})
+			}
 		}
 	}
 
@@ -132,4 +128,24 @@ Make a cricular stmap, black on white.`, prompt)},
 	}
 
 	return buffer.Bytes(), nil
+}
+
+func isImageMostlyWhite(img image.Image) (bool, error) {
+	bounds := img.Bounds()
+	whiteCount := 0
+	blackCount := 0
+
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			r, g, b, _ := img.At(x, y).RGBA()
+			brightness := (r + g + b) / 3 >> 8
+			if brightness > 127 {
+				whiteCount++
+			} else {
+				blackCount++
+			}
+		}
+	}
+
+	return whiteCount > blackCount, nil
 }
