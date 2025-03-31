@@ -12,7 +12,6 @@ import (
 	"image"
 	"image/color"
 	"image/png"
-	"io/ioutil"
 	"log"
 	"mensadb/tools/env"
 )
@@ -120,11 +119,6 @@ Make a cricular stmap, black on white.`, prompt)},
 	var buffer bytes.Buffer
 	if err := png.Encode(&buffer, newImg); err != nil {
 		return nil, err
-	}
-
-	err = ioutil.WriteFile("gemini-transparent-image.png", buffer.Bytes(), 0644)
-	if err != nil {
-		log.Fatal(err)
 	}
 
 	return buffer.Bytes(), nil
