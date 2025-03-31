@@ -62,3 +62,7 @@ func GetUsersByState(app core.App, state string) ([]string, error) {
 	}
 	return userIDs, nil
 }
+
+func GetUserById(app core.App, userId string) (*core.Record, error) {
+	return app.FindRecordById("users", userId)
+}
