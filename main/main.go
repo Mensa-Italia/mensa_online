@@ -16,25 +16,22 @@ import (
 	"os"
 )
 
-var app = pocketbase.New()
-
 func main() {
+	app := pocketbase.New()
+	dbtools.CronTasks(app)
 
 	app.OnBootstrap().BindFunc(func(e *core.BootstrapEvent) error {
 		tolgee.Load(env.GetTolgeeKey())
 		printful.Setup(env.GetPrintfulKey())
 		printful.SetupWebhook(env.GetPrintfulWebhookURL())
 		go importers.GetFullMailList()
-
 		return e.Next()
 	})
 
 	app.OnServe().BindFunc(func(e *core.ServeEvent) error {
-		dbtools.CronTasks(app)
 		api.Load(e.Router.Group("/api"))
 		e.Router.GET("/ical/{hash}", RetrieveICAL)
 		e.Router.GET("/static/{path...}", apis.Static(os.DirFS("./pb_public"), false))
-
 		return e.Next()
 	})
 
