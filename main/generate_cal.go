@@ -36,14 +36,14 @@ func (i *IcalEvents) GetSixDigitPrecisionLatLon() (string, string) {
 func RetrieveICAL(e *core.RequestEvent) error {
 	hashCode := e.Request.PathValue("hash")
 
-	resultCalendarStates, _ := app.FindAllRecords("calendar_link", dbx.NewExp("hash = {:user}", dbx.Params{
+	resultCalendarStates, _ := e.App.FindAllRecords("calendar_link", dbx.NewExp("hash = {:user}", dbx.Params{
 		"user": hashCode,
 	}))
 	if len(resultCalendarStates) == 0 {
 		return e.String(404, "Calendar not found")
 	}
 
-	resultUsers, _ := app.FindAllRecords("users", dbx.NewExp("id = {:user}", dbx.Params{
+	resultUsers, _ := e.App.FindAllRecords("users", dbx.NewExp("id = {:user}", dbx.Params{
 		"user": resultCalendarStates[0].GetString("user"),
 	}))
 	if len(resultUsers) == 0 {
@@ -73,7 +73,7 @@ func RetrieveICAL(e *core.RequestEvent) error {
 		calendarStates = append(calendarStates, data)
 	}
 
-	query := app.DB().Select(
+	query := e.App.DB().Select(
 		"events.id as id",
 		"events.name as name",
 		"events.description as description",
