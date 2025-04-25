@@ -42,9 +42,6 @@ func RemoteUpdateAddons(app core.App) {
 	for _, record := range records {
 		// Costruisce l'URL da cui recuperare i dati dell'addon
 		urlToCheck := record.Get("url").(string) + "/mensadata.json"
-		if urlToCheck == "" {
-			continue
-		}
 
 		// Effettua una richiesta HTTP GET per recuperare i dati dell'addon
 		get, err := resty.New().R().Get(urlToCheck)
@@ -74,8 +71,15 @@ func RemoteUpdateAddons(app core.App) {
 
 				// Salva il record aggiornato nel database
 				err = app.Save(record)
+			} else {
+				// Se l'ID dell'addon non corrisponde, imposta l'addon come non valido
+				record.Set("is_ready", false)
+				_ = app.Save(record)
 			}
-
+		} else {
+			// Se la richiesta HTTP fallisce, imposta l'addon come non valido
+			record.Set("is_ready", false)
+			_ = app.Save(record)
 		}
 	}
 }

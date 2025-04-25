@@ -64,7 +64,7 @@ func (api *ScraperApi) DoLoginAndRetrieveMain(email, password string) (*Area32Us
 		"password": password,
 		"_token":   token,
 	}
-	_, err = api.client.R().
+	resp, err = api.client.R().
 		SetFormData(formData).
 		Post("https://www.cloud32.it/Associazioni/utenti/login")
 	if err != nil {
