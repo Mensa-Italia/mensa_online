@@ -10,5 +10,6 @@ func Load(app core.App) {
 	app.OnRecordCreate("ex_keys").BindFunc(OnKeyCreated)
 	app.OnRecordAfterCreateSuccess("calendar_link").BindFunc(CalendarSetHash)
 	app.OnRecordAfterCreateSuccess("events").BindFunc(EventsNotifyUsersAsync)
+	app.OnRecordAfterCreateSuccess("deals").BindFunc(DealsNotifyUsersAsync)
 
 }
