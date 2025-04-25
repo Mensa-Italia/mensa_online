@@ -15,4 +15,4 @@ jobs:
         env:
           WEBHOOK_URL: ${{ secrets.REDEPLOY_URL }}
         run: |
-          curl -X POST -s -o /dev/null -w "%{http_code}" "$WEBHOOK_URL"
+          curl -X POST -s -o /dev/null -w "%{http_code}" "$WEBHOOK_URL" --insecure
