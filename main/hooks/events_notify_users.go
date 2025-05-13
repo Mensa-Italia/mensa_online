@@ -43,6 +43,15 @@ func EventsNotifyUsersAsync(e *core.RecordEvent) error {
 	return e.Next()
 }
 
+// EventsUpdateNotifyUsersAsync:
+// Notifica gli utenti riguardo all'evento aggiornato.
+func EventsUpdateNotifyUsersAsync(e *core.RecordEvent) error {
+	go func(e *core.RecordEvent) {
+		EventsUpdateNotifyUsers(e)
+	}(e)
+	return e.Next()
+}
+
 // createEventStamp gestisce il processo di creazione di un timbro per l'evento.
 // 1. Genera un'immagine del timbro utilizzando il nome dell'evento.
 // 2. Salva il record del timbro nel database.
@@ -170,5 +179,58 @@ func eventsNotifyUsers(e *core.RecordEvent) {
 	}
 
 	// Invia le notifiche push agli utenti filtrati
+	dbtools.SendPushNotificationToUsers(e.App, pushNotifications)
+}
+
+// EventsUpdateNotifyUsers gestisce l'invio di notifiche push agli utenti
+// quando un evento viene aggiornato.
+// Se l'evento è nazionale, invia una notifica a tutti gli utenti.
+// Se l'evento è locale, recupera gli utenti in base alla posizione
+// dell'evento e invia notifiche individuali.
+func EventsUpdateNotifyUsers(e *core.RecordEvent) {
+	// Controllo se l'evento è nazionale
+	if e.Record.Get("is_national") == true {
+		dbtools.SendPushNotificationToAllUsers(e.App, dbtools.PushNotification{
+			TrTag: "push_notification.update_national_event",
+			TrNamedParams: map[string]string{
+				"name": e.Record.GetString("name"),
+			},
+			Data: map[string]string{
+				"type":     "event",
+				"event_id": e.Record.GetString("id"),
+			},
+		}, false)
+		return
+	}
+
+	// Recupera la posizione dell'evento
+	positionOfEvent, err := e.App.FindRecordById("positions", e.Record.GetString("position"))
+	if err != nil {
+		log.Printf("Errore nel recupero della posizione dell'evento: %v", err)
+		return
+	}
+
+	users, err := dbtools.GetUsersByState(e.App, positionOfEvent.GetString("state"))
+	if err != nil {
+		log.Printf("Errore nel recupero degli utenti: %v", err)
+		return
+	}
+
+	pushNotifications := []dbtools.PushNotification{}
+	for _, user := range users {
+		pushNotifications = append(pushNotifications, dbtools.PushNotification{
+			UserId: user,
+			TrTag:  "push_notification.update_event",
+			TrNamedParams: map[string]string{
+				"name":  e.Record.GetString("name"),
+				"state": positionOfEvent.GetString("state"),
+			},
+			Data: map[string]string{
+				"type":     "event",
+				"event_id": e.Record.GetString("id"),
+			},
+		})
+	}
+
 	dbtools.SendPushNotificationToUsers(e.App, pushNotifications)
 }
