@@ -15,12 +15,12 @@ func webhookStripe(e *core.RequestEvent) error {
 	payloadToRead := http.MaxBytesReader(e.Response, e.Request.Body, MaxBodyBytes)
 	payload, err := io.ReadAll(payloadToRead)
 	if err != nil {
-		return e.String(400, "Invalid payload")
+		return e.String(http.StatusBadRequest, "Invalid payload")
 	}
 
 	event, err := webhook.ConstructEvent(payload, e.Request.Header.Get("Stripe-Signature"), env.GetStripeWebhookSignature())
 	if err != nil {
-		return e.JSON(400, err.Error())
+		return e.JSON(http.StatusBadRequest, err.Error())
 	}
 
 	if strings.Contains(string(event.Type), "payment_intent") {
@@ -30,14 +30,14 @@ func webhookStripe(e *core.RequestEvent) error {
 			return err
 		}
 		if len(records) == 0 {
-			return e.String(404, "Payment not found")
+			return e.String(http.StatusOK, "We have received the webhook but this service doesn't know this payment")
 		}
 		record := records[0]
 		record.Set("status", paymentIntent["status"])
 		err = e.App.Save(record)
 		if err != nil {
-			return e.String(500, "Error saving payment")
+			return e.String(http.StatusInternalServerError, "Error saving payment")
 		}
 	}
-	return e.String(200, "OK")
+	return e.String(http.StatusOK, "OK")
 }
