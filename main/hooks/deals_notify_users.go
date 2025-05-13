@@ -7,15 +7,22 @@ import (
 
 func DealsNotifyUsersAsync(e *core.RecordEvent) error {
 	go func(e *core.RecordEvent) {
-		dealsNotifyUsers(e)
+		dealsNotifyUsers(e, "push_notification.new_deal")
 	}(e)
 
 	return e.Next()
 }
 
-func dealsNotifyUsers(e *core.RecordEvent) {
+func DealsUpdateNotifyUsersAsync(e *core.RecordEvent) error {
+	go func(e *core.RecordEvent) {
+		dealsNotifyUsers(e, "push_notification.update_deal")
+	}(e)
+	return e.Next()
+}
+
+func dealsNotifyUsers(e *core.RecordEvent, trTags string) {
 	dbtools.SendPushNotificationToAllUsers(e.App, dbtools.PushNotification{
-		TrTag: "push_notification.new_deal",
+		TrTag: trTags,
 		TrNamedParams: map[string]string{
 			"name": e.Record.GetString("name"),
 		},
@@ -23,5 +30,5 @@ func dealsNotifyUsers(e *core.RecordEvent) {
 			"type":    "deal",
 			"deal_id": e.Record.Id,
 		},
-	}, false)
+	})
 }
