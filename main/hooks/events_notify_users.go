@@ -72,25 +72,39 @@ func createEventStamp(e *core.RecordEvent) {
 	if err != nil {
 		// Log dell'errore nella generazione dello stamp
 		log.Printf("Errore nella generazione dello stamp: %v", err)
+		return
 	}
-	fileImage, _ := filesystem.NewFileFromBytes(geminiImage, "stamp.png")
+	fileImage, err := filesystem.NewFileFromBytes(geminiImage, "stamp.png")
+	if err != nil {
+		log.Printf("Errore nella creazione del file immagine: %v", err)
+		return
+	}
 	newRecord.Set("image", fileImage)
 	newRecord.Set("description", e.Record.GetString("name"))
 
 	// Salvataggio del record del timbro
-	_ = e.App.Save(newRecord)
+	err = e.App.Save(newRecord)
+	if err != nil {
+		log.Printf("Errore nel salvataggio del record del timbro: %v", err)
+		return
+	}
 
 	stampSecretCollection, _ := e.App.FindCollectionByNameOrId("stamp_secret")
 	newRecordSecret := core.NewRecord(stampSecretCollection)
 	newRecordSecret.Set("stamp", newRecord.Id)
 	newRecordSecret.Set("code", uuid.New().String())
-	_ = e.App.Save(newRecordSecret)
+	err = e.App.Save(newRecordSecret)
+	if err != nil {
+		log.Printf("Errore nel salvataggio del record del timbro segreto: %v", err)
+		return
+	}
 
 	// Generazione del QR code
 	qrc, err := qrcode.New(fmt.Sprintf("%s:::%s", newRecord.Id, newRecordSecret.GetString("code")))
 	if err != nil {
 		// Log dell'errore nella generazione del QRCode
 		log.Printf("Errore nella generazione del QRCode: %v", err)
+		return
 	}
 	options := []standard.ImageOption{
 		standard.WithBgColorRGBHex("#ffffff"),
@@ -102,7 +116,8 @@ func createEventStamp(e *core.RecordEvent) {
 	wr := nopCloser{Writer: stampImage}
 	w2 := standard.NewWithWriter(wr, options...)
 	if err = qrc.Save(w2); err != nil {
-		panic(err) // Se c'è un errore nel salvataggio del QR code, si genera un panic
+		log.Printf("Errore nel salvataggio del QRCode: %v", err)
+		return
 	}
 
 	// Preparazione del messaggio email da inviare
@@ -123,7 +138,11 @@ func createEventStamp(e *core.RecordEvent) {
 	}
 
 	// Invio dell'email con il timbro allegato
-	_ = e.App.NewMailClient().Send(message)
+	err = e.App.NewMailClient().Send(message)
+	if err != nil {
+		log.Printf("Errore nell'invio dell'email: %v", err)
+		return
+	}
 }
 
 // eventsNotifyUsers gestisce l'invio di notifiche push agli utenti.
