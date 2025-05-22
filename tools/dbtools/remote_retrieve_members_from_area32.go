@@ -94,7 +94,7 @@ func UpdateMembers(app core.App, member map[string]any) string {
 	if err == nil {
 		newRecord.Set("full_data", marshal)
 	}
-	if member["image"] != nil {
+	if member["image"].(*filesystem.File) != nil {
 		newRecord.Set("image", member["image"].(*filesystem.File))
 	}
 	newRecord.Set("is_active", true)
