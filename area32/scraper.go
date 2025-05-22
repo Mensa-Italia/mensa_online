@@ -15,7 +15,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -316,29 +315,15 @@ func (api *ScraperApi) DownloadFile(url string) (*filesystem.File, error) {
 
 func (api *ScraperApi) GetAllRegSoci() ([]map[string]any, error) {
 	var allUsers []map[string]any
-	lock := sync.Mutex{}
-	wg := sync.WaitGroup{}
-	allUsersBefLength := 0
 	for i := 1; ; i++ {
-		wg.Add(1)
-		go func(page int) {
-			defer wg.Done()
-			users, err := api.GetRegSoci(page, "")
-			if err != nil {
-				return
-			}
-			lock.Lock()
-			allUsers = append(allUsers, users...)
-			lock.Unlock()
-		}(i)
-		if i%10 == 0 {
-			wg.Wait()
-			if len(allUsers) == allUsersBefLength {
-				break
-			} else {
-				allUsersBefLength = len(allUsers)
-			}
+		users, err := api.GetRegSoci(i, "")
+		if err != nil {
+			return nil, err
 		}
+		if len(users) == 0 {
+			break
+		}
+		allUsers = append(allUsers, users...)
 	}
 	return allUsers, nil
 }
