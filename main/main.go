@@ -4,6 +4,7 @@ import (
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
+	"github.com/pocketbase/pocketbase/plugins/migratecmd"
 	"log"
 	"mensadb/importers"
 	"mensadb/main/api"
@@ -14,6 +15,7 @@ import (
 	"mensadb/tools/dbtools"
 	"mensadb/tools/env"
 	"os"
+	"strings"
 )
 
 func main() {
@@ -37,6 +39,13 @@ func main() {
 
 	// Hooks to table events
 	hooks.Load(app)
+
+	isGoRun := strings.HasPrefix(os.Args[0], os.TempDir())
+
+	migratecmd.MustRegister(app, app.RootCmd, migratecmd.Config{
+		Automigrate: isGoRun,
+		Dir:         "./migrations",
+	})
 
 	if err := app.Start(); err != nil {
 		log.Fatal(err)
