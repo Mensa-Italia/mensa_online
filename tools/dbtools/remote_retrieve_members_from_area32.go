@@ -92,7 +92,9 @@ func UpdateMembers(app core.App, member map[string]any) string {
 		if err == nil {
 			memberInside.Set("full_data", marshal)
 		}
-		memberInside.Set("image", member["image"].(*filesystem.File))
+		if member["image"] != nil {
+			memberInside.Set("image", member["image"].(*filesystem.File))
+		}
 		memberInside.Set("is_active", true)
 		err = app.Save(memberInside)
 		if err != nil {
