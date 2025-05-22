@@ -3,6 +3,7 @@ package env
 import (
 	"fmt"
 	"github.com/caarlos0/env/v11"
+	"os"
 )
 
 type config struct {
@@ -25,8 +26,16 @@ type config struct {
 var cfg = config{}
 
 func init() {
-	if err := env.Parse(&cfg); err != nil {
-		fmt.Printf("%+v\n", err)
+	if os.Getenv("DEBUG") == "true" {
+		fmt.Println("DEBUG MODE ON | Getting env from .env file")
+		if err := env.Parse(&cfg); err != nil {
+			fmt.Printf("%+v\n", err)
+		}
+
+	} else {
+		if err := env.Parse(&cfg); err != nil {
+			fmt.Printf("%+v\n", err)
+		}
 	}
 }
 
