@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -313,6 +314,32 @@ func (api *ScraperApi) DownloadFile(url string) (*filesystem.File, error) {
 	return file, nil
 }
 
+func (api *ScraperApi) GetAllRegSoci() ([]map[string]any, error) {
+	var allUsers []map[string]any
+	wg := sync.WaitGroup{}
+	allUsersBefLength := 0
+	for i := 1; ; i++ {
+		wg.Add(1)
+		go func(page int) {
+			defer wg.Done()
+			users, err := api.GetRegSoci(i, "")
+			if err != nil {
+				return
+			}
+			allUsers = append(allUsers, users...)
+		}(i)
+		if i%10 == 0 {
+			wg.Wait()
+			if len(allUsers) == allUsersBefLength {
+				break
+			} else {
+				allUsersBefLength = len(allUsers)
+			}
+		}
+	}
+	return allUsers, nil
+}
+
 func (api *ScraperApi) GetRegSoci(page int, search string) ([]map[string]any, error) {
 	nameToSearch := ""
 	surnameToSearch := ""
@@ -392,21 +419,6 @@ func (api *ScraperApi) GetRegSoci(page int, search string) ([]map[string]any, er
 	})
 
 	return users, nil
-}
-
-func (api *ScraperApi) GetAllRegSoci() ([]map[string]any, error) {
-	var allUsers []map[string]any
-	for i := 1; ; i++ {
-		users, err := api.GetRegSoci(i, "")
-		if err != nil {
-			return nil, err
-		}
-		if len(users) == 0 {
-			break
-		}
-		allUsers = append(allUsers, users...)
-	}
-	return allUsers, nil
 }
 
 // GetRegSocioDeepData retrieves deep data for a member from their full profile page
