@@ -81,45 +81,27 @@ func UpdateMembers(app core.App, member map[string]any) string {
 	}
 	memberId := member["uid"].(string)
 	// Controlla se il membro esiste già nel database
-	memberInside, err := app.FindRecordById(id, memberId)
-	if err == nil {
-		// Se il membro esiste già, aggiorna i suoi dati
-		memberInside.Set("name", member["name"].(string))
-		memberInside.Set("city", member["city"].(string))
-		memberInside.Set("birthdate", member["birthDate"])
-		memberInside.Set("state", member["state"].(string))
-		marshal, err := json.Marshal(member["deepData"])
-		if err == nil {
-			memberInside.Set("full_data", marshal)
-		}
-		if member["image"] != nil {
-			memberInside.Set("image", member["image"].(*filesystem.File))
-		}
-		memberInside.Set("is_active", true)
-		err = app.Save(memberInside)
-		if err != nil {
-			log.Println("Error saving member: ", err.Error())
-		}
-	} else {
-
-		newRecord := core.NewRecord(id)
+	newRecord, err := app.FindRecordById(id, memberId)
+	if err != nil {
+		newRecord = core.NewRecord(id)
 		newRecord.Id = member["uid"].(string)
-		newRecord.Set("name", member["name"].(string))
-		newRecord.Set("city", member["city"].(string))
-		newRecord.Set("birthdate", member["birthDate"])
-		newRecord.Set("state", member["state"].(string))
-		marshal, err := json.Marshal(member["deepData"])
-		if err == nil {
-			newRecord.Set("full_data", marshal)
-		}
-		newRecord.Set("image", member["image"].(*filesystem.File))
-		newRecord.Set("is_active", true)
-		newRecord.Set("full_profile_link", member["full_profile_link"])
-		// Salva il record nel database
-		err = app.Save(newRecord)
-		if err != nil {
-			log.Println("Error saving member: ", err.Error())
-		}
 	}
+	newRecord.Set("name", member["name"].(string))
+	newRecord.Set("city", member["city"].(string))
+	newRecord.Set("birthdate", member["birthDate"])
+	newRecord.Set("state", member["state"].(string))
+	marshal, err := json.Marshal(member["deepData"])
+	if err == nil {
+		newRecord.Set("full_data", marshal)
+	}
+	newRecord.Set("image", member["image"].(*filesystem.File))
+	newRecord.Set("is_active", true)
+	newRecord.Set("full_profile_link", member["full_profile_link"])
+	// Salva il record nel database
+	err = app.Save(newRecord)
+	if err != nil {
+		log.Println("Error saving member: ", err.Error())
+	}
+
 	return memberId
 }
