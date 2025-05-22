@@ -7,10 +7,12 @@ import (
 	"github.com/google/uuid"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
 	"io"
+	"log"
 	"mensadb/tools/aipower"
 	"mensadb/tools/env"
 	"net/http/cookiejar"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -275,6 +277,15 @@ func invertArray(arr []map[string]any) []map[string]any {
 	return arr
 }
 
+func (api *ScraperApi) DownloadFileNoError(url string) *filesystem.File {
+	file, err := api.DownloadFile(url)
+	if err != nil {
+		log.Println("Error downloading file:", err)
+		return nil
+	}
+	return file
+}
+
 func (api *ScraperApi) DownloadFile(url string) (*filesystem.File, error) {
 	resp, err := api.client.R().Head(url)
 	if err != nil {
@@ -300,4 +311,126 @@ func (api *ScraperApi) DownloadFile(url string) (*filesystem.File, error) {
 		return nil, err
 	}
 	return file, nil
+}
+
+func (api *ScraperApi) GetRegSoci(page int, search string) ([]map[string]any, error) {
+	nameToSearch := ""
+	surnameToSearch := ""
+	if strings.Contains(search, " ") {
+		parts := strings.SplitN(search, " ", 2)
+		surnameToSearch = parts[0]
+		nameToSearch = parts[1]
+	} else {
+		nameToSearch = search
+		surnameToSearch = ""
+	}
+
+	visitedIds := map[string]bool{}
+	var users []map[string]any
+
+	parseTable := func(doc *goquery.Document) {
+		doc.Find("table").First().Find("tr").Each(func(i int, s *goquery.Selection) {
+			if i != 0 {
+				tds := s.Find("td")
+				if tds.Length() < 7 {
+					return
+				}
+				id := strings.TrimSpace(tds.Eq(1).Text())
+				if visitedIds[id] {
+					return
+				}
+				visitedIds[id] = true
+
+				birthDateStr := strings.TrimSpace(tds.Eq(3).Text())
+				loc, _ := time.LoadLocation("Europe/Rome")
+				var birthDate time.Time
+				birthDate, _ = time.ParseInLocation("02/01/2006", birthDateStr, loc)
+
+				imgSrc, _ := tds.Eq(0).Find("img").Attr("src")
+				link, _ := tds.Eq(6).Find("a").Attr("href")
+
+				log.Println(id)
+				user := map[string]any{
+					"uid":               id,
+					"name":              strings.TrimSpace(tds.Eq(2).Text()),
+					"birthDate":         birthDate,
+					"city":              strings.TrimSpace(tds.Eq(4).Text()),
+					"state":             strings.TrimSpace(tds.Eq(5).Text()),
+					"image":             api.DownloadFileNoError("https://www.cloud32.it" + imgSrc),
+					"linkToFullProfile": "https://www.cloud32.it" + link,
+					"deepData":          api.GetRegSocioDeepData("https://www.cloud32.it" + link),
+				}
+				users = append(users, user)
+
+			}
+		})
+	}
+
+	makeRequest := func(name, surname string) {
+		url := "https://www.cloud32.it/Associazioni/utenti/regsocio?s_cognome=" + surname +
+			"&s_nome=" + name + "&s_citta=&s_provincia=&s_regione=&Ricerca=Ricerca&page=" + strconv.Itoa(page)
+		resp, err := api.client.R().Get(url)
+		if err != nil {
+			return
+		}
+		doc, err := goquery.NewDocumentFromReader(resp.RawBody())
+		if err != nil {
+			return
+		}
+		parseTable(doc)
+	}
+
+	makeRequest(nameToSearch, surnameToSearch)
+	if surnameToSearch != "" && surnameToSearch != nameToSearch {
+		makeRequest(surnameToSearch, nameToSearch)
+	}
+
+	// Sort alphabetically by name
+	sort.Slice(users, func(i, j int) bool {
+		return users[i]["name"].(string) < users[j]["name"].(string)
+	})
+
+	return users, nil
+}
+
+func (api *ScraperApi) GetAllRegSoci() ([]map[string]any, error) {
+	var allUsers []map[string]any
+	for i := 1; ; i++ {
+		users, err := api.GetRegSoci(i, "")
+		if err != nil {
+			return nil, err
+		}
+		if len(users) == 0 {
+			break
+		}
+		allUsers = append(allUsers, users...)
+	}
+	return allUsers, nil
+}
+
+// GetRegSocioDeepData retrieves deep data for a member from their full profile page
+func (api *ScraperApi) GetRegSocioDeepData(url string) map[string]string {
+	resp, err := api.client.R().Get(url)
+	if err != nil {
+		return map[string]string{}
+	}
+
+	doc, err := goquery.NewDocumentFromReader(resp.RawBody())
+	if err != nil {
+		return map[string]string{}
+	}
+
+	data := map[string]string{}
+	doc.Find(".form-group").Each(func(i int, s *goquery.Selection) {
+		key := strings.TrimSpace(s.Find("div").First().Text())
+		value := strings.TrimSpace(s.Find("label").Last().Text())
+		if value == "" {
+			value, _ = s.Find("a").Last().Attr("href")
+		}
+		if key != "" && value != "" {
+			data[key] = value
+		}
+	})
+
+	return data
 }
