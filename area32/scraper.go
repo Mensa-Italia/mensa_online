@@ -359,6 +359,7 @@ func (api *ScraperApi) GetRegSoci(page int, search string) ([]map[string]any, er
 					"image":             api.DownloadFileNoError("https://www.cloud32.it" + imgSrc),
 					"linkToFullProfile": "https://www.cloud32.it" + link,
 					"deepData":          api.GetRegSocioDeepData("https://www.cloud32.it" + link),
+					"full_profile_link": "https://www.cloud32.it" + link,
 				}
 				users = append(users, user)
 
