@@ -114,6 +114,7 @@ func UpdateMembers(app core.App, member map[string]any) string {
 		}
 		newRecord.Set("image", member["image"].(*filesystem.File))
 		newRecord.Set("is_active", true)
+		newRecord.Set("full_profile_link", member["full_profile_link"])
 		// Salva il record nel database
 		err = app.Save(newRecord)
 		if err != nil {
