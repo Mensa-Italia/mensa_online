@@ -29,7 +29,7 @@ func CronTasks(app *pocketbase.PocketBase) {
 		RemoteRetrieveDocumentsFromArea32(app)
 	})
 
-	app.Cron().MustAdd("Update registry data", "0 6,9,12,15,18 * * *", func() {
+	app.Cron().MustAdd("Update registry data", "0 0,3,6,9,12,15,18,21 * * *", func() {
 		RemoteRetrieveMembersFromArea32(app)
 	})
 }
