@@ -6,88 +6,69 @@ import (
 	"encoding/base64"
 	"fmt"
 	"github.com/go-resty/resty/v2"
-	"github.com/google/generative-ai-go/genai"
 	"github.com/tidwall/gjson"
-	"google.golang.org/api/option"
+	"google.golang.org/genai"
 	"image"
 	"image/color"
 	"image/png"
-	"log"
 	"mensadb/tools/env"
 )
 
 func GenerateStamp(prompt string) ([]byte, error) {
 	ctx := context.Background()
+	client, _ := genai.NewClient(ctx, &genai.ClientConfig{
+		APIKey:  env.GetGeminiKey(),
+		Backend: genai.BackendGeminiAPI,
+	})
 
-	client, err := genai.NewClient(ctx, option.WithAPIKey(env.GetGeminiKey()))
-	if err != nil {
-		log.Fatalf("Error creating client: %v", err)
-	}
-	defer client.Close()
+	temp := float32(1)
+	topP := float32(0.95)
+	topK := float32(40.0)
+	maxOutputTokens := int32(8192)
 
-	model := client.GenerativeModel("gemini-2.0-flash")
-
-	model.SetTemperature(1)
-	model.SetTopK(40)
-	model.SetTopP(0.95)
-	model.SetMaxOutputTokens(8192)
-	model.ResponseMIMEType = "application/json"
-	model.ResponseSchema = &genai.Schema{
-		Type: genai.TypeObject,
-		Properties: map[string]*genai.Schema{
-			"prompt": &genai.Schema{
-				Type: genai.TypeString,
+	config := &genai.GenerateContentConfig{
+		ResponseMIMEType: "application/json",
+		Temperature:      &temp,
+		TopP:             &topP,
+		TopK:             &topK,
+		MaxOutputTokens:  maxOutputTokens,
+		ResponseSchema: &genai.Schema{
+			Type: genai.TypeObject,
+			Properties: map[string]*genai.Schema{
+				"prompt": &genai.Schema{
+					Type: genai.TypeString,
+				},
 			},
 		},
 	}
-
-	session := model.StartChat()
-
-	resp, err := session.SendMessage(ctx, genai.Text(fmt.Sprintf("Event Maker: Mensa Italia\n-----\n%s\n\n----\n\nMake a prompt to generate an image that is a circular stamp, black on white with a drawing that represent the event.\nDon't use names describe everything\nDefine what kind of text is need to be written on the outer ring, top and bottom, in Italian. include the event maker.\nBe descriptive", prompt)))
-	if err != nil {
-		log.Fatalf("Error sending message: %v", err)
-	}
-
-	for _, part := range resp.Candidates[0].Content.Parts {
-		if textPart, ok := part.(genai.Text); ok {
-			data := gjson.Parse(string(textPart))
-			promptToUse := data.Get("prompt").String()
-			return _generateStampImage(promptToUse)
-		}
-	}
-
-	return nil, fmt.Errorf("No prompt found")
+	result, _ := client.Models.GenerateContent(
+		ctx,
+		"gemini-2.0-flash",
+		genai.Text(fmt.Sprintf("Event Maker: Mensa Italia\n-----\n%s\n\n----\n\nMake a prompt to generate an image that is a circular stamp, black on white with a drawing that represent the event.\nDon't use names describe everything\nDefine what kind of text is need to be written on the outer ring, top and bottom, in Italian. include the event maker.\nBe descriptive", prompt)),
+		config,
+	)
+	data := gjson.Parse(result.Text())
+	promptToUse := data.Get("prompt").String()
+	return _generateStampImage(promptToUse)
 }
 func _generateStampImage(prompt string) ([]byte, error) {
-	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp-image-generation:generateContent?key=%s", env.GetGeminiKey())
 
-	client := resty.New()
+	url := "https://ir-api.myqa.cc/v1/openai/images/generations"
 
-	response, err := client.R().
+	response, err := resty.New().R().
+		SetHeader("Authorization", fmt.Sprintf("Bearer %s", env.GetImageRouterKey())).
 		SetHeader("Content-Type", "application/json").
 		SetBody(map[string]interface{}{
-			"contents": []map[string]interface{}{
-				{
-					"parts": []map[string]interface{}{
-						{"text": fmt.Sprintf(`Mensa Italia Event:
-%s
----
-Make a cricular stmap, black on white.`, prompt)},
-					},
-				},
-			},
-			"generationConfig": map[string]interface{}{
-				"responseModalities": []string{"Text", "Image"},
-			},
+			"prompt":  prompt,
+			"model":   "google/gemini-2.0-flash-exp:free",
+			"quality": "auto",
 		}).
 		Post(url)
-
 	if err != nil {
-		log.Fatal(err)
+		return nil, fmt.Errorf("error making request: %w", err)
 	}
-
 	data := gjson.ParseBytes(response.Body())
-	jsonResponse := data.Get("candidates.0.content.parts.0.inlineData.data").String()
+	jsonResponse := data.Get("data.0.b64_json").String()
 
 	decodedData, err := base64.StdEncoding.DecodeString(jsonResponse)
 	if err != nil {
