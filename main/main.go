@@ -34,6 +34,7 @@ func main() {
 		api.Load(e.Router.Group("/api"))
 		e.Router.GET("/ical/{hash}", RetrieveICAL)
 		e.Router.GET("/static/{path...}", apis.Static(os.DirFS("./pb_public"), false))
+		e.Router.GET("/force-stamp-gen/:id", hooks.ForceStampGen)
 		return e.Next()
 	})
 
