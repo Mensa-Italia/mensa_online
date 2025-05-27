@@ -36,7 +36,7 @@ func EventsNotifyUsersAsync(e *core.RecordEvent) error {
 
 	if !e.Record.GetBool("is_spot") {
 		go func(e *core.RecordEvent) {
-			createEventStamp(e)
+			createEventStamp(e.App, e.Record)
 		}(e)
 	}
 
@@ -57,46 +57,46 @@ func EventsUpdateNotifyUsersAsync(e *core.RecordEvent) error {
 // 2. Salva il record del timbro nel database.
 // 3. Genera un QR code associato al timbro e al suo codice segreto.
 // 4. Invia un'email all'utente con il timbro allegato.
-func createEventStamp(e *core.RecordEvent) {
+func createEventStamp(app core.App, record *core.Record) []byte {
 
-	userRecord, err := dbtools.GetUserById(e.App, e.Record.GetString("owner"))
+	userRecord, err := dbtools.GetUserById(app, record.GetString("owner"))
 	if err != nil {
-		return
+		return nil
 	}
 
-	stampCollection, _ := e.App.FindCollectionByNameOrId("stamp")
+	stampCollection, _ := app.FindCollectionByNameOrId("stamp")
 	newRecord := core.NewRecord(stampCollection)
 
 	// Generazione dell'immagine del timbro
-	geminiImage, err := aipower.GenerateStamp(e.Record.GetString("name") + "\n" + e.Record.GetString("description"))
+	geminiImage, err := aipower.GenerateStamp(record.GetString("name") + "\n" + record.GetString("description"))
 	if err != nil {
 		// Log dell'errore nella generazione dello stamp
 		log.Printf("Errore nella generazione dello stamp: %v", err)
-		return
+		return nil
 	}
 	fileImage, err := filesystem.NewFileFromBytes(geminiImage, "stamp.png")
 	if err != nil {
 		log.Printf("Errore nella creazione del file immagine: %v", err)
-		return
+		return nil
 	}
 	newRecord.Set("image", fileImage)
-	newRecord.Set("description", e.Record.GetString("name"))
+	newRecord.Set("description", record.GetString("name"))
 
 	// Salvataggio del record del timbro
-	err = e.App.Save(newRecord)
+	err = app.Save(newRecord)
 	if err != nil {
 		log.Printf("Errore nel salvataggio del record del timbro: %v", err)
-		return
+		return nil
 	}
 
-	stampSecretCollection, _ := e.App.FindCollectionByNameOrId("stamp_secret")
+	stampSecretCollection, _ := app.FindCollectionByNameOrId("stamp_secret")
 	newRecordSecret := core.NewRecord(stampSecretCollection)
 	newRecordSecret.Set("stamp", newRecord.Id)
 	newRecordSecret.Set("code", uuid.New().String())
-	err = e.App.Save(newRecordSecret)
+	err = app.Save(newRecordSecret)
 	if err != nil {
 		log.Printf("Errore nel salvataggio del record del timbro segreto: %v", err)
-		return
+		return nil
 	}
 
 	// Generazione del QR code
@@ -104,7 +104,7 @@ func createEventStamp(e *core.RecordEvent) {
 	if err != nil {
 		// Log dell'errore nella generazione del QRCode
 		log.Printf("Errore nella generazione del QRCode: %v", err)
-		return
+		return nil
 	}
 	options := []standard.ImageOption{
 		standard.WithBgColorRGBHex("#ffffff"),
@@ -117,14 +117,14 @@ func createEventStamp(e *core.RecordEvent) {
 	w2 := standard.NewWithWriter(wr, options...)
 	if err = qrc.Save(w2); err != nil {
 		log.Printf("Errore nel salvataggio del QRCode: %v", err)
-		return
+		return nil
 	}
 
 	// Preparazione del messaggio email da inviare
 	message := &mailer.Message{
 		From: mail.Address{
-			Address: e.App.Settings().Meta.SenderAddress,
-			Name:    e.App.Settings().Meta.SenderName,
+			Address: app.Settings().Meta.SenderAddress,
+			Name:    app.Settings().Meta.SenderName,
 		},
 		To: []mail.Address{{
 			Address: userRecord.Email(),
@@ -133,16 +133,20 @@ func createEventStamp(e *core.RecordEvent) {
 			"stamp_qr.png": stampImage,
 			"stamp.png":    bytes.NewReader(geminiImage),
 		},
-		HTML: fmt.Sprintf(`<p>Ciao creatore di eventi!</p><br><p>Trovi allegato il tuo timbro personale per l'evento %s</p>`, e.Record.GetString("name")),
-		Text: fmt.Sprintf("Ciao creatore di eventi!\n\nTrovi allegato il tuo timbro personale per l'evento %s", e.Record.GetString("name")),
+		HTML: fmt.Sprintf(`<p>Ciao creatore di eventi!</p><br><p>Trovi allegato il tuo timbro personale per l'evento %s</p>`, record.GetString("name")),
+		Text: fmt.Sprintf("Ciao creatore di eventi!\n\nTrovi allegato il tuo timbro personale per l'evento %s", record.GetString("name")),
 	}
 
 	// Invio dell'email con il timbro allegato
-	err = e.App.NewMailClient().Send(message)
+	err = app.NewMailClient().Send(message)
 	if err != nil {
 		log.Printf("Errore nell'invio dell'email: %v", err)
-		return
+		return nil
 	}
+
+	log.Printf("Timbro creato e email inviata con successo per l'evento: %s", record.GetString("name"))
+	return geminiImage
+
 }
 
 // eventsNotifyUsers gestisce l'invio di notifiche push agli utenti.
