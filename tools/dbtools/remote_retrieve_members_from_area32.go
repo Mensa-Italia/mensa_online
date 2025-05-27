@@ -23,30 +23,30 @@ func RemoteRetrieveMembersFromArea32(app core.App) {
 		return
 	}
 
-	// Recupera la collezione "members" dal database
-	id, err := app.FindCollectionByNameOrId("members_registry")
-	if err != nil {
-		return
-	}
-
-	// Recupera tutti i membri già presenti nel database
-	membersInside, err := app.FindAllRecords(id)
-	if err != nil {
-		return
-	}
-
-	// Costruisce un elenco degli UID dei membri esistenti
-	membersUids := []string{}
-	for _, member := range membersInside {
-		membersUids = append(membersUids, member.GetString("uid"))
-	}
-
 	// Recupera i nuovi membri da Area32 che non sono già nel database
 	newMembers, _ := scraperApi.GetAllRegSoci()
 	// Aggiorna i membri in modo concorrente
 	allMembersIDs := []string{}
 	for _, member := range newMembers {
 		allMembersIDs = append(allMembersIDs, UpdateMembers(app, member))
+	}
+
+	// Recupera la collezione "members_registry" dal database
+	membersRegistryCollection, err := app.FindCollectionByNameOrId("members_registry")
+	if err != nil {
+		return
+	}
+
+	// Recupera tutti i membri presenti nel database
+	membersInside, err := app.FindAllRecords(membersRegistryCollection)
+	if err != nil {
+		return
+	}
+
+	// Costruisce un elenco degli ID dei membri esistenti
+	membersUids := []string{}
+	for _, member := range membersInside {
+		membersUids = append(membersUids, member.Id)
 	}
 
 	// per i memberi in memberUids che non sono in allMembersIDs imposto is_active a false
@@ -59,7 +59,7 @@ func RemoteRetrieveMembersFromArea32(app core.App) {
 			}
 		}
 		if !found {
-			memberInside, err := app.FindRecordById(id, member)
+			memberInside, err := app.FindRecordById(membersRegistryCollection, member)
 			if err == nil {
 				memberInside.Set("is_active", false)
 				err = app.Save(memberInside)
