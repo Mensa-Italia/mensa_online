@@ -2,88 +2,86 @@ package aipower
 
 import (
 	"context"
-	"encoding/json"
-	"github.com/google/generative-ai-go/genai"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
-	"google.golang.org/api/option"
+	"github.com/tidwall/gjson"
+	"google.golang.org/genai"
 	"log"
 	"mensadb/tools/env"
 )
 
-func uploadToGemini(ctx context.Context, client *genai.Client, fileSystemData *filesystem.File) string {
-	options := genai.UploadFileOptions{
+func uploadToGemini(fileSystemData *filesystem.File) *genai.File {
+	ctx := context.Background()
+	client, _ := genai.NewClient(ctx, &genai.ClientConfig{
+		APIKey:  env.GetGeminiKey(),
+		Backend: genai.BackendGeminiAPI,
+	})
+	options := genai.UploadFileConfig{
 		DisplayName: fileSystemData.Name,
 	}
 	open, err := fileSystemData.Reader.Open()
 	if err != nil {
-		return ""
+		return nil
 	}
-	fileData, err := client.UploadFile(ctx, "", open, &options)
+	fileData, err := client.Files.Upload(ctx, open, &options)
 	if err != nil {
 		log.Fatalf("Error uploading file: %v", err)
-		return ""
+		return nil
 	}
 	log.Printf("Uploaded file %s as: %s", fileData.DisplayName, fileData.URI)
-	return fileData.URI
+	return fileData
 }
 
 func AskResume(fileSystemData *filesystem.File) string {
 	ctx := context.Background()
-	client, err := genai.NewClient(ctx, option.WithAPIKey(env.GetGeminiKey()))
-	if err != nil {
-		log.Fatalf("Error creating client: %v", err)
-	}
-	defer client.Close()
+	client, _ := genai.NewClient(ctx, &genai.ClientConfig{
+		APIKey:  env.GetGeminiKey(),
+		Backend: genai.BackendGeminiAPI,
+	})
 
-	model := client.GenerativeModel("gemini-2.0-flash")
+	temp := float32(1)
+	topP := float32(0.95)
+	topK := float32(40.0)
+	maxOutputTokens := int32(8192)
 
-	model.SetTemperature(1)
-	model.SetTopK(40)
-	model.SetTopP(0.95)
-	model.SetMaxOutputTokens(8192)
-	model.ResponseMIMEType = "application/json"
-	model.SystemInstruction = &genai.Content{
-		Parts: []genai.Part{genai.Text("PARLI SOLO ITALIANO")},
-	}
-	model.ResponseSchema = &genai.Schema{
-		Type:     genai.TypeObject,
-		Required: []string{"resume_text"},
-		Properties: map[string]*genai.Schema{
-			"resume_text": &genai.Schema{
-				Type: genai.TypeString,
+	config := &genai.GenerateContentConfig{
+		ResponseMIMEType: "application/json",
+		Temperature:      &temp,
+		TopP:             &topP,
+		TopK:             &topK,
+		MaxOutputTokens:  maxOutputTokens,
+		ResponseSchema: &genai.Schema{
+			Type:     genai.TypeObject,
+			Required: []string{"resume_text"},
+			Properties: map[string]*genai.Schema{
+				"resume_text": &genai.Schema{
+					Type: genai.TypeString,
+				},
 			},
 		},
 	}
 
-	fileURIs := []string{
-		uploadToGemini(ctx, client, fileSystemData),
-	}
+	uploadedFile := uploadToGemini(fileSystemData)
 
-	session := model.StartChat()
-	session.History = []*genai.Content{
-		{
-			Role: "user",
-			Parts: []genai.Part{
-				genai.FileData{URI: fileURIs[0]},
+	parts := []*genai.Part{
+		&genai.Part{
+			FileData: &genai.FileData{
+				FileURI: uploadedFile.URI,
 			},
 		},
+		genai.NewPartFromText(env.GetGeminiResumePrompt()),
 	}
 
-	resp, err := session.SendMessage(ctx, genai.Text(env.GetGeminiResumePrompt()))
-	if err != nil {
-		return ""
-	}
-
-	if len(resp.Candidates) > 0 {
-		for _, part := range resp.Candidates[0].Content.Parts {
-			if textPart, ok := part.(genai.Text); ok {
-				var jsonData map[string]string
-				err = json.Unmarshal([]byte(textPart), &jsonData)
-				if err == nil {
-					return jsonData["resume_text"]
-				}
-			}
-		}
+	result, _ := client.Models.GenerateContent(
+		ctx,
+		"gemini-2.0-flash",
+		[]*genai.Content{
+			genai.NewContentFromParts(parts, genai.RoleUser),
+		},
+		config,
+	)
+	data := gjson.Parse(result.Text())
+	if data.Get("resume_text").Exists() {
+		return data.Get("resume_text").String()
 	}
 
 	return ""

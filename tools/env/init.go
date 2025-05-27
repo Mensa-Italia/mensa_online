@@ -17,6 +17,7 @@ type config struct {
 	Area32InternalEmail    string `env:"AREA32_INTERNAL_EMAIL" envDefault:""`
 	Area32InternalPassword string `env:"AREA32_INTERNAL_PASSWORD" envDefault:""`
 	GeminiKey              string `env:"GEMINI_KEY" envDefault:""`
+	ImageRouterKey         string `env:"IMAGE_ROUTER_KEY" envDefault:""`
 	GeminiResumePrompt     string `env:"GEMINI_RESUME_PROMPT" envDefault:"PARLI SOLO ITALIANO"`
 	TolgeeKey              string `env:"TOLGEE_KEY" envDefault:""`
 	PrintfulKey            string `env:"PRINTFUL_KEY" envDefault:""`
@@ -93,4 +94,8 @@ func GetPrintfulKey() string {
 
 func GetPrintfulWebhookURL() string {
 	return cfg.PrintfulWebhookURL
+}
+
+func GetImageRouterKey() string {
+	return cfg.ImageRouterKey
 }
