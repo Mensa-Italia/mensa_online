@@ -142,8 +142,8 @@ func createEventStamp(app core.App, record *core.Record) []byte {
 			"stamp.png":     bytes.NewReader(geminiImage),
 			"copertina.png": blob,
 		},
-		HTML: fmt.Sprintf(`<p>Ciao creatore di eventi!</p><br><p>Trovi allegato il tuo timbro personale per l'evento %s</p>`, record.GetString("name")),
-		Text: fmt.Sprintf("Ciao creatore di eventi!\n\nTrovi allegato il tuo timbro personale per l'evento %s", record.GetString("name")),
+		HTML: fmt.Sprintf(`<p>Ciao creatore di eventi!</p><br><p>Trovi allegato il tuo timbro personale per l'evento %s e la copertina!</p>`, record.GetString("name")),
+		Text: fmt.Sprintf("Ciao creatore di eventi!\n\nTrovi allegato il tuo timbro personale per l'evento %s e la copertina! ", record.GetString("name")),
 	}
 
 	// Invio dell'email con il timbro allegato
