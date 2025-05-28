@@ -1,21 +1,27 @@
 package main
 
 import (
-	"github.com/pocketbase/pocketbase"
-	"github.com/pocketbase/pocketbase/plugins/migratecmd"
+	"io/ioutil"
 	"log"
+	"mensadb/tools/aipower"
 )
 
-var app = pocketbase.New()
-
 func main() {
+	lines := [5]string{
+		"GIOVEDÌ 5 GIUGNO",
+		"ORE 19:45",
+		"45 SHOOTING GAMES",
+		"VIAENZO FERRARI 32",
+		"MONCALIERI (TO)",
+	}
 
-	migratecmd.MustRegister(app, app.RootCmd, migratecmd.Config{
-		Dir:         "./migrations",
-		Automigrate: true,
-	})
+	imgBytes, err := aipower.GenerateEventCard(
+		"LASER TAG", lines)
+	if err != nil {
+		log.Fatalf("Errore: %v", err)
+	}
 
-	if err := app.Start(); err != nil {
-		log.Fatal(err)
+	if err := ioutil.WriteFile("output.png", imgBytes, 0644); err != nil {
+		log.Fatalf("Impossibile salvare: %v", err)
 	}
 }
