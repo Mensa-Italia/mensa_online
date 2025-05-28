@@ -51,6 +51,7 @@ func GenerateStamp(prompt string) ([]byte, error) {
 	promptToUse := data.Get("prompt").String()
 	return _generateStampImage(promptToUse)
 }
+
 func _generateStampImage(prompt string) ([]byte, error) {
 
 	url := "https://ir-api.myqa.cc/v1/openai/images/generations"
