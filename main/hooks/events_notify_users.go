@@ -120,6 +120,14 @@ func createEventStamp(app core.App, record *core.Record) []byte {
 		return nil
 	}
 
+	key := record.BaseFilesPath() + "/" + record.GetString("image")
+
+	fsys, _ := app.NewFilesystem()
+	defer fsys.Close()
+
+	blob, _ := fsys.GetReader(key)
+	defer blob.Close()
+
 	// Preparazione del messaggio email da inviare
 	message := &mailer.Message{
 		From: mail.Address{
@@ -130,8 +138,9 @@ func createEventStamp(app core.App, record *core.Record) []byte {
 			Address: userRecord.Email(),
 		}},
 		Subject: "Ciao creatore di eventi!", Attachments: map[string]io.Reader{
-			"stamp_qr.png": stampImage,
-			"stamp.png":    bytes.NewReader(geminiImage),
+			"stamp_qr.png":  stampImage,
+			"stamp.png":     bytes.NewReader(geminiImage),
+			"copertina.png": blob,
 		},
 		HTML: fmt.Sprintf(`<p>Ciao creatore di eventi!</p><br><p>Trovi allegato il tuo timbro personale per l'evento %s</p>`, record.GetString("name")),
 		Text: fmt.Sprintf("Ciao creatore di eventi!\n\nTrovi allegato il tuo timbro personale per l'evento %s", record.GetString("name")),
