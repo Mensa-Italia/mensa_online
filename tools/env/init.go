@@ -22,6 +22,7 @@ type config struct {
 	TolgeeKey              string `env:"TOLGEE_KEY" envDefault:""`
 	PrintfulKey            string `env:"PRINTFUL_KEY" envDefault:""`
 	PrintfulWebhookURL     string `env:"PRINTFUL_WEBHOOK_URL" envDefault:""`
+	UnsplashKey            string `env:"UNSPLASH_KEY" envDefault:""`
 }
 
 var cfg = config{}
@@ -98,4 +99,8 @@ func GetPrintfulWebhookURL() string {
 
 func GetImageRouterKey() string {
 	return cfg.ImageRouterKey
+}
+
+func GetUnsplashKey() string {
+	return cfg.UnsplashKey
 }
