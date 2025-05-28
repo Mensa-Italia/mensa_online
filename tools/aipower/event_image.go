@@ -3,15 +3,18 @@ package aipower
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"fmt"
 	"github.com/fogleman/gg"
 	"github.com/go-resty/resty/v2"
+	"github.com/hbagdi/go-unsplash/unsplash"
 	"github.com/tidwall/gjson"
+	"golang.org/x/oauth2"
 	"google.golang.org/genai"
 	"image"
 	"image/png"
+	"log"
 	"math"
+	"math/rand/v2"
 	"mensadb/tools/env"
 )
 
@@ -36,7 +39,7 @@ func _generateEventImagePrompt(prompt string) (string, error) {
 		ResponseSchema: &genai.Schema{
 			Type: genai.TypeObject,
 			Properties: map[string]*genai.Schema{
-				"prompt": &genai.Schema{
+				"query": &genai.Schema{
 					Type: genai.TypeString,
 				},
 			},
@@ -45,38 +48,40 @@ func _generateEventImagePrompt(prompt string) (string, error) {
 	result, _ := client.Models.GenerateContent(
 		ctx,
 		"gemini-2.0-flash",
-		genai.Text(fmt.Sprintf("-----\n%s\n\n----\n\nMake a prompt to generate a cover image for this event. \nBe descriptive, cartoonish, 3d art and avoid text", prompt)),
+		genai.Text(fmt.Sprintf("-----\n%s\n\n----\n\nMake a search query for unsplash. You should use just a bunch words.", prompt)),
 		config,
 	)
 	data := gjson.Parse(result.Text())
-	promptToUse := data.Get("prompt").String()
+	promptToUse := data.Get("query").String()
+	log.Println("Generated prompt for image search:", promptToUse)
 	return promptToUse, nil
 }
 
 func _generateBackgroundImage(prompt string) ([]byte, error) {
 
-	url := "https://ir-api.myqa.cc/v1/openai/images/generations"
 	prompt, err := _generateEventImagePrompt(prompt)
-	response, err := resty.New().R().
-		SetHeader("Authorization", fmt.Sprintf("Bearer %s", env.GetImageRouterKey())).
-		SetHeader("Content-Type", "application/json").
-		SetBody(map[string]interface{}{
-			"prompt":  prompt,
-			"model":   "google/gemini-2.0-flash-exp:free",
-			"quality": "auto",
-		}).
-		Post(url)
-	if err != nil {
-		return nil, fmt.Errorf("error making request: %w", err)
+	ts := oauth2.StaticTokenSource(
+		&oauth2.Token{AccessToken: "Client-ID " + env.GetUnsplashKey()},
+	)
+	client := oauth2.NewClient(oauth2.NoContext, ts)
+	//use the http.Client to instantiate unsplash
+	unsplashClient := unsplash.New(client)
+	// requests can be now made to the API
+	searchedPhoto, _, err := unsplashClient.Search.Photos(&unsplash.SearchOpt{
+		Query:   prompt,
+		PerPage: 50,
+	})
+	if err != nil || searchedPhoto == nil || searchedPhoto.Results == nil || len(*searchedPhoto.Results) == 0 {
+		return nil, fmt.Errorf("error searching for photos: %w", err)
 	}
-	data := gjson.ParseBytes(response.Body())
-	jsonResponse := data.Get("data.0.b64_json").String()
 
-	decodedData, err := base64.StdEncoding.DecodeString(jsonResponse)
-	if err != nil {
-		return nil, err
+	randomIndex := 0 // You can randomize this if you want
+	if len(*searchedPhoto.Results) > 1 {
+		randomIndex = rand.IntN(len(*searchedPhoto.Results))
 	}
-	return decodedData, nil
+
+	downloadPhoto, _ := resty.New().R().Get((*(searchedPhoto.Results))[randomIndex].Urls.Raw.String())
+	return downloadPhoto.Body(), nil
 }
 
 // addText carica il font specificato, imposta il colore, l’allineamento e il debug,
