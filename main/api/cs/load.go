@@ -22,5 +22,6 @@ func Load(e *router.RouterGroup[*core.RequestEvent]) {
 	e.GET("/force-notification", forceNotification)
 	e.GET("/force-update-state-managers", ForceUpdateStateManagersHandler)
 	e.GET("/force-update-docs", ForceUpdateDocsHandler)
+	e.GET("/generate-event-card", GenerateEventCardHandler)
 	webhook.Load(e.Group("/webhook"))
 }
