@@ -107,7 +107,7 @@ func UpdateDocuments(app core.App, document map[string]any) string {
 	// Salva il nuovo documento nel database
 	_ = app.Save(newDocument)
 
-	if document["resume"] != nil {
+	if document["resume"] != nil && document["resume"].(string) != "" {
 		// Crea un nuovo record nella collezione "resumes"
 		resumeCollection, _ := app.FindCollectionByNameOrId("documents_elaborated")
 		newResume := core.NewRecord(resumeCollection)
