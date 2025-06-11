@@ -257,6 +257,7 @@ func (api *ScraperApi) GetAllDocuments(excludedUID []string) ([]map[string]any, 
 		if !slices.Contains(excludedUID, uid) {
 			fs, err := api.DownloadFile(document["link"].(string))
 			if err != nil {
+				log.Println("Error downloading file:", err)
 				continue
 			}
 			documents[i]["file"] = fs

@@ -2,32 +2,43 @@ package aipower
 
 import (
 	"context"
+	"github.com/gabriel-vasile/mimetype"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
 	"github.com/tidwall/gjson"
 	"google.golang.org/genai"
+	"io"
 	"log"
 	"mensadb/tools/env"
 )
 
-func uploadToGemini(fileSystemData *filesystem.File) *genai.File {
+func uploadToGemini(client *genai.Client, fileSystemData *filesystem.File) *genai.File {
+
 	ctx := context.Background()
-	client, _ := genai.NewClient(ctx, &genai.ClientConfig{
-		APIKey:  env.GetGeminiKey(),
-		Backend: genai.BackendGeminiAPI,
-	})
-	options := genai.UploadFileConfig{
-		DisplayName: fileSystemData.Name,
-	}
-	open, err := fileSystemData.Reader.Open()
+	openedFile, err := fileSystemData.Reader.Open()
 	if err != nil {
 		return nil
 	}
-	fileData, err := client.Files.Upload(ctx, open, &options)
+	log.Println("Uploading file to Gemini:", fileSystemData.Name)
+	mtype, err := mimetype.DetectReader(openedFile)
+	options := genai.UploadFileConfig{
+		DisplayName: fileSystemData.Name,
+		MIMEType:    mtype.String(),
+	}
+	// Reset reader to beginning after MIME detection
+	if seeker, ok := openedFile.(io.Seeker); ok {
+		_, _ = seeker.Seek(0, io.SeekStart)
+	} else {
+		_ = openedFile.Close()
+		openedFile, err = fileSystemData.Reader.Open()
+		if err != nil {
+			return nil
+		}
+	}
+	fileData, err := client.Files.Upload(ctx, openedFile, &options)
 	if err != nil {
 		log.Fatalf("Error uploading file: %v", err)
 		return nil
 	}
-	log.Printf("Uploaded file %s as: %s", fileData.DisplayName, fileData.URI)
 	return fileData
 }
 
@@ -63,8 +74,9 @@ func AskResume(fileSystemData *filesystem.File) string {
 		},
 	}
 
-	uploadedFile := uploadToGemini(fileSystemData)
+	uploadedFile := uploadToGemini(client, fileSystemData)
 
+	log.Println(uploadedFile.MIMEType)
 	parts := []*genai.Part{
 		&genai.Part{
 			FileData: &genai.FileData{
