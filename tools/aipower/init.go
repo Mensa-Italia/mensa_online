@@ -33,10 +33,13 @@ func uploadToGemini(fileSystemData *filesystem.File) *genai.File {
 
 func AskResume(fileSystemData *filesystem.File) string {
 	ctx := context.Background()
-	client, _ := genai.NewClient(ctx, &genai.ClientConfig{
+	client, err := genai.NewClient(ctx, &genai.ClientConfig{
 		APIKey:  env.GetGeminiKey(),
 		Backend: genai.BackendGeminiAPI,
 	})
+	if err != nil {
+		return ""
+	}
 
 	temp := float32(1)
 	topP := float32(0.95)
@@ -71,7 +74,7 @@ func AskResume(fileSystemData *filesystem.File) string {
 		genai.NewPartFromText(env.GetGeminiResumePrompt()),
 	}
 
-	result, _ := client.Models.GenerateContent(
+	result, err := client.Models.GenerateContent(
 		ctx,
 		"gemini-2.0-flash",
 		[]*genai.Content{
@@ -79,6 +82,9 @@ func AskResume(fileSystemData *filesystem.File) string {
 		},
 		config,
 	)
+	if err != nil {
+		return ""
+	}
 	data := gjson.Parse(result.Text())
 	if data.Get("resume_text").Exists() {
 		return data.Get("resume_text").String()
