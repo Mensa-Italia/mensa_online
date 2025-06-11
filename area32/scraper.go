@@ -257,13 +257,10 @@ func (api *ScraperApi) GetAllDocuments(excludedUID []string) ([]map[string]any, 
 		if !slices.Contains(excludedUID, uid) {
 			fs, err := api.DownloadFile(document["link"].(string))
 			if err != nil {
-				return nil, err
+				continue
 			}
 			documents[i]["file"] = fs
 			documents[i]["resume"] = aipower.AskResume(fs)
-			if err != nil {
-				return nil, err
-			}
 			resultDocuments = append(resultDocuments, documents[i])
 		}
 	}
