@@ -10,6 +10,7 @@ import (
 	"log"
 	"mensadb/tools/aipower"
 	"mensadb/tools/env"
+	"mensadb/tools/spatial"
 	"net/http/cookiejar"
 	"slices"
 	"sort"
@@ -369,6 +370,7 @@ func (api *ScraperApi) GetRegSoci(page int, search string) ([]map[string]any, er
 					"birthDate":         birthDate,
 					"city":              strings.TrimSpace(tds.Eq(4).Text()),
 					"state":             strings.TrimSpace(tds.Eq(5).Text()),
+					"area":              spatial.CheckProvinceFromState(strings.TrimSpace(tds.Eq(5).Text())),
 					"image":             api.DownloadFileNoError("https://www.cloud32.it" + imgSrc),
 					"linkToFullProfile": "https://www.cloud32.it" + link,
 					"deepData":          api.GetRegSocioDeepData("https://www.cloud32.it" + link),
@@ -379,7 +381,6 @@ func (api *ScraperApi) GetRegSoci(page int, search string) ([]map[string]any, er
 			}
 		})
 	}
-
 	makeRequest := func(name, surname string) {
 		url := "https://www.cloud32.it/Associazioni/utenti/regsocio?s_cognome=" + surname +
 			"&s_nome=" + name + "&s_citta=&s_provincia=&s_regione=&Ricerca=Ricerca&page=" + strconv.Itoa(page)
