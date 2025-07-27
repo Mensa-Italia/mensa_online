@@ -101,6 +101,7 @@ func UpdateMembers(app core.App, member map[string]any) string {
 	newRecord.Set("city", member["city"].(string))
 	newRecord.Set("birthdate", member["birthDate"])
 	newRecord.Set("state", member["state"].(string))
+	newRecord.Set("area", member["area"].(string))
 	marshal, err := json.Marshal(member["deepData"])
 	if err == nil {
 		newRecord.Set("full_data", marshal)
