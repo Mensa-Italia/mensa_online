@@ -78,7 +78,7 @@ const htmlTemplate = `<!DOCTYPE html>
 <body>
   <div class="container">
     <h1>Per continuare, scarica l'app ufficiale di Mensa Italia</h1>
-    <p>{{.Description}}</p>
+    <p>Questa pagina è disponibile solo all'interno dell'app Mensa Italia.</p>
     <a href="https://apps.apple.com/app/id1524200080" class="btn">App Store</a>
     <a href="https://play.google.com/store/apps/details?id=it.mensa.app" class="btn">Google Play</a>
   </div>
@@ -190,7 +190,7 @@ func LinksEvents(e *core.RequestEvent) error {
 	data := EventTemplateData{
 		Title:       record.GetString("name"),
 		Description: record.GetString("description"),
-		Image:       "https://svc.mensa.it" + imageKey,
+		Image:       "https://svc.mensa.it/api/files/" + imageKey,
 		URL:         "https://svc.mensa.it/links/event/" + idEvent,
 	}
 
