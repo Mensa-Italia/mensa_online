@@ -174,7 +174,7 @@ func eventsNotifyUsers(e *core.RecordEvent) {
 				"type":     "event",
 				"event_id": e.Record.GetString("id"),
 			},
-		}, false)
+		})
 		return
 	}
 
@@ -231,7 +231,7 @@ func EventsUpdateNotifyUsers(e *core.RecordEvent) {
 				"type":     "event",
 				"event_id": e.Record.GetString("id"),
 			},
-		}, false)
+		})
 		return
 	}
 
