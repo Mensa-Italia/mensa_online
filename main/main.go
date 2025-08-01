@@ -37,6 +37,7 @@ func main() {
 		e.Router.GET("/static/{path...}", apis.Static(os.DirFS("./pb_public"), false))
 		e.Router.GET("/force-stamp-gen/{id}", hooks.ForceStampGen)
 		e.Router.GET("/.well-known/apple-app-site-association", utilities.AASAWellKnown)
+		e.Router.GET("/.well-known/assetlinks.json", utilities.AssetLinksWellKnown)
 		return e.Next()
 	})
 
