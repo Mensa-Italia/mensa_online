@@ -9,6 +9,7 @@ import (
 	"mensadb/importers"
 	"mensadb/main/api"
 	"mensadb/main/hooks"
+	"mensadb/main/links"
 	"mensadb/main/utilities"
 	_ "mensadb/migrations"
 	"mensadb/printful"
@@ -38,6 +39,7 @@ func main() {
 		e.Router.GET("/force-stamp-gen/{id}", hooks.ForceStampGen)
 		e.Router.GET("/.well-known/apple-app-site-association", utilities.AASAWellKnown)
 		e.Router.GET("/.well-known/assetlinks.json", utilities.AssetLinksWellKnown)
+		e.Router.GET("/links/event/{id}", links.LinksEvents)
 		return e.Next()
 	})
 
