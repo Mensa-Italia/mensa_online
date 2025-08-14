@@ -3,18 +3,17 @@ package aipower
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"fmt"
-	"github.com/go-resty/resty/v2"
 	"github.com/tidwall/gjson"
 	"google.golang.org/genai"
 	"image"
 	"image/color"
 	"image/png"
+	"log"
 	"mensadb/tools/env"
 )
 
-func GenerateStamp(prompt string) ([]byte, error) {
+func GenerateStamp(prompt string, makeitred bool) ([]byte, error) {
 	ctx := context.Background()
 	client, _ := genai.NewClient(ctx, &genai.ClientConfig{
 		APIKey:  env.GetGeminiKey(),
@@ -49,34 +48,47 @@ func GenerateStamp(prompt string) ([]byte, error) {
 	)
 	data := gjson.Parse(result.Text())
 	promptToUse := data.Get("prompt").String()
-	return _generateStampImage(promptToUse)
+	return _generateStampImage(promptToUse, makeitred)
 }
 
-func _generateStampImage(prompt string) ([]byte, error) {
+func _generateStampImage(prompt string, makeitred bool) ([]byte, error) {
 
-	url := "https://ir-api.myqa.cc/v1/openai/images/generations"
+	ctx := context.Background()
+	client, _ := genai.NewClient(ctx, &genai.ClientConfig{
+		APIKey:  env.GetGeminiKey(),
+		Backend: genai.BackendGeminiAPI,
+	})
 
-	response, err := resty.New().R().
-		SetHeader("Authorization", fmt.Sprintf("Bearer %s", env.GetImageRouterKey())).
-		SetHeader("Content-Type", "application/json").
-		SetBody(map[string]interface{}{
-			"prompt":  prompt,
-			"model":   "google/gemini-2.0-flash-exp:free",
-			"quality": "auto",
-		}).
-		Post(url)
-	if err != nil {
-		return nil, fmt.Errorf("error making request: %w", err)
-	}
-	data := gjson.ParseBytes(response.Body())
-	jsonResponse := data.Get("data.0.b64_json").String()
-
-	decodedData, err := base64.StdEncoding.DecodeString(jsonResponse)
-	if err != nil {
-		return nil, err
+	config := &genai.GenerateImagesConfig{
+		NumberOfImages:   1,
+		OutputMIMEType:   "image/jpeg",
+		PersonGeneration: genai.PersonGenerationAllowAdult,
+		AspectRatio:      "1:1",
 	}
 
-	img, _, err := image.Decode(bytes.NewReader(decodedData))
+	result, err := client.Models.GenerateImages(
+		ctx,
+		"models/imagen-4.0-generate-preview-06-06",
+		fmt.Sprintf(`Mensa Italia Event:
+		%s
+		---
+		Make a circular stmap, black on white.`, prompt),
+		config,
+	)
+
+	if err != nil {
+		log.Println("Response:", err.Error())
+		return nil, fmt.Errorf("failed to generate image: %w", err)
+	}
+	var bytesOutput []byte
+	for _, part := range result.GeneratedImages {
+		if part.Image != nil {
+			bytesOutput = part.Image.ImageBytes
+			break
+		}
+	}
+
+	img, _, err := image.Decode(bytes.NewReader(bytesOutput))
 	if err != nil {
 		return nil, err
 	}
@@ -90,10 +102,14 @@ func _generateStampImage(prompt string) ([]byte, error) {
 			r, g, b, _ := pixel.RGBA()
 			brightness := (r + g + b) / 3 >> 8
 
+			redVal := uint8(0)
+			if makeitred {
+				redVal = uint8(255)
+			}
 			if isImageWhite {
-				newImg.SetNRGBA(x, y, color.NRGBA{uint8(0), uint8(0), uint8(0), uint8(255 - brightness)})
+				newImg.SetNRGBA(x, y, color.NRGBA{redVal, uint8(0), uint8(0), uint8(255 - brightness)})
 			} else {
-				newImg.SetNRGBA(x, y, color.NRGBA{uint8(0), uint8(0), uint8(0), uint8(brightness)})
+				newImg.SetNRGBA(x, y, color.NRGBA{redVal, uint8(0), uint8(0), uint8(brightness)})
 			}
 		}
 	}
