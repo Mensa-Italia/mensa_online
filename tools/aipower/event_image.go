@@ -18,7 +18,7 @@ import (
 	"mensadb/tools/env"
 )
 
-func _generateEventImagePrompt(prompt string) (string, error) {
+func _generateEventImagePromptUplashQuery(prompt string) (string, error) {
 	ctx := context.Background()
 	client, _ := genai.NewClient(ctx, &genai.ClientConfig{
 		APIKey:  env.GetGeminiKey(),
@@ -57,9 +57,56 @@ func _generateEventImagePrompt(prompt string) (string, error) {
 	return promptToUse, nil
 }
 
+func _generateEventImageGenerationPrompt(prompt string) (string, error) {
+
+	ctx := context.Background()
+	client, _ := genai.NewClient(ctx, &genai.ClientConfig{
+		APIKey:  env.GetGeminiKey(),
+		Backend: genai.BackendGeminiAPI,
+	})
+
+	temp := float32(1)
+	topP := float32(0.95)
+	topK := float32(40.0)
+	maxOutputTokens := int32(8192)
+
+	config := &genai.GenerateContentConfig{
+		ResponseMIMEType: "application/json",
+		Temperature:      &temp,
+		TopP:             &topP,
+		TopK:             &topK,
+		MaxOutputTokens:  maxOutputTokens,
+		ResponseSchema: &genai.Schema{
+			Type: genai.TypeObject,
+			Properties: map[string]*genai.Schema{
+				"prompt": &genai.Schema{
+					Type: genai.TypeString,
+				},
+			},
+		},
+	}
+	result, err := client.Models.GenerateContent(
+		ctx,
+		"gemini-2.0-flash",
+		genai.Text(fmt.Sprintf("-----\n%s\n\n----\n\nUsing the previous data make a prompt to generate the best image that represents the event.\nUse a lot of details, be descriptive, use a lot of adjectives and nouns.\nUse the best words to describe the image you want to generate.", prompt)),
+		config,
+	)
+
+	if err != nil {
+		log.Println("Error generating event image prompt:", err)
+		return "", err
+	}
+	data := gjson.Parse(result.Text())
+	promptToUse := data.Get("prompt").String()
+
+	log.Println("Generated prompt for image generation:", promptToUse)
+
+	return promptToUse, nil
+}
+
 func _generateBackgroundImage(prompt string) ([]byte, error) {
 
-	prompt, err := _generateEventImagePrompt(prompt)
+	prompt, err := _generateEventImagePromptUplashQuery(prompt)
 	ts := oauth2.StaticTokenSource(
 		&oauth2.Token{AccessToken: "Client-ID " + env.GetUnsplashKey()},
 	)
@@ -82,6 +129,57 @@ func _generateBackgroundImage(prompt string) ([]byte, error) {
 
 	downloadPhoto, _ := resty.New().R().Get((*(searchedPhoto.Results))[randomIndex].Urls.Raw.String())
 	return downloadPhoto.Body(), nil
+}
+
+func _generateBackgroundImageAI(prompt string) ([]byte, error) {
+	ctx := context.Background()
+	client, _ := genai.NewClient(ctx, &genai.ClientConfig{
+		APIKey:  env.GetGeminiKey(),
+		Backend: genai.BackendGeminiAPI,
+	})
+
+	promptToUse, err := _generateEventImageGenerationPrompt(prompt)
+	if err != nil {
+		log.Println("Error generating event image prompt:", err)
+		return nil, err
+	}
+	config := &genai.GenerateImagesConfig{
+		NumberOfImages:   1,
+		OutputMIMEType:   "image/jpeg",
+		PersonGeneration: genai.PersonGenerationAllowAdult,
+		AspectRatio:      "16:9",
+	}
+
+	result, err := client.Models.GenerateImages(
+		ctx,
+		"models/imagen-4.0-generate-preview-06-06",
+		promptToUse,
+		config,
+	)
+
+	if err != nil {
+		log.Println("Response:", err.Error())
+		return nil, fmt.Errorf("failed to generate image: %w", err)
+	}
+	var bytesOutput []byte
+	for _, part := range result.GeneratedImages {
+		if part.Image != nil {
+			bytesOutput = part.Image.ImageBytes
+			break
+		}
+	}
+
+	img, _, err := image.Decode(bytes.NewReader(bytesOutput))
+	if err != nil {
+		return nil, err
+	}
+
+	var buffer bytes.Buffer
+	if err := png.Encode(&buffer, img); err != nil {
+		return nil, err
+	}
+
+	return buffer.Bytes(), nil
 }
 
 // addText carica il font specificato, imposta il colore, l’allineamento e il debug,
@@ -138,7 +236,7 @@ func GenerateEventCard(title string, lines [5]string) ([]byte, error) {
 	// Genera o carica sfondo da prompt
 	descriptionPrompt := fmt.Sprintf("%s\n%s\n%s\n%s\n%s\n%s", title, lines[0], lines[1], lines[2], lines[3], lines[4])
 	var bg image.Image
-	bgBytes, err := _generateBackgroundImage(descriptionPrompt)
+	bgBytes, err := _generateBackgroundImageAI(descriptionPrompt)
 	if err != nil {
 		return nil, err
 	}
