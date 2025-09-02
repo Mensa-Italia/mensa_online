@@ -50,27 +50,29 @@ func RemoteRetrieveDocumentsFromArea32(app core.App) {
 	}
 
 	// Notifica gli utenti se sono stati aggiunti nuovi documenti
-	if len(newDocuments) > 1 {
-		SendPushNotificationToAllUsers(app, PushNotification{
-			TrTag: "push_notification.new_documents_available",
-			TrNamedParams: map[string]string{
-				"count": fmt.Sprintf("%d", len(newDocuments)),
-			},
-			Data: map[string]string{
-				"type": "multiple_documents",
-			},
-		})
-	} else if len(newDocuments) == 1 {
-		SendPushNotificationToAllUsers(app, PushNotification{
-			TrTag: "push_notification.new_document_available",
-			TrNamedParams: map[string]string{
-				"name": newDocuments[0]["description"].(string),
-			},
-			Data: map[string]string{
-				"type":        "single_document",
-				"document_id": idOfDocument,
-			},
-		})
+	if GetInternalConfig(app, "notify_documents_new") == "true" {
+		if len(newDocuments) > 1 {
+			SendPushNotificationToAllUsers(app, PushNotification{
+				TrTag: "push_notification.new_documents_available",
+				TrNamedParams: map[string]string{
+					"count": fmt.Sprintf("%d", len(newDocuments)),
+				},
+				Data: map[string]string{
+					"type": "multiple_documents",
+				},
+			})
+		} else if len(newDocuments) == 1 {
+			SendPushNotificationToAllUsers(app, PushNotification{
+				TrTag: "push_notification.new_document_available",
+				TrNamedParams: map[string]string{
+					"name": newDocuments[0]["description"].(string),
+				},
+				Data: map[string]string{
+					"type":        "single_document",
+					"document_id": idOfDocument,
+				},
+			})
+		}
 	}
 
 	// Log dell'operazione completata
