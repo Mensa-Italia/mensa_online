@@ -15,7 +15,7 @@ func Load(app core.App) {
 	app.OnRecordAfterUpdateSuccess("events").BindFunc(EventsUpdateNotifyUsersAsync)
 
 	// Notify users when a deal is created or updated
-	app.OnRecordAfterCreateSuccess("deals").BindFunc(DealsNotifyUsersAsync)
-	app.OnRecordAfterUpdateSuccess("deals").BindFunc(DealsUpdateNotifyUsersAsync)
+	//app.OnRecordAfterCreateSuccess("deals").BindFunc(DealsNotifyUsersAsync)
+	//app.OnRecordAfterUpdateSuccess("deals").BindFunc(DealsUpdateNotifyUsersAsync)
 
 }
