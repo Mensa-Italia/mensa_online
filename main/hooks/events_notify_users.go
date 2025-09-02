@@ -30,6 +30,11 @@ func (nopCloser) Close() error { return nil }
 // 2. Crea e salva un timbro per l'evento.
 // Restituisce il controllo immediatamente al chiamante.
 func EventsNotifyUsersAsync(e *core.RecordEvent) error {
+
+	if dbtools.GetInternalConfig(e.App, "notify_events_new") != "true" {
+		return e.Next()
+	}
+
 	go func(e *core.RecordEvent) {
 		eventsNotifyUsers(e)
 	}(e)
@@ -46,6 +51,9 @@ func EventsNotifyUsersAsync(e *core.RecordEvent) error {
 // EventsUpdateNotifyUsersAsync:
 // Notifica gli utenti riguardo all'evento aggiornato.
 func EventsUpdateNotifyUsersAsync(e *core.RecordEvent) error {
+	if dbtools.GetInternalConfig(e.App, "notify_events_update") != "true" {
+		return e.Next()
+	}
 	go func(e *core.RecordEvent) {
 		EventsUpdateNotifyUsers(e)
 	}(e)
