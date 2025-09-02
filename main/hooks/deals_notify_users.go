@@ -6,6 +6,9 @@ import (
 )
 
 func DealsNotifyUsersAsync(e *core.RecordEvent) error {
+	if dbtools.GetInternalConfig(e.App, "notify_deals_new") != "true" {
+		return e.Next()
+	}
 	go func(e *core.RecordEvent) {
 		dealsNotifyUsers(e, "push_notification.new_deal")
 	}(e)
@@ -14,6 +17,9 @@ func DealsNotifyUsersAsync(e *core.RecordEvent) error {
 }
 
 func DealsUpdateNotifyUsersAsync(e *core.RecordEvent) error {
+	if dbtools.GetInternalConfig(e.App, "notify_deals_update") != "true" {
+		return e.Next()
+	}
 	go func(e *core.RecordEvent) {
 		dealsNotifyUsers(e, "push_notification.update_deal")
 	}(e)
