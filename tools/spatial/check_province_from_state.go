@@ -18,5 +18,10 @@ func CheckProvinceFromState(state string) string {
 			return item.Get("regione").String()
 		}
 	}
+	for _, item := range province.Array() {
+		if strings.Contains(strings.ToLower(item.Get("nome").String()), strings.ToLower(state)) {
+			return item.Get("regione").String()
+		}
+	}
 	return "NaN"
 }
