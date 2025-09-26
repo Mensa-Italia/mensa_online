@@ -11,7 +11,7 @@ func CheckUserStripeAccount(app core.App) {
 	users, _ := app.FindAllRecords("users", nil)
 
 	for _, user := range users {
-		filter, err := app.FindFirstRecordByFilter("users_secrets", "user = ? AND key = ?", dbx.Params{
+		filter, err := app.FindFirstRecordByFilter("users_secrets", "user = {:user} AND key = {:key}", dbx.Params{
 			"user": user.Id,
 			"key":  "stripe_customer_id",
 		})
