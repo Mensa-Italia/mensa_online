@@ -78,15 +78,27 @@ const htmlTemplate = `<!DOCTYPE html>
 <body>
   <div class="container">
     <h1>Per continuare, scarica l'app ufficiale di Mensa Italia</h1>
-    <p>Questa pagina è disponibile solo all'interno dell'app Mensa Italia.</p>
+    <p>Questa pagina è disponibile all'interno dell'app Mensa Italia.</p>
     <a href="https://apps.apple.com/app/id1524200080" class="btn">App Store</a>
     <a href="https://play.google.com/store/apps/details?id=it.mensa.app" class="btn">Google Play</a>
+    <a href="https://web.svc.mensa.it/events/{{.Id}}" class="btn">Vedi Online</a>
   </div>
   <script>
-	setTimeout(function() {
-   		window.location.href = "https://web.svc.mensa.it/events/{{.Id}}";
-	}, 500);
-  </script>
+  function isMobile() {
+    // Browser moderni con User-Agent Client Hints
+    if (navigator.userAgentData && navigator.userAgentData.mobile !== undefined) {
+      return navigator.userAgentData.mobile;
+    }
+    // Fallback per compatibilità
+    return /Android|iPhone|iPad|iPod|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  }
+
+  if (!isMobile()) {
+    setTimeout(function() {
+      window.location.href = "https://web.svc.mensa.it/events/{{.Id}}";
+    }, 500);
+  }
+</script>
 </body>
 </html>`
 
