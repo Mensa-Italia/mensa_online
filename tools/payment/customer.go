@@ -22,7 +22,7 @@ func GetCustomerId(app core.App, userId string) (string, error) {
 		record = core.NewRecord(collection)
 		record.Set("user", userId)
 		record.Set("key", "stripe_customer_id")
-		customer, err := NewCustomer(userId, recordUser.Get("name").(string), recordUser.Get("email").(string))
+		customer, err := NewCustomerIfNotExists(userId, recordUser.Get("name").(string), recordUser.Get("email").(string))
 		if err != nil {
 			return "", err
 		}
