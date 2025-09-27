@@ -82,6 +82,11 @@ const htmlTemplate = `<!DOCTYPE html>
     <a href="https://apps.apple.com/app/id1524200080" class="btn">App Store</a>
     <a href="https://play.google.com/store/apps/details?id=it.mensa.app" class="btn">Google Play</a>
   </div>
+  <script>
+	setTimeout(function() {
+   		window.location.href = "https://web.svc.mensa.it/events/{{.Id}}";
+	}, 500);
+  </script>
 </body>
 </html>`
 
@@ -165,6 +170,7 @@ const htmlErrorTemplate = `<!DOCTYPE html>
 </html>`
 
 type EventTemplateData struct {
+	Id          string
 	Title       string
 	Description string
 	Image       string
@@ -188,6 +194,7 @@ func LinksEvents(e *core.RequestEvent) error {
 	imageKey := record.BaseFilesPath() + "/" + record.GetString("image")
 
 	data := EventTemplateData{
+		Id:          idEvent,
 		Title:       record.GetString("name"),
 		Description: record.GetString("description"),
 		Image:       "https://svc.mensa.it/api/files/" + imageKey,
