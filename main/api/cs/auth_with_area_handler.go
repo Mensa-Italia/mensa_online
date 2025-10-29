@@ -32,7 +32,7 @@ func AuthWithAreaHandler(e *core.RequestEvent) error {
 	areaUser, err := scraperApi.DoLoginAndRetrieveMain(email, password)
 	if err != nil && errors.Is(err, area32.UNABLE_TO_CONNECT) {
 		byUser, err := e.App.FindFirstRecordByFilter("users", "email={:email} ", dbx.Params{"email": email})
-		if err != nil || !byUser.ValidatePassword(generatePassword(password)) || byUser == nil {
+		if err != nil || !byUser.ValidatePassword(password) || byUser == nil {
 			return apis.NewBadRequestError("Invalid credentials", err)
 		}
 		return apis.RecordAuthResponse(e, byUser, "password", nil)
@@ -53,7 +53,7 @@ func AuthWithAreaHandler(e *core.RequestEvent) error {
 		newUser.Set("id", areaUser.Id)
 		newUser.SetEmail(email)
 		newUser.Set("username", suggestUniqueAuthRecordUsername(e.App, "users", strings.Split(email, "@")[0])) // Suggerisce un username unico
-		newUser.SetPassword(generatePassword(password))                                                        // Genera una password sicura
+		newUser.SetPassword(password)                                                                          // Genera una password sicura
 		newUser.SetVerified(true)                                                                              // Segna l'utente come verificato
 		newUser.Set("name", areaUser.Fullname)                                                                 // Imposta il nome dell'utente
 		newUser.Set("expire_membership", areaUser.ExpireDate)                                                  // Data di scadenza della membership
@@ -103,7 +103,7 @@ func AuthWithAreaHandler(e *core.RequestEvent) error {
 		byUser.SetVerified(true)
 		byUser.Set("name", areaUser.Fullname)
 		byUser.Set("expire_membership", areaUser.ExpireDate)
-		byUser.SetPassword(generatePassword(password))
+		byUser.SetPassword(password)
 		byUser.Set("is_membership_active", areaUser.IsMembershipActive)
 
 		// Gestisce i permessi esistenti
@@ -124,7 +124,7 @@ func AuthWithAreaHandler(e *core.RequestEvent) error {
 
 		// Ricarica l'utente dal database per confermare gli aggiornamenti
 		byUser, err = e.App.FindRecordById("users", areaUser.Id)
-		if err != nil || !byUser.ValidatePassword(generatePassword(areaUser.Id)) {
+		if err != nil || !byUser.ValidatePassword(areaUser.Id) {
 			data, _ := byUser.MarshalJSON()
 			log.Println("Invalid credentials on reload", string(data))
 			return apis.NewBadRequestError("Invalid credentials", err)
