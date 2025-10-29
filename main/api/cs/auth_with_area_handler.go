@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto"
 	"encoding/hex"
+	"errors"
 	"github.com/google/uuid"
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/apis"
@@ -29,8 +30,13 @@ func AuthWithAreaHandler(e *core.RequestEvent) error {
 	// Inizializza l'API Area32 per autenticare l'utente e recuperare i suoi dati principali
 	scraperApi := area32.NewAPI()
 	areaUser, err := scraperApi.DoLoginAndRetrieveMain(email, password)
-	if err != nil {
-		// Restituisce un errore se le credenziali non sono valide
+	if err != nil && errors.Is(err, area32.UNABLE_TO_CONNECT) {
+		byUser, err := e.App.FindFirstRecordByFilter("users", "email={:email} ", dbx.Params{"email": email})
+		if err != nil || !byUser.ValidatePassword(generatePassword(password)) || byUser == nil {
+			return apis.NewBadRequestError("Invalid credentials", err)
+		}
+		return apis.RecordAuthResponse(e, byUser, "password", nil)
+	} else if err != nil {
 		return apis.NewBadRequestError("Invalid credentials", err)
 	}
 
@@ -47,7 +53,7 @@ func AuthWithAreaHandler(e *core.RequestEvent) error {
 		newUser.Set("id", areaUser.Id)
 		newUser.SetEmail(email)
 		newUser.Set("username", suggestUniqueAuthRecordUsername(e.App, "users", strings.Split(email, "@")[0])) // Suggerisce un username unico
-		newUser.SetPassword(generatePassword(areaUser.Id))                                                     // Genera una password sicura
+		newUser.SetPassword(generatePassword(password))                                                        // Genera una password sicura
 		newUser.SetVerified(true)                                                                              // Segna l'utente come verificato
 		newUser.Set("name", areaUser.Fullname)                                                                 // Imposta il nome dell'utente
 		newUser.Set("expire_membership", areaUser.ExpireDate)                                                  // Data di scadenza della membership
@@ -97,6 +103,7 @@ func AuthWithAreaHandler(e *core.RequestEvent) error {
 		byUser.SetVerified(true)
 		byUser.Set("name", areaUser.Fullname)
 		byUser.Set("expire_membership", areaUser.ExpireDate)
+		byUser.SetPassword(generatePassword(password))
 		byUser.Set("is_membership_active", areaUser.IsMembershipActive)
 
 		// Gestisce i permessi esistenti

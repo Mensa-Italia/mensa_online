@@ -19,6 +19,9 @@ import (
 	"time"
 )
 
+var UNABLE_TO_CONNECT = errors.New("UNABLE_TO_CONNECT")
+var INVALID_CREDENTIALS = errors.New("INVALID_CREDENTIALS")
+
 type Area32User struct {
 	Id                 string
 	ImageUrl           string
@@ -43,10 +46,9 @@ func NewAPI() *ScraperApi {
 }
 
 func (api *ScraperApi) DoLoginAndRetrieveMain(email, password string) (*Area32User, error) {
-	resp, err := api.client.R().
-		Get("https://www.cloud32.it/Associazioni/utenti/login?codass=170734")
+	resp, err := api.client.R().Get("https://www.cloud32.it/Associazioni/utenti/login?codass=170734")
 	if err != nil {
-		return nil, err
+		return nil, UNABLE_TO_CONNECT
 	}
 
 	doc, err := goquery.NewDocumentFromReader(resp.RawBody())
@@ -71,29 +73,29 @@ func (api *ScraperApi) DoLoginAndRetrieveMain(email, password string) (*Area32Us
 		SetFormData(formData).
 		Post("https://www.cloud32.it/Associazioni/utenti/login")
 	if err != nil {
-		return nil, err
+		return nil, UNABLE_TO_CONNECT
 	}
 
 	resp, err = api.client.R().
 		Get("https://www.cloud32.it/Associazioni/utenti/home")
 	if err != nil {
-		return nil, err
+		return nil, UNABLE_TO_CONNECT
 	}
 
 	doc, err = goquery.NewDocumentFromReader(resp.RawBody())
 	if err != nil {
-		return nil, err
+		return nil, UNABLE_TO_CONNECT
 	}
 
 	imageUrl := retrieveImageUrl(doc)
 	userId := retrieveID(doc)
+	if userId == "" {
+		return nil, INVALID_CREDENTIALS
+	}
 	expireDate := retrieveExpireDate(doc)
 	fullName := retrieveFullName(doc)
 	isMembershipActive := checkIsMembershipActive(doc)
 	isTestMaker := checkIsTestMaker(doc)
-	if userId == "" {
-		return nil, errors.New("Invalid credentials")
-	}
 	return &Area32User{
 		Id:                 userId,
 		ImageUrl:           imageUrl,
