@@ -17,6 +17,7 @@ import (
 	"mensadb/tools/env"
 	"mensadb/tools/generic"
 	"mensadb/tools/payment"
+	"net/http"
 	"slices"
 	"strings"
 )
@@ -33,7 +34,7 @@ func AuthWithAreaHandler(e *core.RequestEvent) error {
 	if err != nil && errors.Is(err, area32.UNABLE_TO_CONNECT) {
 		byUser, err := e.App.FindFirstRecordByFilter("users", "email={:email} ", dbx.Params{"email": email})
 		if err != nil || !byUser.ValidatePassword(password) || byUser == nil {
-			return apis.NewBadRequestError("Invalid credentials", err)
+			return apis.NewApiError(http.StatusServiceUnavailable, "Unable to connect to area32", err)
 		}
 		return apis.RecordAuthResponse(e, byUser, "password", nil)
 	} else if err != nil {
