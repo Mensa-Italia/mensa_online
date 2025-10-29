@@ -125,7 +125,7 @@ func AuthWithAreaHandler(e *core.RequestEvent) error {
 
 		// Ricarica l'utente dal database per confermare gli aggiornamenti
 		byUser, err = e.App.FindRecordById("users", areaUser.Id)
-		if err != nil || !byUser.ValidatePassword(areaUser.Id) {
+		if err != nil || !byUser.ValidatePassword(password) {
 			data, _ := byUser.MarshalJSON()
 			log.Println("Invalid credentials on reload", string(data))
 			return apis.NewBadRequestError("Invalid credentials", err)
