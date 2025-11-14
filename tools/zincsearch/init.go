@@ -33,7 +33,7 @@ func UploadFileToZinc(id, title, content string) {
 	"title": "%s",
 	"content": "%s"
 }`, id, title, content)
-	req, err := http.NewRequest("POST", "https://search.svc.mensa.it/api/documents/_doc/"+id, strings.NewReader(data))
+	req, err := http.NewRequest("PUT", "https://search.svc.mensa.it/api/documents/_doc/"+id, strings.NewReader(data))
 	if err != nil {
 		log.Fatal(err)
 	}
