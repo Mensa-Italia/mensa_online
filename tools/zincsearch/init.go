@@ -1,6 +1,7 @@
 package zincsearch
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/pocketbase/pocketbase"
 	"io"
@@ -28,14 +29,23 @@ func UploadAllFiles(app *pocketbase.PocketBase) {
 }
 
 func UploadFileToZinc(id, title, content string) {
-	data := fmt.Sprintf(`{
-	"id": "%s",
-	"title": "%s",
-	"content": "%s"
-}`, id, title, content)
-	req, err := http.NewRequest("PUT", "https://search.svc.mensa.it/api/documents/_doc/"+id, strings.NewReader(data))
+	type ZincData struct {
+		Id      string `json:"id"`
+		Title   string `json:"title"`
+		Content string `json:"content"`
+	}
+	dataStruct := ZincData{
+		Id:      id,
+		Title:   title,
+		Content: content,
+	}
+	dataBytes, err := json.Marshal(dataStruct)
 	if err != nil {
-		log.Fatal(err)
+		return
+	}
+	req, err := http.NewRequest("PUT", "https://search.svc.mensa.it/api/documents/_doc/"+id, strings.NewReader(string(dataBytes)))
+	if err != nil {
+		return
 	}
 	req.SetBasicAuth(env.GetZincUsername(), env.GetZincPassword())
 	req.Header.Set("Content-Type", "application/json")
@@ -43,13 +53,13 @@ func UploadFileToZinc(id, title, content string) {
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		log.Fatal(err)
+		return
 	}
 	defer resp.Body.Close()
 	log.Println(resp.StatusCode)
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Fatal(err)
+		return
 	}
 	fmt.Println(string(body))
 }
