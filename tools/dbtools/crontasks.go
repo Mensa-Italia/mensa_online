@@ -6,6 +6,7 @@ import (
 	"mensadb/importers"
 	"mensadb/tolgee"
 	"mensadb/tools/env"
+	"mensadb/tools/zincsearch"
 )
 
 func CronTasks(app *pocketbase.PocketBase) {
@@ -31,6 +32,10 @@ func CronTasks(app *pocketbase.PocketBase) {
 
 	app.Cron().MustAdd("Update registry data", "0 0,3,6,9,12,15,18,21 * * *", func() {
 		RemoteRetrieveMembersFromArea32(app)
+	})
+
+	app.Cron().MustAdd("Upload file to zinc", "0 0,3 * * *", func() {
+		zincsearch.UploadAllFiles(app)
 	})
 
 	app.Cron().MustAdd("CheckUserStripeAccount", "0 */6 * * *", func() {

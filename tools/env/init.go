@@ -23,6 +23,8 @@ type config struct {
 	PrintfulKey            string `env:"PRINTFUL_KEY" envDefault:""`
 	PrintfulWebhookURL     string `env:"PRINTFUL_WEBHOOK_URL" envDefault:""`
 	UnsplashKey            string `env:"UNSPLASH_KEY" envDefault:""`
+	ZincUsername           string `env:"ZINC_USERNAME" envDefault:""`
+	ZincPassword           string `env:"ZINC_PASSWORD" envDefault:""`
 }
 
 var cfg = config{}
@@ -103,4 +105,12 @@ func GetImageRouterKey() string {
 
 func GetUnsplashKey() string {
 	return cfg.UnsplashKey
+}
+
+func GetZincUsername() string {
+	return cfg.ZincUsername
+}
+
+func GetZincPassword() string {
+	return cfg.ZincPassword
 }
