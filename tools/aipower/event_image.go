@@ -11,7 +11,7 @@ import (
 	"golang.org/x/oauth2"
 	"google.golang.org/genai"
 	"image"
-	"image/png"
+	"image/jpeg"
 	"log"
 	"math"
 	"math/rand/v2"
@@ -175,7 +175,7 @@ func _generateBackgroundImageAI(prompt string) ([]byte, error) {
 	}
 
 	var buffer bytes.Buffer
-	if err := png.Encode(&buffer, img); err != nil {
+	if err := jpeg.Encode(&buffer, img, &jpeg.Options{Quality: 90}); err != nil {
 		return nil, err
 	}
 
@@ -326,10 +326,11 @@ func GenerateEventCard(title string, lines [5]string) ([]byte, error) {
 		1, 1, 1,
 	)
 
-	// Esporta in PNG bytes
+	// Esporta in JPEG bytes
 	var buf bytes.Buffer
-	if err := png.Encode(&buf, dc.Image()); err != nil {
+	if err := jpeg.Encode(&buf, dc.Image(), &jpeg.Options{Quality: 90}); err != nil {
 		return nil, err
 	}
+
 	return buf.Bytes(), nil
 }
