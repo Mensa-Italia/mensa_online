@@ -25,5 +25,5 @@ func GenerateEventCardHandler(e *core.RequestEvent) error {
 		return err
 	}
 
-	return e.Blob(200, "image/png", card)
+	return e.Blob(200, "image/jpeg", card)
 }
