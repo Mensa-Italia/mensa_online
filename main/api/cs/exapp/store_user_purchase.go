@@ -15,7 +15,10 @@ func StoreUserTickets(e *core.RequestEvent) error {
 	userId := e.Request.FormValue("user_id")
 	var userRecord *core.Record
 	var err error
-	if userId == "" {
+	if userId != "" {
+		userRecord, err = e.App.FindRecordById("users", userId)
+	}
+	if userId == "" || userRecord == nil {
 		userEmail := e.Request.FormValue("user_email")
 		userRecord, err = e.App.FindFirstRecordByFilter("users", "email={:user_email}", dbx.Params{"user_email": userEmail})
 		if err != nil || userRecord == nil {
@@ -39,11 +42,6 @@ func StoreUserTickets(e *core.RequestEvent) error {
 					return e.InternalServerError("User not found", nil)
 				}
 			}
-		}
-	} else {
-		userRecord, err = e.App.FindRecordById("users", userId)
-		if err != nil || userRecord == nil {
-			return e.InternalServerError("User not found", nil)
 		}
 	}
 	collection, _ := e.App.FindCollectionByNameOrId("tickets")
