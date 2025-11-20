@@ -8,5 +8,5 @@ import (
 func Load(e *router.RouterGroup[*core.RequestEvent]) {
 	e.POST("/request", externalAppRequireConfirmation)
 	e.POST("/valid", checkValidity)
-	e.POST("/store-user-purchase", StoreUserPurchase)
+	e.POST("/store-user-ticket", StoreUserTickets)
 }
