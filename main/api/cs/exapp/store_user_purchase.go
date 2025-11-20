@@ -55,6 +55,9 @@ func StoreUserTickets(e *core.RequestEvent) error {
 	purchaseRecord.Set("user_id", userRecord.Id)
 	purchaseRecord.Set("link", e.Request.FormValue("link"))
 	purchaseRecord.Set("qr", e.Request.FormValue("qr"))
+	if e.Request.FormValue("event_id") != "" {
+		purchaseRecord.Set("internal_ref_id", "event:"+e.Request.FormValue("event_id"))
+	}
 
 	err = e.App.Save(purchaseRecord)
 	if err != nil {
