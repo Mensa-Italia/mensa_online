@@ -52,7 +52,7 @@ func StoreUserTickets(e *core.RequestEvent) error {
 	if purchaseRecord == nil || err != nil {
 		purchaseRecord = core.NewRecord(collection)
 	}
-	purchaseRecord.Id = e.Request.FormValue("id")
+	purchaseRecord.Id = e.Request.FormValue("unique_id")
 	purchaseRecord.Set("name", e.Request.FormValue("name"))
 	purchaseRecord.Set("user_id", userRecord.Id)
 	purchaseRecord.Set("link", e.Request.FormValue("link"))
