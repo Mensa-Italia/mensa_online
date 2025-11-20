@@ -6,7 +6,7 @@ import (
 	"mensadb/main/hooks"
 )
 
-func StoreUserPurchase(e *core.RequestEvent) error {
+func StoreUserTickets(e *core.RequestEvent) error {
 	authKey := e.Request.Header.Get("Authorization")
 	if !hooks.CheckKey(e.App, authKey, "PUSH_PAYMENTS_DATA") {
 		return e.String(401, "Unauthorized")
@@ -29,13 +29,10 @@ func StoreUserPurchase(e *core.RequestEvent) error {
 			return e.InternalServerError("User not found", nil)
 		}
 	}
-	collection, _ := e.App.FindCollectionByNameOrId("payments")
+	collection, _ := e.App.FindCollectionByNameOrId("tickets")
 	purchaseRecord := core.NewRecord(collection)
-	purchaseRecord.Set("description", e.Request.FormValue("description"))
-	purchaseRecord.Set("user", userRecord.Id)
-	purchaseRecord.Set("stripe_code", e.Request.FormValue("stripe_code"))
-	purchaseRecord.Set("status", e.Request.FormValue("status"))
-	purchaseRecord.Set("amount", e.Request.FormValue("amount"))
+	purchaseRecord.Set("name", e.Request.FormValue("name"))
+	purchaseRecord.Set("user_id", userRecord.Id)
 	purchaseRecord.Set("link", e.Request.FormValue("link"))
 
 	err = e.App.Save(purchaseRecord)
