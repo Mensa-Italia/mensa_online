@@ -6,6 +6,7 @@ import (
 	"mensadb/main/hooks"
 	"mensadb/tools/dbtools"
 	"strings"
+	"time"
 )
 
 func StoreUserTickets(e *core.RequestEvent) error {
@@ -57,7 +58,16 @@ func StoreUserTickets(e *core.RequestEvent) error {
 	purchaseRecord.Set("link", e.Request.FormValue("link"))
 	purchaseRecord.Set("qr", e.Request.FormValue("qr"))
 	purchaseRecord.Set("description", e.Request.FormValue("description"))
-	purchaseRecord.Set("deadline", e.Request.FormValue("deadline"))
+
+	deadlineString := e.Request.FormValue("deadline")
+	deadlineTime, err := time.Parse(time.RFC3339, deadlineString)
+	if err == nil {
+		//add 1 day to deadlineTime
+		deadlineTime = deadlineTime.Add(24 * time.Hour)
+		deadlineString = deadlineTime.Format(time.RFC3339)
+		purchaseRecord.Set("deadline", deadlineString)
+	}
+
 	if e.Request.FormValue("event_id") != "" {
 		purchaseRecord.Set("internal_ref_id", "event:"+e.Request.FormValue("event_id"))
 	}
