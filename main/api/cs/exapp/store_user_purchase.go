@@ -57,19 +57,22 @@ func StoreUserTickets(e *core.RequestEvent) error {
 	purchaseRecord.Set("link", e.Request.FormValue("link"))
 	purchaseRecord.Set("qr", e.Request.FormValue("qr"))
 	purchaseRecord.Set("description", e.Request.FormValue("description"))
+	purchaseRecord.Set("deadline", e.Request.FormValue("deadline"))
 	if e.Request.FormValue("event_id") != "" {
 		purchaseRecord.Set("internal_ref_id", "event:"+e.Request.FormValue("event_id"))
 	}
 
 	err = e.App.Save(purchaseRecord)
 
-	dbtools.SendPushNotificationToUser(e.App, dbtools.PushNotification{
-		UserId: userRecord.Id,
-		TrTag:  "push_notification.ticket_purchase_recorded",
-		TrNamedParams: map[string]string{
-			"name": purchaseRecord.GetString("name"),
-		},
-	})
+	go func() {
+		dbtools.SendPushNotificationToUser(e.App, dbtools.PushNotification{
+			UserId: userRecord.Id,
+			TrTag:  "push_notification.ticket_purchase_recorded",
+			TrNamedParams: map[string]string{
+				"name": e.Request.FormValue("name"),
+			},
+		})
+	}()
 
 	if err != nil {
 		return e.InternalServerError("Failed to save purchase record", err)
