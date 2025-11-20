@@ -4,6 +4,7 @@ import (
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
 	"mensadb/main/hooks"
+	"mensadb/tools/dbtools"
 	"strings"
 )
 
@@ -60,6 +61,15 @@ func StoreUserTickets(e *core.RequestEvent) error {
 	}
 
 	err = e.App.Save(purchaseRecord)
+
+	dbtools.SendPushNotificationToUser(e.App, dbtools.PushNotification{
+		UserId: userRecord.Id,
+		TrTag:  "push_notification.ticket_purchase_recorded",
+		TrNamedParams: map[string]string{
+			"name": purchaseRecord.GetString("name"),
+		},
+	})
+
 	if err != nil {
 		return e.InternalServerError("Failed to save purchase record", err)
 	}
