@@ -47,7 +47,12 @@ func StoreUserTickets(e *core.RequestEvent) error {
 		}
 	}
 	collection, _ := e.App.FindCollectionByNameOrId("tickets")
-	purchaseRecord := core.NewRecord(collection)
+	var purchaseRecord *core.Record
+	purchaseRecord, err = e.App.FindRecordById("tickets", e.Request.FormValue("id"))
+	if purchaseRecord == nil || err != nil {
+		purchaseRecord = core.NewRecord(collection)
+		purchaseRecord.Id = e.Request.FormValue("id")
+	}
 	purchaseRecord.Set("name", e.Request.FormValue("name"))
 	purchaseRecord.Set("user_id", userRecord.Id)
 	purchaseRecord.Set("link", e.Request.FormValue("link"))
