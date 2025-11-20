@@ -51,6 +51,7 @@ func StoreUserTickets(e *core.RequestEvent) error {
 	purchaseRecord.Set("name", e.Request.FormValue("name"))
 	purchaseRecord.Set("user_id", userRecord.Id)
 	purchaseRecord.Set("link", e.Request.FormValue("link"))
+	purchaseRecord.Set("qr", e.Request.FormValue("qr"))
 
 	err = e.App.Save(purchaseRecord)
 	if err != nil {
