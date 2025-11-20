@@ -71,6 +71,9 @@ func StoreUserTickets(e *core.RequestEvent) error {
 			TrNamedParams: map[string]string{
 				"name": e.Request.FormValue("name"),
 			},
+			Data: map[string]string{
+				"type": "ticket_purchase",
+			},
 		})
 	}()
 
