@@ -88,7 +88,7 @@ func StoreUserTickets(e *core.RequestEvent) error {
 			UserId: userRecord.Id,
 			TrTag:  "push_notification.ticket_purchase_recorded",
 			TrNamedParams: map[string]string{
-				"name": e.Request.FormValue("name"),
+				"name": e.Request.FormValue("name") + " - " + e.Request.FormValue("description"),
 			},
 			Data: map[string]string{
 				"type": "ticket_purchase",
