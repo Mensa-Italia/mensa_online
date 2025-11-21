@@ -58,14 +58,22 @@ func StoreUserTickets(e *core.RequestEvent) error {
 	purchaseRecord.Set("link", e.Request.FormValue("link"))
 	purchaseRecord.Set("qr", e.Request.FormValue("qr"))
 	purchaseRecord.Set("description", e.Request.FormValue("description"))
+	purchaseRecord.Set("start_date", e.Request.FormValue("start_date"))
 
-	deadlineString := e.Request.FormValue("deadline")
-	deadlineTime, err := time.Parse(time.RFC3339, deadlineString)
-	if err == nil {
-		//add 1 day to deadlineTime
-		deadlineTime = deadlineTime.Add(24 * time.Hour)
-		deadlineString = deadlineTime.Format(time.RFC3339)
-		purchaseRecord.Set("deadline", deadlineString)
+	if e.Request.FormValue("end_date") == "" {
+		deadlineString := e.Request.FormValue("start_date")
+		deadlineTime, err := time.Parse(time.RFC3339, deadlineString)
+		if err == nil {
+			deadlineTime = deadlineTime.Add(24 * time.Hour)
+			deadlineString = deadlineTime.Format(time.RFC3339)
+			purchaseRecord.Set("deadline", deadlineString)
+		} else {
+			purchaseRecord.Set("deadline", e.Request.FormValue("start_date"))
+		}
+	} else {
+		purchaseRecord.Set("end_date", e.Request.FormValue("end_date"))
+		purchaseRecord.Set("deadline", e.Request.FormValue("end_date"))
+
 	}
 
 	if e.Request.FormValue("event_id") != "" {
