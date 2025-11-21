@@ -59,6 +59,7 @@ func StoreUserTickets(e *core.RequestEvent) error {
 	purchaseRecord.Set("qr", e.Request.FormValue("qr"))
 	purchaseRecord.Set("description", e.Request.FormValue("description"))
 	purchaseRecord.Set("start_date", e.Request.FormValue("start_date"))
+	purchaseRecord.Set("customer_data", e.Request.FormValue("customer_data"))
 
 	if e.Request.FormValue("end_date") == "" {
 		deadlineString := e.Request.FormValue("start_date")
