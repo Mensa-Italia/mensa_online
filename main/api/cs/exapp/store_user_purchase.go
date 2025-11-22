@@ -14,7 +14,7 @@ func StoreUserTickets(e *core.RequestEvent) error {
 	if !hooks.CheckKey(e.App, authKey, "PUSH_PAYMENTS_DATA") {
 		return e.String(401, "Unauthorized")
 	}
-	userId := e.Request.FormValue("user_id")
+	userId := e.Request.FormValue("attendee_user_id")
 	userEmail := e.Request.FormValue("attendee_user_email")
 	fullname := e.Request.FormValue("attendee_user_fullname")
 	resolvedUserId, err := userReconciliationFunction(e.App, userId, fullname, userEmail)
