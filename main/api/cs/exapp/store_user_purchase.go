@@ -15,37 +15,19 @@ func StoreUserTickets(e *core.RequestEvent) error {
 		return e.String(401, "Unauthorized")
 	}
 	userId := e.Request.FormValue("user_id")
-	var userRecord *core.Record
-	var err error
-	if userId != "" {
-		userRecord, err = e.App.FindRecordById("users", userId)
-	}
-	if userId == "" || userRecord == nil {
-		userEmail := e.Request.FormValue("user_email")
-		userRecord, err = e.App.FindFirstRecordByFilter("users", "email={:user_email}", dbx.Params{"user_email": userEmail})
-		if err != nil || userRecord == nil {
-			userRecord, err = e.App.FindFirstRecordByFilter("members_registry", "full_data ~ {:user_email}", dbx.Params{"user_email": userEmail})
-			if err != nil || userRecord == nil {
-				fullname := e.Request.FormValue("user_fullname")
-				possibleNames := getAllWordsCombinations(fullname)
-				possibleIds := []string{}
-				for _, nameVariant := range possibleNames {
-					userRecord, err = e.App.FindFirstRecordByFilter("members_registry", "name:lower ~ {:name_variant}", dbx.Params{"name_variant": strings.ToLower(nameVariant)})
-					if err == nil && userRecord != nil {
-						possibleIds = append(possibleIds, userRecord.Id)
-					}
-				}
-				if len(possibleIds) == 1 {
-					userRecord, err = e.App.FindRecordById("users", possibleIds[0])
-					if err != nil || userRecord == nil {
-						return e.InternalServerError("User not found", nil)
-					}
-				} else {
-					return e.InternalServerError("User not found", nil)
-				}
-			}
+	userEmail := e.Request.FormValue("attendee_user_email")
+	fullname := e.Request.FormValue("attendee_user_fullname")
+	resolvedUserId, err := userReconciliationFunction(e.App, userId, fullname, userEmail)
+	if err != nil {
+		userId = e.Request.FormValue("user_id")
+		userEmail = e.Request.FormValue("user_email")
+		fullname = e.Request.FormValue("user_fullname")
+		resolvedUserId, err = userReconciliationFunction(e.App, userId, fullname, userEmail)
+		if err != nil {
+			return e.InternalServerError("User reconciliation failed", err)
 		}
 	}
+
 	collection, _ := e.App.FindCollectionByNameOrId("tickets")
 	var purchaseRecord *core.Record
 	purchaseRecord, err = e.App.FindRecordById(collection, e.Request.FormValue("unique_id"))
@@ -54,7 +36,7 @@ func StoreUserTickets(e *core.RequestEvent) error {
 	}
 	purchaseRecord.Set("id", e.Request.FormValue("unique_id"))
 	purchaseRecord.Set("name", e.Request.FormValue("name"))
-	purchaseRecord.Set("user_id", userRecord.Id)
+	purchaseRecord.Set("user_id", resolvedUserId)
 	purchaseRecord.Set("link", e.Request.FormValue("link"))
 	purchaseRecord.Set("qr", e.Request.FormValue("qr"))
 	purchaseRecord.Set("description", e.Request.FormValue("description"))
@@ -85,7 +67,7 @@ func StoreUserTickets(e *core.RequestEvent) error {
 
 	go func() {
 		dbtools.SendPushNotificationToUser(e.App, dbtools.PushNotification{
-			UserId: userRecord.Id,
+			UserId: resolvedUserId,
 			TrTag:  "push_notification.ticket_purchase_recorded",
 			TrNamedParams: map[string]string{
 				"name": e.Request.FormValue("name") + " - " + e.Request.FormValue("description"),
@@ -142,4 +124,40 @@ func getAllWordsCombinations(words string) []string {
 	backtrack([]string{}, used)
 
 	return result
+}
+
+func userReconciliationFunction(app core.App, userId, fullName, email string) (string, error) {
+
+	var userRecord *core.Record
+	var err error
+	if userId != "" {
+		userRecord, err = app.FindRecordById("users", userId)
+	}
+	if userId == "" || userRecord == nil {
+		userEmail := email
+		userRecord, err = app.FindFirstRecordByFilter("users", "email={:user_email}", dbx.Params{"user_email": userEmail})
+		if err != nil || userRecord == nil {
+			userRecord, err = app.FindFirstRecordByFilter("members_registry", "full_data ~ {:user_email}", dbx.Params{"user_email": userEmail})
+			if err != nil || userRecord == nil {
+				possibleNames := getAllWordsCombinations(fullName)
+				possibleIds := []string{}
+				for _, nameVariant := range possibleNames {
+					userRecord, err = app.FindFirstRecordByFilter("members_registry", "name:lower ~ {:name_variant}", dbx.Params{"name_variant": strings.ToLower(nameVariant)})
+					if err == nil && userRecord != nil {
+						possibleIds = append(possibleIds, userRecord.Id)
+					}
+				}
+				if len(possibleIds) == 1 {
+					userRecord, err = app.FindRecordById("users", possibleIds[0])
+					if err != nil || userRecord == nil {
+						return "", err
+					}
+				} else {
+					return "", nil
+				}
+			}
+		}
+	}
+
+	return userRecord.Id, nil
 }
