@@ -83,7 +83,23 @@ func StoreUserTickets(e *core.RequestEvent) error {
 	}
 
 	return e.String(200, "OK")
+}
 
+func RemoveUserTickets(e *core.RequestEvent) error {
+	authKey := e.Request.Header.Get("Authorization")
+	if !hooks.CheckKey(e.App, authKey, "PUSH_PAYMENTS_DATA") {
+		return e.String(401, "Unauthorized")
+	}
+	collection, _ := e.App.FindCollectionByNameOrId("tickets")
+	purchaseRecord, err := e.App.FindRecordById(collection, e.Request.FormValue("unique_id"))
+	if err != nil || purchaseRecord == nil {
+		return e.String(404, "Purchase record not found")
+	}
+	err = e.App.Delete(purchaseRecord)
+	if err != nil {
+		return e.InternalServerError("Failed to delete purchase record", err)
+	}
+	return e.String(200, "OK")
 }
 
 func getAllWordsCombinations(words string) []string {
