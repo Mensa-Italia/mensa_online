@@ -9,4 +9,5 @@ func Load(e *router.RouterGroup[*core.RequestEvent]) {
 	e.POST("/request", externalAppRequireConfirmation)
 	e.POST("/valid", checkValidity)
 	e.POST("/store-user-ticket", StoreUserTickets)
+	e.POST("/delete-user-ticket", RemoveUserTickets)
 }
