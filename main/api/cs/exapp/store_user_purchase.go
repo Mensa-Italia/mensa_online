@@ -143,11 +143,10 @@ func getAllWordsCombinations(words string) []string {
 }
 
 func userReconciliationFunction(app core.App, userId, fullName, email string) (string, error) {
-
 	var userRecord *core.Record
 	var err error
 	if userId != "" {
-		userRecord, err = app.FindRecordById("users", userId)
+		userRecord, err = app.FindRecordById("members_registry", userId)
 	}
 	if userId == "" || userRecord == nil {
 		userEmail := email
