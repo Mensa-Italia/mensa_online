@@ -1,6 +1,9 @@
 package main
 
 import (
+	"context"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
@@ -16,8 +19,10 @@ import (
 	"mensadb/tolgee"
 	"mensadb/tools/dbtools"
 	"mensadb/tools/env"
+	"net/http"
 	"os"
 	"strings"
+	"time"
 )
 
 func main() {
@@ -40,6 +45,32 @@ func main() {
 		e.Router.GET("/.well-known/apple-app-site-association", utilities.AASAWellKnown)
 		e.Router.GET("/.well-known/assetlinks.json", utilities.AssetLinksWellKnown)
 		e.Router.GET("/links/event/{id}", links.LinksEvents)
+		return e.Next()
+	})
+
+	app.OnFileDownloadRequest().BindFunc(func(e *core.FileDownloadRequestEvent) error {
+		s3settings := app.Settings().S3
+		if s3settings.Enabled {
+			s3client, err := NewS3(s3settings.Bucket, s3settings.Region, s3settings.Endpoint, s3settings.AccessKey, s3settings.Secret, s3settings.ForcePathStyle)
+			if err != nil {
+				app.Logger().Error("create s3 client", err)
+				return nil
+			}
+			presignClient := s3.NewPresignClient(s3client)
+			presignedUrl, err := presignClient.PresignGetObject(context.Background(),
+				&s3.GetObjectInput{
+					Bucket: aws.String(s3settings.Bucket),
+					Key:    aws.String(e.ServedPath),
+				},
+				s3.WithPresignExpires(time.Hour))
+			if err != nil {
+				app.Logger().Error("create s3 presigned url", err)
+				return nil
+			}
+
+			return e.Redirect(http.StatusTemporaryRedirect, presignedUrl.URL)
+		}
+
 		return e.Next()
 	})
 
