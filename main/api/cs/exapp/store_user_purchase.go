@@ -1,12 +1,13 @@
 package exapp
 
 import (
-	"github.com/pocketbase/dbx"
-	"github.com/pocketbase/pocketbase/core"
 	"mensadb/main/hooks"
 	"mensadb/tools/dbtools"
 	"strings"
 	"time"
+
+	"github.com/pocketbase/dbx"
+	"github.com/pocketbase/pocketbase/core"
 )
 
 func StoreUserTickets(e *core.RequestEvent) error {
@@ -18,7 +19,7 @@ func StoreUserTickets(e *core.RequestEvent) error {
 	userEmail := e.Request.FormValue("attendee_user_email")
 	fullname := e.Request.FormValue("attendee_user_fullname")
 	resolvedUserId, err := userReconciliationFunction(e.App, userId, fullname, userEmail)
-	if err != nil {
+	if err != nil || resolvedUserId == "" {
 		userId = e.Request.FormValue("user_id")
 		userEmail = e.Request.FormValue("user_email")
 		fullname = e.Request.FormValue("user_fullname")
