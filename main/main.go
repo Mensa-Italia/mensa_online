@@ -2,12 +2,6 @@ package main
 
 import (
 	"context"
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/pocketbase/pocketbase"
-	"github.com/pocketbase/pocketbase/apis"
-	"github.com/pocketbase/pocketbase/core"
-	"github.com/pocketbase/pocketbase/plugins/migratecmd"
 	"log"
 	"mensadb/importers"
 	"mensadb/main/api"
@@ -23,11 +17,17 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/pocketbase/pocketbase"
+	"github.com/pocketbase/pocketbase/apis"
+	"github.com/pocketbase/pocketbase/core"
+	"github.com/pocketbase/pocketbase/plugins/migratecmd"
 )
 
 func main() {
 	app := pocketbase.New()
-	dbtools.CronTasks(app)
 
 	app.OnBootstrap().BindFunc(func(e *core.BootstrapEvent) error {
 		tolgee.Load(env.GetTolgeeKey())
@@ -71,6 +71,14 @@ func main() {
 			return e.Redirect(http.StatusTemporaryRedirect, presignedUrl.URL)
 		}
 
+		return e.Next()
+	})
+
+	app.OnServe().BindFunc(func(e *core.ServeEvent) error {
+		dbtools.RemoteUpdateAddons(e.App)
+		dbtools.RemoteRetrieveDocumentsFromArea32(e.App)
+		dbtools.RemoteRetrieveMembersFromArea32(e.App)
+		dbtools.CronTasks(app)
 		return e.Next()
 	})
 
