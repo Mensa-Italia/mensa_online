@@ -2,11 +2,12 @@ package dbtools
 
 import (
 	"fmt"
-	"github.com/pocketbase/pocketbase"
 	"mensadb/importers"
 	"mensadb/tolgee"
 	"mensadb/tools/env"
 	"mensadb/tools/zincsearch"
+
+	"github.com/pocketbase/pocketbase"
 )
 
 func CronTasks(app *pocketbase.PocketBase) {
@@ -26,7 +27,7 @@ func CronTasks(app *pocketbase.PocketBase) {
 		tolgee.Load(env.GetTolgeeKey())
 	})
 
-	app.Cron().MustAdd("Update documents data", "0 8,11,14,17,20 * * *", func() {
+	app.Cron().MustAdd("Update documents data", "0 8-20 * * *", func() {
 		RemoteRetrieveDocumentsFromArea32(app)
 	})
 
