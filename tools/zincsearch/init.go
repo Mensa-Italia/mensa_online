@@ -3,7 +3,9 @@ package zincsearch
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/pocketbase/pocketbase"
+
+	"github.com/pocketbase/pocketbase/core"
+
 	"io"
 	"log"
 	"mensadb/tools/env"
@@ -11,7 +13,7 @@ import (
 	"strings"
 )
 
-func UploadAllFiles(app *pocketbase.PocketBase) {
+func UploadAllFiles(app core.App) {
 	records, err := app.FindAllRecords("documents")
 	if err != nil {
 		return

@@ -78,7 +78,7 @@ func main() {
 		dbtools.RemoteUpdateAddons(e.App)
 		dbtools.RemoteRetrieveDocumentsFromArea32(e.App)
 		dbtools.RemoteRetrieveMembersFromArea32(e.App)
-		dbtools.CronTasks(app)
+		dbtools.CronTasks(e.App)
 		return e.Next()
 	})
 
