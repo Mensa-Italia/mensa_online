@@ -28,6 +28,7 @@ import (
 
 func main() {
 	app := pocketbase.New()
+	dbtools.CronTasks(app)
 
 	app.OnBootstrap().BindFunc(func(e *core.BootstrapEvent) error {
 		tolgee.Load(env.GetTolgeeKey())
@@ -71,14 +72,6 @@ func main() {
 			return e.Redirect(http.StatusTemporaryRedirect, presignedUrl.URL)
 		}
 
-		return e.Next()
-	})
-
-	app.OnServe().BindFunc(func(e *core.ServeEvent) error {
-		dbtools.RemoteUpdateAddons(e.App)
-		dbtools.RemoteRetrieveDocumentsFromArea32(e.App)
-		dbtools.RemoteRetrieveMembersFromArea32(e.App)
-		dbtools.CronTasks(e.App)
 		return e.Next()
 	})
 
