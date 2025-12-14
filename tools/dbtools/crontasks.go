@@ -7,10 +7,10 @@ import (
 	"mensadb/tools/env"
 	"mensadb/tools/zincsearch"
 
-	"github.com/pocketbase/pocketbase"
+	"github.com/pocketbase/pocketbase/core"
 )
 
-func CronTasks(app *pocketbase.PocketBase) {
+func CronTasks(app core.App) {
 	app.Cron().MustAdd("Update remote addons", "1 3 * * *", func() {
 		RemoteUpdateAddons(app)
 	})
