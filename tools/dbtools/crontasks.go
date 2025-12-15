@@ -27,11 +27,11 @@ func CronTasks(app core.App) {
 		tolgee.Load(env.GetTolgeeKey())
 	})
 
-	app.Cron().MustAdd("Update documents data", "0 8-20 * * *", func() {
+	app.Cron().MustAdd("Update documents data", "0 * * * *", func() {
 		RemoteRetrieveDocumentsFromArea32(app)
 	})
 
-	app.Cron().MustAdd("Update registry data", "0 0,3,6,9,12,15,18,21 * * *", func() {
+	app.Cron().MustAdd("Update registry data", "30 0,3,6,9,12,15,18,21 * * *", func() {
 		RemoteRetrieveMembersFromArea32(app)
 	})
 
