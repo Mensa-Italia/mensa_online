@@ -3,17 +3,18 @@ package hooks
 import (
 	"bytes"
 	"fmt"
+	"io"
+	"log"
+	"mensadb/tools/aipower"
+	"mensadb/tools/dbtools"
+	"net/mail"
+
 	"github.com/google/uuid"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
 	"github.com/pocketbase/pocketbase/tools/mailer"
 	"github.com/yeqown/go-qrcode/v2"
 	"github.com/yeqown/go-qrcode/writer/standard"
-	"io"
-	"log"
-	"mensadb/tools/aipower"
-	"mensadb/tools/dbtools"
-	"net/mail"
 )
 
 // nopCloser è una struttura che implementa l'interfaccia io.Writer
@@ -186,6 +187,21 @@ func eventsNotifyUsers(e *core.RecordEvent) {
 		return
 	}
 
+	// Online event
+	if e.Record.GetString("position") == "" {
+		dbtools.SendPushNotificationToAllUsers(e.App, dbtools.PushNotification{
+			TrTag: "push_notification.new_online_event",
+			TrNamedParams: map[string]string{
+				"name": e.Record.GetString("name"),
+			},
+			Data: map[string]string{
+				"type":     "event",
+				"event_id": e.Record.GetString("id"),
+			},
+		})
+		return
+	}
+
 	// Recupera la posizione dell'evento
 	positionOfEvent, err := e.App.FindRecordById("positions", e.Record.GetString("position"))
 	if err != nil {
@@ -232,6 +248,20 @@ func EventsUpdateNotifyUsers(e *core.RecordEvent) {
 	if e.Record.Get("is_national") == true {
 		dbtools.SendPushNotificationToAllUsers(e.App, dbtools.PushNotification{
 			TrTag: "push_notification.update_national_event",
+			TrNamedParams: map[string]string{
+				"name": e.Record.GetString("name"),
+			},
+			Data: map[string]string{
+				"type":     "event",
+				"event_id": e.Record.GetString("id"),
+			},
+		})
+		return
+	}
+
+	if e.Record.GetString("position") == "" {
+		dbtools.SendPushNotificationToAllUsers(e.App, dbtools.PushNotification{
+			TrTag: "push_notification.update_online_event",
 			TrNamedParams: map[string]string{
 				"name": e.Record.GetString("name"),
 			},
