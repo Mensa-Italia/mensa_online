@@ -3,6 +3,7 @@ package cs
 import (
 	"mensadb/tools/dbtools"
 
+	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/tidwall/gjson"
 )
@@ -10,7 +11,7 @@ import (
 func MembersHashedHandler(e *core.RequestEvent) error {
 	app := e.App
 
-	records, err := app.FindAllRecords("members_registry")
+	records, err := app.FindAllRecords("members_registry", dbx.NewExp("is_active = true"))
 	if err != nil {
 		return err
 	}
@@ -23,20 +24,22 @@ func MembersHashedHandler(e *core.RequestEvent) error {
 			return err
 		}
 		elems := gjson.ParseBytes(json)
-		finalData = append(finalData, recurseMap(elems.Map()))
+		data := recurseMap(elems.Map(), record.Id)
+		data["id"] = record.Id
+		finalData = append(finalData, data)
 	}
 
 	return e.JSON(200, finalData)
 
 }
 
-func recurseMap(data map[string]gjson.Result) map[string]any {
+func recurseMap(data map[string]gjson.Result, salt string) map[string]any {
 	finalData := make(map[string]any)
 	for key, value := range data {
 		if value.IsObject() {
-			finalData[dbtools.NormalizeTextForHash(key)] = recurseMap(value.Map())
+			finalData[dbtools.NormalizeTextForHash(key)] = recurseMap(value.Map(), salt)
 		} else {
-			finalData[dbtools.NormalizeTextForHash(key)] = dbtools.GetMD5Hash(value.String())
+			finalData[dbtools.NormalizeTextForHash(key)] = dbtools.GetMD5Hash(value.String(), salt)
 		}
 	}
 	return finalData
