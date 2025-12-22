@@ -1,17 +1,17 @@
-package main
+package cdnfiles
 
 import (
 	"context"
+	"strings"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"strings"
 )
 
 // Modified from Pocketbase's codebase
 func NewS3(
-	bucketName string,
 	region string,
 	endpoint string,
 	accessKey string,
