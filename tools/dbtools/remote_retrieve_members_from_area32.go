@@ -139,19 +139,19 @@ func UpdateMembers(app core.App, member map[string]any) string {
 }
 
 func GetMD5Hash(text string) string {
-	normalized := normalizeTextForHash(text)
+	normalized := NormalizeTextForHash(text)
 	hash := md5.Sum([]byte(normalized))
 	return hex.EncodeToString(hash[:])
 }
 
-// normalizeTextForHash applica una normalizzazione deterministica al testo prima dell'hash.
+// NormalizeTextForHash applica una normalizzazione deterministica al testo prima dell'hash.
 // Regole:
 // - normalizza newline a \n
 // - Unicode normal form: NFKC
 // - trim spazi ai bordi
 // - lowercase
 // - collassa qualunque sequenza di whitespace Unicode in un singolo spazio
-func normalizeTextForHash(s string) string {
+func NormalizeTextForHash(s string) string {
 	if s == "" {
 		return ""
 	}
