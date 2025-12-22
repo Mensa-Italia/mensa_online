@@ -25,5 +25,7 @@ func Load(e *router.RouterGroup[*core.RequestEvent]) {
 	e.GET("/force-update-docs", ForceUpdateDocsHandler)
 	e.GET("/generate-event-card", GenerateEventCardHandler)
 	e.GET("/members-hashed", MembersHashedHandler)
+	e.GET("/members-snapshots", MembersSnapshotsHandler)
+	e.GET("/members-snapshots/{key}", MemberSnapshotByKeyHandler)
 	webhook.Load(e.Group("/webhook"))
 }
