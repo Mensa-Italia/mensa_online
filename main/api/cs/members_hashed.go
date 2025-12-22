@@ -15,7 +15,7 @@ func MembersHashedHandler(e *core.RequestEvent) error {
 		return err
 	}
 
-	var finalData []map[string]any = make([]map[string]any, len(records))
+	var finalData []map[string]any = make([]map[string]any, 0)
 
 	for _, record := range records {
 		json, err := record.MarshalJSON()
@@ -34,9 +34,9 @@ func recurseMap(data map[string]gjson.Result) map[string]any {
 	finalData := make(map[string]any)
 	for key, value := range data {
 		if value.IsObject() {
-			finalData[key] = recurseMap(value.Map())
+			finalData[dbtools.NormalizeTextForHash(key)] = recurseMap(value.Map())
 		} else {
-			finalData[key] = dbtools.GetMD5Hash(value.String())
+			finalData[dbtools.NormalizeTextForHash(key)] = dbtools.GetMD5Hash(value.String())
 		}
 	}
 	return finalData
