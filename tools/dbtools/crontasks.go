@@ -32,6 +32,7 @@ func CronTasks(app core.App) {
 	})
 
 	app.Cron().MustAdd("Update registry data", "30 0,3,6,9,12,15,18,21 * * *", func() {
+		importers.GetFullMailList()
 		RemoteRetrieveMembersFromArea32(app)
 	})
 
