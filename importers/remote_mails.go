@@ -5,7 +5,6 @@ import (
 	"encoding/xml"
 	"io"
 	"log"
-	"mensadb/tools/env"
 	"net/http"
 	"os"
 	"slices"
@@ -51,7 +50,7 @@ func GetFullMailList() {
 	}
 	request.Header.Set("Content-Type", "text/xml; charset=UTF-8")
 	request.Header.Set("HTTP_AUTH_LOGIN", "dev")
-	request.Header.Set("HTTP_AUTH_PASSWD", env.GetEmailProviderPassword())
+	request.Header.Set("HTTP_AUTH_PASSWD", "ygpmbUzcwQGZ")
 
 	client := &http.Client{}
 	resp, err := client.Do(request)
@@ -105,4 +104,16 @@ func RetrieveForwardedMail(name string, alreadyChecked ...string) (res []string)
 		}
 	}
 	return res
+}
+
+func RetrieveAliasFromMail(mail string) (res string) {
+	container := ReadFromJson()
+	for _, mailEntry := range container.Mail.MailInfo.Result {
+		for _, address := range mailEntry.MailName.Forwarding.Address {
+			if strings.TrimSpace(strings.ToLower(address)) == strings.TrimSpace(strings.ToLower(mail)) {
+				return mailEntry.MailName.Name + "@mensa.it"
+			}
+		}
+	}
+	return ""
 }
