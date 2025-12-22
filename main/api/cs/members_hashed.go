@@ -3,6 +3,7 @@ package cs
 import (
 	"mensadb/main/hooks"
 	"mensadb/tools/dbtools"
+	"strings"
 
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
@@ -111,6 +112,7 @@ func recurseMap(data map[string]gjson.Result, salt string) map[string]any {
 
 	for key, value := range data {
 		normalizedKey := dbtools.NormalizeTextForHashAndRemoveSpecialCharsOrAccents(key)
+		normalizedKey = strings.ReplaceAll(normalizedKey, " ", "_")
 
 		// Caso: sotto-oggetto JSON => ricorsione.
 		if value.IsObject() {
