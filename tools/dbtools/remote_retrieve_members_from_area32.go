@@ -113,7 +113,7 @@ func UpdateMembers(app core.App, member map[string]any) string {
 		alias := importers.RetrieveAliasFromMail(strings.ToLower(strings.TrimSpace(strings.ReplaceAll(elems.Get("E-mail:").String(), "mailto:", ""))))
 		newRecord.Set("alias_mail", alias+"@mensa.it")
 
-		member["deepData"].(map[string]any)["E-mail:"] = "mailto:" + alias + "@mensa.it"
+		member["deepData"].(map[string]string)["E-mail:"] = "mailto:" + alias + "@mensa.it"
 		marshal, err := json.Marshal(member["deepData"])
 		if err == nil {
 			newRecord.Set("full_data", marshal)
