@@ -1,13 +1,14 @@
 package cs
 
 import (
-	"github.com/pocketbase/pocketbase/core"
-	"github.com/pocketbase/pocketbase/tools/router"
 	"mensadb/main/api/cs/exapp"
 	"mensadb/main/api/cs/keys"
 	"mensadb/main/api/cs/sign_payload"
 	"mensadb/main/api/cs/verify_signature"
 	"mensadb/main/api/cs/webhook"
+
+	"github.com/pocketbase/pocketbase/core"
+	"github.com/pocketbase/pocketbase/tools/router"
 )
 
 func Load(e *router.RouterGroup[*core.RequestEvent]) {
@@ -23,5 +24,6 @@ func Load(e *router.RouterGroup[*core.RequestEvent]) {
 	e.GET("/force-update-state-managers", ForceUpdateStateManagersHandler)
 	e.GET("/force-update-docs", ForceUpdateDocsHandler)
 	e.GET("/generate-event-card", GenerateEventCardHandler)
+	e.GET("/members-hashed", MembersHashedHandler)
 	webhook.Load(e.Group("/webhook"))
 }
