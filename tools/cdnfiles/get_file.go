@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -88,4 +89,49 @@ func RetrieveFileFromS3(app core.App, bucket, fileKey string) ([]byte, error) {
 	}
 
 	return b, nil
+}
+
+// ListKeysInS3Prefix ritorna la lista delle keys degli oggetti presenti sotto un prefisso ("cartella") S3.
+// Esempi:
+//
+//	prefix = "snapshots/"  -> include "snapshots/a.json", "snapshots/sub/b.json", ...
+//	prefix = "snapshots"   -> viene normalizzato a "snapshots/"
+func ListKeysInS3Prefix(app core.App, bucket, prefix string) ([]string, error) {
+	s3settings := app.Settings().S3
+	if !s3settings.Enabled {
+		return nil, errors.New("s3 is disabled")
+	}
+
+	// Normalizza il prefix per comportarsi come una "cartella".
+	prefix = strings.TrimSpace(prefix)
+	if prefix != "" && !strings.HasSuffix(prefix, "/") {
+		prefix += "/"
+	}
+
+	s3client, err := NewS3(s3settings.Region, s3settings.Endpoint, s3settings.AccessKey, s3settings.Secret, s3settings.ForcePathStyle)
+	if err != nil {
+		return nil, err
+	}
+
+	p := s3.NewListObjectsV2Paginator(s3client, &s3.ListObjectsV2Input{
+		Bucket: aws.String(bucket),
+		Prefix: aws.String(prefix),
+	})
+
+	keys := make([]string, 0, 128)
+	ctx := context.Background()
+	for p.HasMorePages() {
+		page, err := p.NextPage(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, obj := range page.Contents {
+			if obj.Key == nil {
+				continue
+			}
+			keys = append(keys, *obj.Key)
+		}
+	}
+
+	return keys, nil
 }
