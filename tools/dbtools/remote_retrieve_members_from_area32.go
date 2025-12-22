@@ -1,12 +1,17 @@
 package dbtools
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
 	"log"
 	"mensadb/area32"
 	"mensadb/importers"
 	"mensadb/tools/env"
 	"strings"
+	"unicode"
+
+	"golang.org/x/text/unicode/norm"
 
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
@@ -131,4 +136,55 @@ func UpdateMembers(app core.App, member map[string]any) string {
 	}
 
 	return memberId
+}
+
+func GetMD5Hash(text string) string {
+	normalized := normalizeTextForHash(text)
+	hash := md5.Sum([]byte(normalized))
+	return hex.EncodeToString(hash[:])
+}
+
+// normalizeTextForHash applica una normalizzazione deterministica al testo prima dell'hash.
+// Regole:
+// - normalizza newline a \n
+// - Unicode normal form: NFKC
+// - trim spazi ai bordi
+// - lowercase
+// - collassa qualunque sequenza di whitespace Unicode in un singolo spazio
+func normalizeTextForHash(s string) string {
+	if s == "" {
+		return ""
+	}
+
+	// Normalizza newline: CRLF e CR -> LF
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	s = strings.ReplaceAll(s, "\r", "\n")
+
+	// Unicode normalization (compatibility decomposition + composition)
+	s = norm.NFKC.String(s)
+
+	// Trim e lowercase
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ""
+	}
+	s = strings.ToLower(s)
+
+	// Collassa whitespace (incluse tab, newline, NBSP, ecc.)
+	var b strings.Builder
+	b.Grow(len(s))
+	inSpace := false
+	for _, r := range s {
+		if unicode.IsSpace(r) {
+			if !inSpace {
+				b.WriteByte(' ')
+				inSpace = true
+			}
+			continue
+		}
+		inSpace = false
+		b.WriteRune(r)
+	}
+
+	return strings.TrimSpace(b.String())
 }
