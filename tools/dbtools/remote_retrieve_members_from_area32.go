@@ -138,9 +138,9 @@ func UpdateMembers(app core.App, member map[string]any) string {
 	return memberId
 }
 
-func GetMD5Hash(text string) string {
+func GetMD5Hash(text string, salt string) string {
 	normalized := NormalizeTextForHash(text)
-	hash := md5.Sum([]byte(normalized))
+	hash := md5.Sum([]byte(normalized + salt))
 	return hex.EncodeToString(hash[:])
 }
 
