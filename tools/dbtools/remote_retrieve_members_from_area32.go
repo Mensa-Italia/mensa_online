@@ -1,14 +1,18 @@
 package dbtools
 
 import (
+	"bytes"
+	"compress/gzip"
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
 	"log"
 	"mensadb/area32"
 	"mensadb/importers"
+	"mensadb/tools/cdnfiles"
 	"mensadb/tools/env"
 	"strings"
+	"time"
 	"unicode"
 
 	"golang.org/x/text/unicode/norm"
@@ -22,6 +26,8 @@ func RemoteRetrieveMembersFromArea32(app core.App) {
 	// Recupera le credenziali dall'ambiente
 	email := env.GetArea32InternalEmail()
 	password := env.GetArea32InternalPassword()
+
+	SnapshotArea32Members(app)
 
 	// Inizializza l'API Area32 per autenticare l'utente e ottenere i dati principali
 	scraperApi := area32.NewAPI()
@@ -241,4 +247,49 @@ func NormalizeTextForHashAndRemoveSpecialCharsOrAccents(s string) string {
 
 	// Trim finale per evitare spazi iniziali/finali e output vuoto " ".
 	return strings.TrimSpace(b.String())
+}
+
+func SnapshotArea32Members(app core.App) {
+	allMembers, err := app.FindAllRecords("members_registry")
+	if err != nil {
+		return
+	}
+
+	snapshotData := make([]map[string]any, 0, len(allMembers))
+	for _, member := range allMembers {
+		memberJson, err := member.MarshalJSON()
+		if err != nil {
+			continue
+		}
+		var memberMap map[string]any
+		if err := json.Unmarshal(memberJson, &memberMap); err != nil {
+			continue
+		}
+		snapshotData = append(snapshotData, memberMap)
+	}
+
+	marshaledSnapshot, err := json.Marshal(snapshotData)
+	if err != nil {
+		return
+	}
+
+	// Comprimi (gzip)
+	var gzBuf bytes.Buffer
+	gz := gzip.NewWriter(&gzBuf)
+	gz.Name = "members_registry.json"
+	gz.ModTime = time.Now()
+	if _, err := gz.Write(marshaledSnapshot); err != nil {
+		_ = gz.Close()
+		return
+	}
+	if err := gz.Close(); err != nil {
+		return
+	}
+
+	// Nome file deterministico e adatto come key S3
+	todayDateTime := time.Now().Format("2006-01-02_15-04-05")
+	fileName := "snapshot_members/members_registry_" + todayDateTime + ".json.gz"
+
+	s3settings := app.Settings().S3
+	cdnfiles.UploadFileToS3(app, s3settings.Bucket, fileName, gzBuf.Bytes())
 }
