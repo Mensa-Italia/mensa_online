@@ -188,3 +188,57 @@ func NormalizeTextForHash(s string) string {
 
 	return strings.TrimSpace(b.String())
 }
+
+func NormalizeTextForHashAndRemoveSpecialCharsOrAccents(s string) string {
+	// Variante di NormalizeTextForHash che, oltre alla normalizzazione deterministica,
+	// rimuove anche:
+	// - diacritici/accents (es. "è" -> "e", "Ł" -> "l" dove possibile)
+	// - caratteri speciali/punteggiatura (mantiene solo lettere, numeri e spazi)
+	//
+	// È utile quando si vuole confrontare stringhe provenienti da fonti diverse
+	// (OCR, input umano, sistemi esterni) minimizzando differenze di formattazione.
+	if s == "" {
+		return ""
+	}
+
+	// Prima applichiamo la normalizzazione base (newline, NFKC, trim/lowercase, whitespace).
+	// Questo rende l'output deterministico e coerente con GetMD5Hash.
+	s = NormalizeTextForHash(s)
+	if s == "" {
+		return ""
+	}
+
+	// Rimozione diacritici:
+	// - passiamo a NFKD (decomposizione) così lettere + segni diacritici diventano rune separate.
+	// - filtriamo i rune con categoria Mn (Mark, nonspacing) che rappresentano tipicamente i segni.
+	// NB: non tutte le lettere "speciali" sono diacritici (es. ß, ø) e potrebbero non
+	// convertire in ASCII; in quel caso restano come lettere e saranno gestite dal filtro successivo.
+	d := norm.NFKD.String(s)
+
+	var b strings.Builder
+	b.Grow(len(d))
+	inSpace := false
+
+	for _, r := range d {
+		// Filtra i combining marks (accenti/diacritici) dopo decomposizione.
+		if unicode.Is(unicode.Mn, r) {
+			continue
+		}
+
+		// Manteniamo solo lettere e numeri.
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			inSpace = false
+			b.WriteRune(r)
+			continue
+		}
+
+		// Trattiamo tutto il resto come separatore; collassiamo in un singolo spazio.
+		if !inSpace {
+			b.WriteByte(' ')
+			inSpace = true
+		}
+	}
+
+	// Trim finale per evitare spazi iniziali/finali e output vuoto " ".
+	return strings.TrimSpace(b.String())
+}
