@@ -24,8 +24,9 @@ func MembersHashedHandler(e *core.RequestEvent) error {
 			return err
 		}
 		elems := gjson.ParseBytes(json)
-		data := recurseMap(elems.Map(), record.Id)
-		data["id"] = record.Id
+		salt := dbtools.GetMD5Hash(record.Id, "")
+		data := recurseMap(elems.Map(), salt)
+		data["salt"] = salt
 		finalData = append(finalData, data)
 	}
 
