@@ -288,7 +288,7 @@ func SnapshotArea32Members(app core.App) {
 
 	// Nome file deterministico e adatto come key S3
 	todayDateTime := time.Now().Format("2006-01-02_15-04-05")
-	fileName := "snapshot_members/members_registry_" + todayDateTime + ".json.gz"
+	fileName := "snapshot_members/" + todayDateTime + ".json.gz"
 
 	s3settings := app.Settings().S3
 	cdnfiles.UploadFileToS3(app, s3settings.Bucket, fileName, gzBuf.Bytes())
