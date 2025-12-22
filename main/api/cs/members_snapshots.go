@@ -2,6 +2,7 @@ package cs
 
 import (
 	"encoding/json"
+	"mensadb/main/hooks"
 	"mensadb/tools/cdnfiles"
 	"strings"
 
@@ -11,6 +12,20 @@ import (
 )
 
 func MembersSnapshotsHandler(e *core.RequestEvent) error {
+	// Recupero della chiave di autorizzazione.
+	// 1) Preferiamo l'header standard `Authorization`.
+	// 2) In fallback accettiamo anche `authKey` in query string (utile per debug/integrazioni semplici).
+	authKey := e.Request.Header.Get("Authorization")
+	if authKey == "" {
+		authKey = e.Request.URL.Query().Get("authKey")
+	}
+
+	// Blocco immediato se la chiave non è valida o non ha la capability richiesta.
+	// Nota: "GET_MEMBERS_HASH" rappresenta la specifica azione/permesso controllato nel progetto.
+	if !hooks.CheckKey(e.App, authKey, "GET_MEMBERS_HASH") {
+		return e.String(401, "Unauthorized")
+	}
+
 	s3settings := e.App.Settings().S3
 	listOfStuffs, err := cdnfiles.ListKeysInS3Prefix(e.App, s3settings.Bucket, "snapshot_members/")
 	if err != nil {
@@ -35,7 +50,7 @@ func MembersSnapshotsHandler(e *core.RequestEvent) error {
 		timestamp := strings.ReplaceAll(key, ".json.gz", "")
 		snapshotInfo.History = append(snapshotInfo.History, SnapshotInfoElem{
 			Timestamp: timestamp,
-			URL:       "https://svc.mensa.it/api/cs/members-snapshots/" + key,
+			URL:       "https://svc.mensa.it/api/cs/members-snapshots/" + key + "?authKey=" + authKey,
 		})
 	}
 
@@ -43,6 +58,20 @@ func MembersSnapshotsHandler(e *core.RequestEvent) error {
 }
 
 func MemberSnapshotByKeyHandler(e *core.RequestEvent) error {
+	// Recupero della chiave di autorizzazione.
+	// 1) Preferiamo l'header standard `Authorization`.
+	// 2) In fallback accettiamo anche `authKey` in query string (utile per debug/integrazioni semplici).
+	authKey := e.Request.Header.Get("Authorization")
+	if authKey == "" {
+		authKey = e.Request.URL.Query().Get("authKey")
+	}
+
+	// Blocco immediato se la chiave non è valida o non ha la capability richiesta.
+	// Nota: "GET_MEMBERS_HASH" rappresenta la specifica azione/permesso controllato nel progetto.
+	if !hooks.CheckKey(e.App, authKey, "GET_MEMBERS_HASH") {
+		return e.String(401, "Unauthorized")
+	}
+
 	s3settings := e.App.Settings().S3
 	key := e.Request.PathValue("key")
 	hideNotActive := e.Request.URL.Query().Get("hideNotActive")
@@ -77,22 +106,27 @@ func filterMembersSnapshot(app core.App, snapshotData []byte, hideNotActive bool
 		activeMemberIds[record.Id] = true
 	}
 
+	var filteredElems []gjson.Result
+
 	snapshotElems.ForEach(func(key, value gjson.Result) bool {
 		memberId := value.Get("id").String()
 		isActive := value.Get("is_active").Bool()
 		if hideNotActive && !isActive {
-			return false // remove this element
+			return true
 		}
 		if hideNowNotActive {
 			if _, exists := activeMemberIds[memberId]; !exists {
-				return false // remove this element
+				return true
 			}
 		}
+		filteredElems = append(filteredElems, value)
 		return true // keep this element
 	})
 
-	//snapshotElems.String() to bytes
-
-	return snapshotElems.String(), nil
+	resultJson, err := json.Marshal(filteredElems)
+	if err != nil {
+		return "", err
+	}
+	return string(resultJson), nil
 
 }
