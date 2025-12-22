@@ -1,8 +1,6 @@
 package dbtools
 
 import (
-	"bytes"
-	"compress/gzip"
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
@@ -273,16 +271,9 @@ func SnapshotArea32Members(app core.App) {
 		return
 	}
 
-	// Comprimi (gzip)
-	var gzBuf bytes.Buffer
-	gz := gzip.NewWriter(&gzBuf)
-	gz.Name = "members_registry.json"
-	gz.ModTime = time.Now()
-	if _, err := gz.Write(marshaledSnapshot); err != nil {
-		_ = gz.Close()
-		return
-	}
-	if err := gz.Close(); err != nil {
+	compressed, err := cdnfiles.GzipCompressBytes(marshaledSnapshot, "members_registry.json")
+	if err != nil {
+		app.Logger().Error("gzip snapshot members_registry", err)
 		return
 	}
 
@@ -291,5 +282,8 @@ func SnapshotArea32Members(app core.App) {
 	fileName := "snapshot_members/" + todayDateTime + ".json.gz"
 
 	s3settings := app.Settings().S3
-	cdnfiles.UploadFileToS3(app, s3settings.Bucket, fileName, gzBuf.Bytes())
+	if err := cdnfiles.UploadFileToS3(app, s3settings.Bucket, fileName, compressed); err != nil {
+		app.Logger().Error("upload snapshot members_registry", err)
+		return
+	}
 }
