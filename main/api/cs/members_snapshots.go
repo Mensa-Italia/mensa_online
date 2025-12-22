@@ -125,6 +125,9 @@ func filterMembersSnapshot(app core.App, snapshotData []byte, hideNotActive bool
 				return true
 			}
 		}
+		if strings.TrimSpace(value.Get("area").String()) == "" {
+			return true
+		}
 		var elem map[string]any
 		err := json.Unmarshal([]byte(value.String()), &elem)
 		if err != nil {
