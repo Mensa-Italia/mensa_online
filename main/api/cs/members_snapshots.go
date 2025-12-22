@@ -76,6 +76,7 @@ func MemberSnapshotByKeyHandler(e *core.RequestEvent) error {
 	key := e.Request.PathValue("key")
 	hideNotActive := e.Request.URL.Query().Get("hideNotActive")
 	hideNowNotActive := e.Request.URL.Query().Get("hideNowNotActive")
+	areaPlaces := e.Request.URL.Query().Get("area") //comma separated list of area (like Piemonte,Lombardia,...)
 
 	fileContent, err := cdnfiles.RetrieveFileFromS3(e.App, s3settings.Bucket, "snapshot_members/"+key)
 
@@ -87,7 +88,7 @@ func MemberSnapshotByKeyHandler(e *core.RequestEvent) error {
 	if err != nil {
 		return err
 	}
-	filteredContent, err := filterMembersSnapshot(e.App, decompressedContent, hideNotActive != "", hideNowNotActive != "")
+	filteredContent, err := filterMembersSnapshot(e.App, decompressedContent, hideNotActive != "", hideNowNotActive != "", areaPlaces)
 	if err != nil {
 		return err
 	}
@@ -98,7 +99,7 @@ func MemberSnapshotByKeyHandler(e *core.RequestEvent) error {
 	return e.JSON(200, jsonData)
 }
 
-func filterMembersSnapshot(app core.App, snapshotData []byte, hideNotActive bool, hideNowNotActive bool) (string, error) {
+func filterMembersSnapshot(app core.App, snapshotData []byte, hideNotActive bool, hideNowNotActive bool, areaPlaces string) (string, error) {
 	snapshotElems := gjson.ParseBytes(snapshotData)
 	records, _ := app.FindAllRecords("members_registry", dbx.NewExp("is_active = true"))
 	activeMemberIds := map[string]bool{}
@@ -106,7 +107,7 @@ func filterMembersSnapshot(app core.App, snapshotData []byte, hideNotActive bool
 		activeMemberIds[record.Id] = true
 	}
 
-	var filteredElems []gjson.Result
+	var filteredElems []map[string]any
 
 	snapshotElems.ForEach(func(key, value gjson.Result) bool {
 		memberId := value.Get("id").String()
@@ -119,7 +120,17 @@ func filterMembersSnapshot(app core.App, snapshotData []byte, hideNotActive bool
 				return true
 			}
 		}
-		filteredElems = append(filteredElems, value)
+		if areaPlaces != "" {
+			if !strings.Contains(strings.ToLower(areaPlaces), strings.ToLower(value.Get("area").String())) {
+				return true
+			}
+		}
+		var elem map[string]any
+		err := json.Unmarshal([]byte(value.String()), &elem)
+		if err != nil {
+			return true
+		}
+		filteredElems = append(filteredElems, elem)
 		return true // keep this element
 	})
 
