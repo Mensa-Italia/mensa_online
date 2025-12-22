@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"io"
 	"log"
+	"mensadb/tools/env"
 	"net/http"
 	"os"
 	"slices"
@@ -81,7 +82,7 @@ func GetFullMailList() {
 	// L'endpoint si aspetta XML in POST e autenticazione via header custom.
 	request.Header.Set("Content-Type", "text/xml; charset=UTF-8")
 	request.Header.Set("HTTP_AUTH_LOGIN", "dev")
-	request.Header.Set("HTTP_AUTH_PASSWD", "ygpmbUzcwQGZ")
+	request.Header.Set("HTTP_AUTH_PASSWD", env.GetArea32InternalEmail())
 
 	client := &http.Client{}
 	resp, err := client.Do(request)
