@@ -106,7 +106,7 @@ func AskResume(fileSystemData *filesystem.File, appendedFiles []*filesystem.File
 
 	result, err := client.Models.GenerateContent(
 		ctx,
-		"gemini-2.0-flash",
+		"gemini-3-flash-preview",
 		[]*genai.Content{
 			genai.NewContentFromParts(parts, genai.RoleUser),
 		},
