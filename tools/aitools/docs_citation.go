@@ -8,6 +8,7 @@ import (
 	"mensadb/tools/env"
 	"strings"
 
+	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
 	"google.golang.org/genai"
 )
@@ -33,7 +34,7 @@ type documentsCitationResponse struct {
 
 const provaPrompt = ``
 
-func FindTree(file *filesystem.File) DocumentsCitationList {
+func FindTree(app core.App, file *filesystem.File) DocumentsCitationList {
 	ctx := context.Background()
 	client, _ := genai.NewClient(ctx, &genai.ClientConfig{
 		APIKey:  env.GetGeminiKey(),
@@ -54,12 +55,15 @@ func FindTree(file *filesystem.File) DocumentsCitationList {
 		log.Fatal("upload to Gemini failed")
 	}
 
+	promptTemp := strings.ReplaceAll(provaPrompt, "{nameFile}", file.Name)
+	promptTemp = strings.ReplaceAll(promptTemp, "{docs}", retrieveAllDocumentsList(app))
+
 	contents := []*genai.Content{
 		{
 			Role: genai.RoleUser,
 			Parts: []*genai.Part{
 				genai.NewPartFromFile(*uploaded),
-				genai.NewPartFromText(strings.ReplaceAll(provaPrompt, "{nameFile}", file.Name)),
+				genai.NewPartFromText(promptTemp),
 			},
 		},
 	}
@@ -109,4 +113,22 @@ func FindTree(file *filesystem.File) DocumentsCitationList {
 	log.Println(responseCitation)
 
 	return responseCitation.Items
+}
+
+func retrieveAllDocumentsList(app core.App) string {
+	records, _ := app.FindAllRecords("documents")
+	type Doc struct {
+		ID   string
+		Name string
+	}
+
+	var docs []Doc
+	for _, record := range records {
+		docs = append(docs, Doc{
+			ID:   record.Id,
+			Name: record.GetString("name"),
+		})
+	}
+	data, _ := json.Marshal(docs)
+	return string(data)
 }
