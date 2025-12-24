@@ -2,10 +2,6 @@ package area32
 
 import (
 	"errors"
-	"github.com/PuerkitoBio/goquery"
-	"github.com/go-resty/resty/v2"
-	"github.com/google/uuid"
-	"github.com/pocketbase/pocketbase/tools/filesystem"
 	"io"
 	"log"
 	"mensadb/tools/aipower"
@@ -17,6 +13,12 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/PuerkitoBio/goquery"
+	"github.com/go-resty/resty/v2"
+	"github.com/google/uuid"
+	"github.com/pocketbase/pocketbase/core"
+	"github.com/pocketbase/pocketbase/tools/filesystem"
 )
 
 var UNABLE_TO_CONNECT = errors.New("UNABLE_TO_CONNECT")
@@ -240,7 +242,7 @@ func (api *ScraperApi) GetDocumentByPage(page int) ([]map[string]any, error) {
 	return documents, nil
 }
 
-func (api *ScraperApi) GetAllDocuments(excludedUID []string) ([]map[string]any, error) {
+func (api *ScraperApi) GetAllDocuments(app core.App, excludedUID []string) ([]map[string]any, error) {
 	var documents []map[string]any
 	for i := 1; ; i++ {
 		pageDocuments, err := api.GetDocumentByPage(i)
@@ -255,6 +257,21 @@ func (api *ScraperApi) GetAllDocuments(excludedUID []string) ([]map[string]any, 
 	}
 	documents = invertArray(documents)
 	resultDocuments := []map[string]any{}
+	previousDocuments, _ := app.FindAllRecords("documents")
+	last10Documents := []*filesystem.File{}
+	for i := 0; i < len(previousDocuments) && i < 5; i++ {
+		key := previousDocuments[i].BaseFilesPath() + "/" + previousDocuments[i].GetString("file")
+		fsys, _ := app.NewFilesystem()
+		defer fsys.Close()
+
+		blob, _ := fsys.GetReader(key)
+		defer blob.Close()
+
+		fileData, _ := io.ReadAll(blob)
+		file, _ := filesystem.NewFileFromBytes(fileData, previousDocuments[i].GetString("file"))
+		last10Documents = append(last10Documents, file)
+	}
+
 	for i, document := range documents {
 		uid := uuid.NewMD5(uuid.MustParse(env.GetDocsUUID()), []byte(document["link"].(string))).String()
 		if !slices.Contains(excludedUID, uid) {
@@ -264,7 +281,7 @@ func (api *ScraperApi) GetAllDocuments(excludedUID []string) ([]map[string]any, 
 				continue
 			}
 			documents[i]["file"] = fs
-			documents[i]["resume"] = aipower.AskResume(fs)
+			documents[i]["resume"] = aipower.AskResume(fs, last10Documents)
 			resultDocuments = append(resultDocuments, documents[i])
 		}
 	}

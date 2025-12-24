@@ -38,7 +38,7 @@ func GetFilePresignedURL(app core.App, bucket, fileKey string) string {
 	return ""
 }
 
-func UploadFileToS3(app core.App, bucket, fileKey string, file []byte) error {
+func UploadFileToS3(app core.App, bucket, fileKey string, file []byte, metadata ...map[string]string) error {
 	s3settings := app.Settings().S3
 	if !s3settings.Enabled {
 		return errors.New("s3 is disabled")
@@ -49,10 +49,15 @@ func UploadFileToS3(app core.App, bucket, fileKey string, file []byte) error {
 		return err
 	}
 
+	if len(metadata) == 0 {
+		metadata = append(metadata, map[string]string{})
+	}
+
 	_, err = s3client.PutObject(context.Background(), &s3.PutObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(fileKey),
-		Body:   bytes.NewReader(file),
+		Bucket:   aws.String(bucket),
+		Key:      aws.String(fileKey),
+		Body:     bytes.NewReader(file),
+		Metadata: metadata[0],
 	})
 	if err != nil {
 		return err

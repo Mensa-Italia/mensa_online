@@ -43,7 +43,7 @@ func RemoteRetrieveDocumentsFromArea32(app core.App) {
 	}
 
 	// Recupera i nuovi documenti da Area32 che non sono già nel database
-	newDocuments, _ := scraperApi.GetAllDocuments(documentsUids)
+	newDocuments, _ := scraperApi.GetAllDocuments(app, documentsUids)
 	idOfDocument := ""
 	for _, document := range newDocuments {
 		idOfDocument = UpdateDocuments(app, document) // Aggiorna i documenti in modo concorrente

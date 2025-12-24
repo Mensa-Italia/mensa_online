@@ -43,4 +43,8 @@ func CronTasks(app core.App) {
 	app.Cron().MustAdd("CheckUserStripeAccount", "0 */6 * * *", func() {
 		CheckUserStripeAccount(app)
 	})
+
+	app.Cron().MustAdd("Snapshot Members Registry", "0 0 * * *", func() {
+		SnapshotArea32Members(app)
+	})
 }
