@@ -4,7 +4,7 @@ import (
 	"errors"
 	"io"
 	"log"
-	"mensadb/tools/aipower"
+	"mensadb/tools/aitools"
 	"mensadb/tools/env"
 	"mensadb/tools/spatial"
 	"net/http/cookiejar"
@@ -256,22 +256,7 @@ func (api *ScraperApi) GetAllDocuments(app core.App, excludedUID []string) ([]ma
 		break
 	}
 	documents = invertArray(documents)
-	resultDocuments := []map[string]any{}
-	previousDocuments, _ := app.FindAllRecords("documents")
-	last10Documents := []*filesystem.File{}
-	for i := 0; i < len(previousDocuments) && i < 5; i++ {
-		key := previousDocuments[i].BaseFilesPath() + "/" + previousDocuments[i].GetString("file")
-		fsys, _ := app.NewFilesystem()
-		defer fsys.Close()
-
-		blob, _ := fsys.GetReader(key)
-		defer blob.Close()
-
-		fileData, _ := io.ReadAll(blob)
-		file, _ := filesystem.NewFileFromBytes(fileData, previousDocuments[i].GetString("file"))
-		last10Documents = append(last10Documents, file)
-	}
-
+	var resultDocuments []map[string]any
 	for i, document := range documents {
 		uid := uuid.NewMD5(uuid.MustParse(env.GetDocsUUID()), []byte(document["link"].(string))).String()
 		if !slices.Contains(excludedUID, uid) {
@@ -281,7 +266,7 @@ func (api *ScraperApi) GetAllDocuments(app core.App, excludedUID []string) ([]ma
 				continue
 			}
 			documents[i]["file"] = fs
-			documents[i]["resume"] = aipower.AskResume(fs, last10Documents)
+			documents[i]["resume"] = aitools.ResumeDocument(app, fs)
 			resultDocuments = append(resultDocuments, documents[i])
 		}
 	}
