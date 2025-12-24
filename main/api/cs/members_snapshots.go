@@ -33,8 +33,9 @@ func MembersSnapshotsHandler(e *core.RequestEvent) error {
 	}
 
 	type SnapshotInfoElem struct {
-		Timestamp string `json:"timestamp"`
-		URL       string `json:"url"`
+		Timestamp string            `json:"timestamp"`
+		URL       string            `json:"url"`
+		Metadata  map[string]string `json:"metadata"`
 	}
 
 	type SnapshotInfo struct {
@@ -45,12 +46,13 @@ func MembersSnapshotsHandler(e *core.RequestEvent) error {
 		History: []SnapshotInfoElem{},
 	}
 
-	for _, key := range listOfStuffs {
-		key := strings.ReplaceAll(key, "snapshot_members/", "")
+	for keyName, value := range listOfStuffs {
+		key := strings.ReplaceAll(keyName, "snapshot_members/", "")
 		timestamp := strings.ReplaceAll(key, ".json.gz", "")
 		snapshotInfo.History = append(snapshotInfo.History, SnapshotInfoElem{
 			Timestamp: timestamp,
 			URL:       "https://svc.mensa.it/api/cs/members-snapshots/" + key + "?authKey=" + authKey,
+			Metadata:  value,
 		})
 	}
 
@@ -78,7 +80,7 @@ func MemberSnapshotByKeyHandler(e *core.RequestEvent) error {
 	hideNowNotActive := e.Request.URL.Query().Get("hideNowNotActive")
 	areaPlaces := e.Request.URL.Query().Get("area") //comma separated list of area (like Piemonte,Lombardia,...)
 
-	fileContent, err := cdnfiles.RetrieveFileFromS3(e.App, s3settings.Bucket, "snapshot_members/"+key)
+	fileContent, _, err := cdnfiles.RetrieveFileFromS3(e.App, s3settings.Bucket, "snapshot_members/"+key)
 
 	if err != nil {
 		return err

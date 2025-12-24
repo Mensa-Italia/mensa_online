@@ -66,23 +66,24 @@ func UploadFileToS3(app core.App, bucket, fileKey string, file []byte, metadata 
 	return nil
 }
 
-func RetrieveFileFromS3(app core.App, bucket, fileKey string) ([]byte, error) {
+func RetrieveFileFromS3(app core.App, bucket, fileKey string) ([]byte, map[string]string, error) {
 	s3settings := app.Settings().S3
 	if !s3settings.Enabled {
-		return nil, errors.New("s3 is disabled")
+		return nil, nil, errors.New("s3 is disabled")
 	}
 
 	s3client, err := NewS3(s3settings.Region, s3settings.Endpoint, s3settings.AccessKey, s3settings.Secret, s3settings.ForcePathStyle)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	out, err := s3client.GetObject(context.Background(), &s3.GetObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(fileKey),
 	})
+
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer func() {
 		_ = out.Body.Close()
@@ -90,18 +91,23 @@ func RetrieveFileFromS3(app core.App, bucket, fileKey string) ([]byte, error) {
 
 	b, err := io.ReadAll(out.Body)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return b, nil
+	return b, out.Metadata, nil
 }
 
-// ListKeysInS3Prefix ritorna la lista delle keys degli oggetti presenti sotto un prefisso ("cartella") S3.
+// ListKeysInS3Prefix ritorna una mappa dove:
+//   - key:      la key completa dell'oggetto S3 (es. "snapshots/a.json")
+//   - value:    metadata dell'oggetto (out.Metadata)
+//
+// Nota: la Metadata non viene restituita da ListObjectsV2, quindi viene recuperata con una chiamata HeadObject per ogni key.
+//
 // Esempi:
 //
 //	prefix = "snapshots/"  -> include "snapshots/a.json", "snapshots/sub/b.json", ...
 //	prefix = "snapshots"   -> viene normalizzato a "snapshots/"
-func ListKeysInS3Prefix(app core.App, bucket, prefix string) ([]string, error) {
+func ListKeysInS3Prefix(app core.App, bucket, prefix string) (map[string]map[string]string, error) {
 	s3settings := app.Settings().S3
 	if !s3settings.Enabled {
 		return nil, errors.New("s3 is disabled")
@@ -123,20 +129,31 @@ func ListKeysInS3Prefix(app core.App, bucket, prefix string) ([]string, error) {
 		Prefix: aws.String(prefix),
 	})
 
-	keys := make([]string, 0, 128)
 	ctx := context.Background()
+	result := make(map[string]map[string]string, 128)
 	for p.HasMorePages() {
 		page, err := p.NextPage(ctx)
 		if err != nil {
 			return nil, err
 		}
+
 		for _, obj := range page.Contents {
-			if obj.Key == nil {
+			if obj.Key == nil || strings.TrimSpace(*obj.Key) == "" {
 				continue
 			}
-			keys = append(keys, *obj.Key)
+
+			key := *obj.Key
+			head, err := s3client.HeadObject(ctx, &s3.HeadObjectInput{
+				Bucket: aws.String(bucket),
+				Key:    aws.String(key),
+			})
+			if err != nil {
+				return nil, err
+			}
+
+			result[key] = head.Metadata
 		}
 	}
 
-	return keys, nil
+	return result, nil
 }
