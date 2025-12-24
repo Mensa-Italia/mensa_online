@@ -249,6 +249,10 @@ func NormalizeTextForHashAndRemoveSpecialCharsOrAccents(s string) string {
 }
 
 func SnapshotArea32Members(app core.App) {
+	// Nome file deterministico e adatto come key S3
+	now := time.Now()
+	todayDateTime := now.Format("2006-01-02_15-04-05")
+
 	allMembers, err := app.FindAllRecords("members_registry")
 	if err != nil {
 		return
@@ -290,9 +294,6 @@ func SnapshotArea32Members(app core.App) {
 		return
 	}
 
-	// Nome file deterministico e adatto come key S3
-	now := time.Now()
-	todayDateTime := now.Format("2006-01-02_15-04-05")
 	fileName := "snapshot_members/" + todayDateTime + ".json.gz"
 
 	s3settings := app.Settings().S3
