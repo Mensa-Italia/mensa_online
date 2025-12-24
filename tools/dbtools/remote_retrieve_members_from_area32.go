@@ -9,6 +9,7 @@ import (
 	"mensadb/importers"
 	"mensadb/tools/cdnfiles"
 	"mensadb/tools/env"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -282,7 +283,15 @@ func SnapshotArea32Members(app core.App) {
 	fileName := "snapshot_members/" + todayDateTime + ".json.gz"
 
 	s3settings := app.Settings().S3
-	if err := cdnfiles.UploadFileToS3(app, s3settings.Bucket, fileName, compressed); err != nil {
+	if err := cdnfiles.UploadFileToS3(app, s3settings.Bucket, fileName, compressed, map[string]string{
+		"x-amz-meta-content-type":        "application/gzip",
+		"x-amz-meta-content-encoding":    "gzip",
+		"x-amz-meta-original-filename":   "members_registry.json",
+		"x-amz-meta-snapshot-created-at": todayDateTime,
+		"x-amz-meta-total-members":       strconv.Itoa(len(allMembers)),
+		"x-amz-meta-snapshot-type":       "members_registry",
+		"x-amz-meta-created-by":          "mensadb-cron-snapshot",
+	}); err != nil {
 		app.Logger().Error("upload snapshot members_registry", err)
 		return
 	}

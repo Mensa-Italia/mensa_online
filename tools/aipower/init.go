@@ -2,13 +2,15 @@ package aipower
 
 import (
 	"context"
+	"io"
+	"log"
+	"mensadb/tools/env"
+	"strings"
+
 	"github.com/gabriel-vasile/mimetype"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
 	"github.com/tidwall/gjson"
 	"google.golang.org/genai"
-	"io"
-	"log"
-	"mensadb/tools/env"
 )
 
 func uploadToGemini(client *genai.Client, fileSystemData *filesystem.File) *genai.File {
@@ -42,7 +44,7 @@ func uploadToGemini(client *genai.Client, fileSystemData *filesystem.File) *gena
 	return fileData
 }
 
-func AskResume(fileSystemData *filesystem.File) string {
+func AskResume(fileSystemData *filesystem.File, appendedFiles []*filesystem.File) string {
 	ctx := context.Background()
 	client, err := genai.NewClient(ctx, &genai.ClientConfig{
 		APIKey:  env.GetGeminiKey(),
@@ -74,17 +76,33 @@ func AskResume(fileSystemData *filesystem.File) string {
 		},
 	}
 
-	uploadedFile := uploadToGemini(client, fileSystemData)
+	uploadedFileCheck := uploadToGemini(client, fileSystemData)
+	uploadedFileAppended := []*genai.File{}
+	for _, f := range appendedFiles {
+		uploaded := uploadToGemini(client, f)
+		if uploaded != nil {
+			uploadedFileAppended = append(uploadedFileAppended, uploaded)
+		}
+	}
 
-	log.Println(uploadedFile.MIMEType)
+	log.Println(uploadedFileCheck.MIMEType)
 	parts := []*genai.Part{
 		&genai.Part{
 			FileData: &genai.FileData{
-				FileURI: uploadedFile.URI,
+				FileURI: uploadedFileCheck.URI,
 			},
 		},
-		genai.NewPartFromText(env.GetGeminiResumePrompt()),
 	}
+
+	for _, f := range uploadedFileAppended {
+		parts = append(parts, &genai.Part{
+			FileData: &genai.FileData{
+				FileURI: f.URI,
+			},
+		})
+	}
+
+	parts = append(parts, genai.NewPartFromText(strings.ReplaceAll(env.GetGeminiResumePrompt(), "{file_name}", fileSystemData.Name)))
 
 	result, err := client.Models.GenerateContent(
 		ctx,
