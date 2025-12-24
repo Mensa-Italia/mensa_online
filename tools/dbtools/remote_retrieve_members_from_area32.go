@@ -254,6 +254,14 @@ func SnapshotArea32Members(app core.App) {
 		return
 	}
 
+	activeMembers := 0
+	for _, m := range allMembers {
+		if m.GetBool("is_active") {
+			activeMembers++
+		}
+	}
+	inactiveMembers := len(allMembers) - activeMembers
+
 	snapshotData := make([]map[string]any, 0, len(allMembers))
 	for _, member := range allMembers {
 		memberJson, err := member.MarshalJSON()
@@ -272,6 +280,10 @@ func SnapshotArea32Members(app core.App) {
 		return
 	}
 
+	// Hash del contenuto (prima della compressione) utile per dedup/controlli di integrità.
+	snapshotMD5 := md5.Sum(marshaledSnapshot)
+	snapshotMD5Hex := hex.EncodeToString(snapshotMD5[:])
+
 	compressed, err := cdnfiles.GzipCompressBytes(marshaledSnapshot, "members_registry.json")
 	if err != nil {
 		app.Logger().Error("gzip snapshot members_registry", err)
@@ -279,18 +291,24 @@ func SnapshotArea32Members(app core.App) {
 	}
 
 	// Nome file deterministico e adatto come key S3
-	todayDateTime := time.Now().Format("2006-01-02_15-04-05")
+	now := time.Now()
+	todayDateTime := now.Format("2006-01-02_15-04-05")
 	fileName := "snapshot_members/" + todayDateTime + ".json.gz"
 
 	s3settings := app.Settings().S3
 	if err := cdnfiles.UploadFileToS3(app, s3settings.Bucket, fileName, compressed, map[string]string{
-		"content-type":        "application/gzip",
-		"content-encoding":    "gzip",
-		"original-filename":   "members_registry.json",
-		"snapshot-created-at": todayDateTime,
-		"total-members":       strconv.Itoa(len(allMembers)),
-		"snapshot-type":       "members_registry",
-		"created-by":          "mensadb-cron-snapshot",
+		"content-type":            "application/gzip",
+		"content-encoding":        "gzip",
+		"original-filename":       "members_registry.json",
+		"snapshot-created-at":     todayDateTime,
+		"snapshot-created-at-iso": now.UTC().Format(time.RFC3339),
+		"total-members":           strconv.Itoa(len(allMembers)),
+		"active-members":          strconv.Itoa(activeMembers),
+		"inactive-members":        strconv.Itoa(inactiveMembers),
+		"snapshot-type":           "members_registry",
+		"snapshot-format":         "json-array",
+		"snapshot-md5":            snapshotMD5Hex,
+		"created-by":              "mensadb-cron-snapshot",
 	}); err != nil {
 		app.Logger().Error("upload snapshot members_registry", err)
 		return
