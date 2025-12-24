@@ -42,6 +42,7 @@ func FindTree(app core.App, file *filesystem.File) DocumentsCitationList {
 	})
 
 	open, err := file.Reader.Open()
+	defer func() { _ = open.Close() }()
 	if err != nil {
 		return nil
 	}
