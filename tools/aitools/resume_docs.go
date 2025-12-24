@@ -75,7 +75,7 @@ func ResumeDocument(app core.App, reader *filesystem.File) string {
 
 	listOfCitatedFiles = append(listOfCitatedFiles,
 		genai.NewPartFromFile(*usageFile),
-		genai.NewPartFromText(strings.ReplaceAll(provaPrompt, "{nameFile}", reader.Name)),
+		genai.NewPartFromText(strings.ReplaceAll(env.GetGeminiResumePrompt(), "{nameFile}", reader.Name)),
 	)
 	contents := []*genai.Content{
 		{
