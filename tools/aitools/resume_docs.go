@@ -21,6 +21,7 @@ func ResumeDocument(app core.App, reader *filesystem.File) string {
 	})
 
 	open, err := reader.Reader.Open()
+	defer func() { _ = open.Close() }()
 	if err != nil {
 		log.Println("Error generating content:", err)
 		return ""
@@ -53,18 +54,19 @@ func ResumeDocument(app core.App, reader *filesystem.File) string {
 			log.Println("Error generating content:", err)
 			continue
 		}
-		open, err := file.Reader.Open()
+		open2, err := file.Reader.Open()
+		defer func() { _ = open2.Close() }()
 		if err != nil {
 			log.Println("Error generating content:", err)
 			continue
 		}
-		data, err := io.ReadAll(open)
+		data2, err := io.ReadAll(open2)
 		if err != nil {
 			log.Println("Error generating content:", err)
 			continue
 		}
 
-		g := prepareFile(client, file.Name, data)
+		g := prepareFile(client, file.Name, data2)
 		if g == nil {
 			continue
 		}
