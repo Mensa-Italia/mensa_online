@@ -36,7 +36,7 @@ func ResumeDocument(app core.App, reader *filesystem.File) string {
 		return ""
 	}
 
-	treeOfDocumentsIds, err := app.FindRecordsByIds("documents", FindTree(reader).RetrieveIDs())
+	treeOfDocumentsIds, err := app.FindRecordsByIds("documents", FindTree(app, reader).RetrieveIDs())
 	if err != nil {
 		log.Println("Error generating content:", err)
 		return ""
