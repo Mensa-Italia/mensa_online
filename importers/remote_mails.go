@@ -224,7 +224,6 @@ func RetrieveAliasFromMail(mail string) (res string) {
 		return ""
 	}
 
-	log.Println("total mail entries:", len(container.Mail.MailInfo.Result))
 	for _, mailEntry := range container.Mail.MailInfo.Result {
 		for _, address := range mailEntry.MailName.Forwarding.Address {
 			// Confronto robusto: trim + lowercase.
