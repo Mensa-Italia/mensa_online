@@ -318,7 +318,9 @@ func (api *ScraperApi) DownloadFile(url string) (*filesystem.File, error) {
 
 func (api *ScraperApi) GetAllRegSoci() ([]map[string]any, error) {
 	var allUsers []map[string]any
-	for i := 1; ; i++ {
+	i := 1
+	for ; ; i++ {
+		log.Println("Fetching members registry page:", i)
 		users, err := api.GetRegSoci(i, "")
 		if err != nil {
 			return nil, err
@@ -328,6 +330,8 @@ func (api *ScraperApi) GetAllRegSoci() ([]map[string]any, error) {
 		}
 		allUsers = append(allUsers, users...)
 	}
+	log.Println("Fetched members:", len(allUsers))
+	log.Println("Total pages fetched:", i)
 	return allUsers, nil
 }
 
@@ -367,7 +371,6 @@ func (api *ScraperApi) GetRegSoci(page int, search string) ([]map[string]any, er
 				imgSrc, _ := tds.Eq(0).Find("img").Attr("src")
 				link, _ := tds.Eq(6).Find("a").Attr("href")
 
-				log.Println(id)
 				user := map[string]any{
 					"uid":               id,
 					"name":              strings.TrimSpace(tds.Eq(2).Text()),
