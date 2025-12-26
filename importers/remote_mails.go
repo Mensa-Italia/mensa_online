@@ -83,7 +83,7 @@ func GetFullMailList() {
 	// L'endpoint si aspetta XML in POST e autenticazione via header custom.
 	request.Header.Set("Content-Type", "text/xml; charset=UTF-8")
 	request.Header.Set("HTTP_AUTH_LOGIN", "dev")
-	request.Header.Set("HTTP_AUTH_PASSWD", env.GetArea32InternalEmail())
+	request.Header.Set("HTTP_AUTH_PASSWD", env.GetEmailProviderPassword())
 
 	client := &http.Client{}
 	resp, err := client.Do(request)
