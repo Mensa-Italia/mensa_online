@@ -76,7 +76,8 @@ func GetFullMailList() {
 
 	request, err := http.NewRequest("POST", myurl, strings.NewReader(xmlbody))
 	if err != nil {
-		log.Fatal(err)
+		log.Println("remote_mails: create request:", err)
+		return
 	}
 
 	// L'endpoint si aspetta XML in POST e autenticazione via header custom.
@@ -87,7 +88,8 @@ func GetFullMailList() {
 	client := &http.Client{}
 	resp, err := client.Do(request)
 	if err != nil {
-		log.Fatal(err)
+		log.Println("remote_mails: do request:", err)
+		return
 	}
 	defer func() {
 		// Non terminiamo il processo per errori di chiusura della response body,
@@ -100,19 +102,25 @@ func GetFullMailList() {
 	// Leggo e converto: XML -> struct -> JSON (per cache locale).
 	xmlResult, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Fatal(err)
+		log.Println("remote_mails: read response body:", err)
+		return
 	}
 	var container Container
-	_ = xml.Unmarshal([]byte(xmlResult), &container)
+	err = xml.Unmarshal([]byte(xmlResult), &container)
+	if err != nil {
+		log.Println("remote_mails: unmarshal xml:", err)
+		return
+	}
 	bt, err := json.Marshal(container)
 	if err != nil {
-		log.Fatal(err)
+		log.Println("remote_mails: marshal to json:", err)
+		return
 	}
-
 	// Salva su file in working directory.
 	// Permessi 0644: owner read/write, group/others read.
 	if err := os.WriteFile("mails.json", bt, 0644); err != nil {
-		log.Fatal(err)
+		log.Println("remote_mails: write mails.json:", err)
+		return
 	}
 }
 
@@ -124,7 +132,7 @@ func GetFullMailList() {
 //
 // Nota: altri errori di apertura file (permessi, I/O, ecc.) non vengono gestiti in modo
 // esplicito e possono causare panics/valori vuoti a seconda dei casi.
-func ReadFromJson() Container {
+func ReadFromJson() *Container {
 	jsonFile, err := os.Open("mails.json")
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -133,7 +141,8 @@ func ReadFromJson() Container {
 			return ReadFromJson()
 		}
 		// Per errori diversi da "file non esiste" falliamo esplicitamente.
-		log.Fatal(err)
+		log.Println("remote_mails: open mails.json:", err)
+		return nil
 	}
 	defer func() {
 		if cerr := jsonFile.Close(); cerr != nil {
@@ -144,10 +153,11 @@ func ReadFromJson() Container {
 	var container Container
 	jsonParser := json.NewDecoder(jsonFile)
 	if err := jsonParser.Decode(&container); err != nil {
-		log.Fatal(err)
+		log.Println("remote_mails: decode mails.json:", err)
+		return nil
 	}
 
-	return container
+	return &container
 }
 
 // RetrieveForwardedMail risolve ricorsivamente la catena di forwarding per un alias.
@@ -166,6 +176,10 @@ func ReadFromJson() Container {
 //	ritorna ["presidente@mensa.it", "board@mensa.it"]
 func RetrieveForwardedMail(name string, alreadyChecked ...string) (res []string) {
 	container := ReadFromJson()
+	if container == nil {
+		log.Println("remote_mails: RetrieveForwardedMail: failed to read mails.json")
+		return
+	}
 
 	for _, mailEntry := range container.Mail.MailInfo.Result {
 		// Cerco l'account richiesto.
@@ -205,6 +219,10 @@ func RetrieveForwardedMail(name string, alreadyChecked ...string) (res []string)
 // Se nessun alias inoltra verso quell'indirizzo, ritorna stringa vuota.
 func RetrieveAliasFromMail(mail string) (res string) {
 	container := ReadFromJson()
+	if container == nil {
+		log.Println("remote_mails: RetrieveAliasFromMail: failed to read mails.json")
+		return ""
+	}
 
 	for _, mailEntry := range container.Mail.MailInfo.Result {
 		for _, address := range mailEntry.MailName.Forwarding.Address {
