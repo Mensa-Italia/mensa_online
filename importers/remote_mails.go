@@ -218,20 +218,24 @@ func RetrieveForwardedMail(name string, alreadyChecked ...string) (res []string)
 //
 // Se nessun alias inoltra verso quell'indirizzo, ritorna stringa vuota.
 func RetrieveAliasFromMail(mail string) (res string) {
+	log.Println("remote_mails: RetrieveAliasFromMail: searching alias for", mail)
 	container := ReadFromJson()
 	if container == nil {
 		log.Println("remote_mails: RetrieveAliasFromMail: failed to read mails.json")
 		return ""
 	}
 
+	log.Println("total mail entries:", len(container.Mail.MailInfo.Result))
 	for _, mailEntry := range container.Mail.MailInfo.Result {
 		for _, address := range mailEntry.MailName.Forwarding.Address {
 			// Confronto robusto: trim + lowercase.
 			if strings.TrimSpace(strings.ToLower(address)) == strings.TrimSpace(strings.ToLower(mail)) {
+				log.Println("remote_mails: RetrieveAliasFromMail: found forwarded mail", mailEntry.MailName.Name+"@mensa.it")
 				return mailEntry.MailName.Name + "@mensa.it"
 			}
 		}
 	}
 
+	log.Println("remote_mails: RetrieveAliasFromMail: failed to find forwarded mail", mail)
 	return ""
 }
