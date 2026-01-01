@@ -25,7 +25,7 @@ func Load(app core.App) {
 	app.OnRecordAfterCreateSuccess("deals").BindFunc(DealsNotifyUsersAsync)
 	app.OnRecordAfterUpdateSuccess("deals").BindFunc(DealsUpdateNotifyUsersAsync)
 
-	app.OnRecordUpdate("stamp").BindFunc(StampUpdateImageAsync)
+	app.OnRecordAfterUpdateSuccess("stamp").BindFunc(StampUpdateImageAsync)
 
 }
 
@@ -47,6 +47,8 @@ func StampUpdateImageAsync(e *core.RecordEvent) error {
 			return e.Next()
 		}
 		record.Set("image", fileImage)
+
+		record.Set("description", strings.TrimSpace(strings.ReplaceAll(record.GetString("description"), "[UPDATE]", "")))
 
 		_ = e.App.Save(record)
 
