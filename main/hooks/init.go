@@ -1,6 +1,13 @@
 package hooks
 
-import "github.com/pocketbase/pocketbase/core"
+import (
+	"log"
+	"mensadb/tools/aipower"
+	"strings"
+
+	"github.com/pocketbase/pocketbase/core"
+	"github.com/pocketbase/pocketbase/tools/filesystem"
+)
 
 func Load(app core.App) {
 
@@ -18,4 +25,31 @@ func Load(app core.App) {
 	app.OnRecordAfterCreateSuccess("deals").BindFunc(DealsNotifyUsersAsync)
 	app.OnRecordAfterUpdateSuccess("deals").BindFunc(DealsUpdateNotifyUsersAsync)
 
+	app.OnRecordUpdate("stamp").BindFunc(StampUpdateImageAsync)
+
+}
+
+func StampUpdateImageAsync(e *core.RecordEvent) error {
+	record := e.Record
+	if strings.Contains(record.GetString("description"), "[UPDATE]") {
+
+		// Generazione dell'immagine del timbro
+		geminiImage, err := aipower.GenerateStamp(record.GetString("name")+"\n"+record.GetString("description"), record.GetBool("is_national"))
+		if err != nil {
+			// Log dell'errore nella generazione dello stamp
+			log.Printf("Errore nella generazione dello stamp: %v", err)
+			return e.Next()
+		}
+		fileImage, err := filesystem.NewFileFromBytes(geminiImage, "stamp.png")
+		if err != nil {
+			log.Printf("Errore nella creazione del file immagine: %v", err)
+			return e.Next()
+		}
+		record.Set("image", fileImage)
+
+		_ = e.App.Save(record)
+
+	}
+
+	return e.Next()
 }
