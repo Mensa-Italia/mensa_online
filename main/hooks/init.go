@@ -31,10 +31,11 @@ func Load(app core.App) {
 
 func StampUpdateImageAsync(e *core.RecordEvent) error {
 	record := e.Record
+
 	if strings.Contains(record.GetString("description"), "[UPDATE]") {
 
 		// Generazione dell'immagine del timbro
-		geminiImage, err := aipower.GenerateStamp(record.GetString("name")+"\n"+record.GetString("description"), record.GetBool("is_national"))
+		geminiImage, err := aipower.GenerateStamp(record.GetString("description"), false)
 		if err != nil {
 			// Log dell'errore nella generazione dello stamp
 			log.Printf("Errore nella generazione dello stamp: %v", err)
