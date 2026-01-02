@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"mensadb/tools/aipower"
+	"mensadb/tools/aitools"
 	"mensadb/tools/dbtools"
 	"net/mail"
 
@@ -77,7 +77,7 @@ func createEventStamp(app core.App, record *core.Record) []byte {
 	newRecord := core.NewRecord(stampCollection)
 
 	// Generazione dell'immagine del timbro
-	geminiImage, err := aipower.GenerateStamp(record.GetString("name")+"\n"+record.GetString("description"), record.GetBool("is_national"))
+	geminiImage, err := aitools.GenerateStamp(record.GetString("name")+"\n\n\n"+record.GetString("description"), record.GetBool("is_national"))
 	if err != nil {
 		// Log dell'errore nella generazione dello stamp
 		log.Printf("Errore nella generazione dello stamp: %v", err)

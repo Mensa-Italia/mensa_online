@@ -2,7 +2,6 @@ package aitools
 
 import (
 	"context"
-	"io"
 	"log"
 	"mensadb/tools/env"
 	"strings"
@@ -15,27 +14,9 @@ import (
 
 func ResumeDocument(app core.App, reader *filesystem.File) string {
 	ctx := context.Background()
-	client, _ := genai.NewClient(ctx, &genai.ClientConfig{
-		APIKey:  env.GetGeminiKey(),
-		Backend: genai.BackendGeminiAPI,
-	})
+	client := GetAIClient()
 
-	open, err := reader.Reader.Open()
-	defer func() { _ = open.Close() }()
-	if err != nil {
-		log.Println("Error generating content:", err)
-		return ""
-	}
-	data, err := io.ReadAll(open)
-	if err != nil {
-		log.Println("Error generating content:", err)
-		return ""
-	}
-	usageFile := prepareFile(client, reader.Name, data)
-	if usageFile == nil {
-		log.Println("Error generating content:", err)
-		return ""
-	}
+	usageFile := UploadFileToAIClient(client, reader)
 
 	treeOfDocumentsIds, err := app.FindRecordsByIds("documents", FindTree(app, reader).RetrieveIDs())
 	if err != nil {
@@ -54,19 +35,7 @@ func ResumeDocument(app core.App, reader *filesystem.File) string {
 			log.Println("Error generating content:", err)
 			continue
 		}
-		open2, err := file.Reader.Open()
-		defer func() { _ = open2.Close() }()
-		if err != nil {
-			log.Println("Error generating content:", err)
-			continue
-		}
-		data2, err := io.ReadAll(open2)
-		if err != nil {
-			log.Println("Error generating content:", err)
-			continue
-		}
-
-		g := prepareFile(client, file.Name, data2)
+		g := UploadFileToAIClient(client, file)
 		if g == nil {
 			continue
 		}
