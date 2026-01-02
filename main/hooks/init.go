@@ -2,9 +2,10 @@ package hooks
 
 import (
 	"log"
-	"mensadb/tools/aipower"
+	"mensadb/tools/aitools"
 	"strings"
 
+	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
 )
@@ -33,9 +34,17 @@ func StampUpdateImageAsync(e *core.RecordEvent) error {
 	record := e.Record
 
 	if strings.Contains(record.GetString("description"), "[UPDATE]") {
+		descriptionToUse := strings.TrimSpace(strings.ReplaceAll(record.GetString("description"), "[UPDATE]", ""))
+		makeItRed := false
 
+		records, _ := e.App.FindRecordsByFilter("events", "name ~ {:name}", "-created", 1, 0, dbx.Params{"name": descriptionToUse})
+		if len(records) > 0 {
+			eventRecord := records[0]
+			descriptionToUse = eventRecord.GetString("name") + "\n\n\n" + eventRecord.GetString("description")
+			makeItRed = eventRecord.GetBool("is_national")
+		}
 		// Generazione dell'immagine del timbro
-		geminiImage, err := aipower.GenerateStamp(record.GetString("description"), false)
+		geminiImage, err := aitools.GenerateStamp(descriptionToUse, makeItRed)
 		if err != nil {
 			// Log dell'errore nella generazione dello stamp
 			log.Printf("Errore nella generazione dello stamp: %v", err)
