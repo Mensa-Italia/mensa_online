@@ -43,7 +43,7 @@ func main() {
 		e.Router.GET("/.well-known/apple-app-site-association", utilities.AASAWellKnown)
 		e.Router.GET("/.well-known/assetlinks.json", utilities.AssetLinksWellKnown)
 		e.Router.GET("/links/event/{id}", links.LinksEvents)
-		e.Router.GET("/links/stamp/{id}", links.LinksEvents)
+		e.Router.GET("/links/stamp/{id}", links.LinksStamps)
 		return e.Next()
 	})
 
