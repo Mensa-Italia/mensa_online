@@ -3,9 +3,7 @@ package aitools
 import (
 	"context"
 	"encoding/json"
-	"io"
 	"log"
-	"mensadb/tools/env"
 	"strings"
 
 	"github.com/pocketbase/pocketbase/core"
@@ -36,25 +34,9 @@ const provaPrompt = ``
 
 func FindTree(app core.App, file *filesystem.File) DocumentsCitationList {
 	ctx := context.Background()
-	client, _ := genai.NewClient(ctx, &genai.ClientConfig{
-		APIKey:  env.GetGeminiKey(),
-		Backend: genai.BackendGeminiAPI,
-	})
+	client := GetAIClient()
 
-	open, err := file.Reader.Open()
-	defer func() { _ = open.Close() }()
-	if err != nil {
-		return nil
-	}
-	data, err := io.ReadAll(open)
-	if err != nil {
-		return nil
-	}
-
-	uploaded := prepareFile(client, file.Name, data)
-	if uploaded == nil {
-		log.Fatal("upload to Gemini failed")
-	}
+	uploaded := UploadFileToAIClient(client, file)
 
 	promptTemp := strings.ReplaceAll(provaPrompt, "{nameFile}", file.Name)
 	promptTemp = strings.ReplaceAll(promptTemp, "{docs}", retrieveAllDocumentsList(app))
