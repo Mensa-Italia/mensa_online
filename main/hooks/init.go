@@ -33,35 +33,37 @@ func Load(app core.App) {
 func StampUpdateImageAsync(e *core.RecordEvent) error {
 	record := e.Record
 
-	if strings.Contains(record.GetString("description"), "[UPDATE]") {
-		descriptionToUse := strings.TrimSpace(strings.ReplaceAll(record.GetString("description"), "[UPDATE]", ""))
-		makeItRed := false
+	go func(e *core.RecordEvent) {
+		if strings.Contains(record.GetString("description"), "[UPDATE]") {
+			descriptionToUse := strings.TrimSpace(strings.ReplaceAll(record.GetString("description"), "[UPDATE]", ""))
+			makeItRed := false
 
-		records, _ := e.App.FindRecordsByFilter("events", "name ~ {:name}", "-created", 1, 0, dbx.Params{"name": descriptionToUse})
-		if len(records) > 0 {
-			eventRecord := records[0]
-			descriptionToUse = eventRecord.GetString("name") + "\n\n\n" + eventRecord.GetString("description")
-			makeItRed = eventRecord.GetBool("is_national")
+			records, _ := e.App.FindRecordsByFilter("events", "name ~ {:name}", "-created", 1, 0, dbx.Params{"name": descriptionToUse})
+			if len(records) > 0 {
+				eventRecord := records[0]
+				descriptionToUse = eventRecord.GetString("name") + "\n\n\n" + eventRecord.GetString("description")
+				makeItRed = eventRecord.GetBool("is_national")
+			}
+			// Generazione dell'immagine del timbro
+			geminiImage, err := aitools.GenerateStamp(descriptionToUse, makeItRed)
+			if err != nil {
+				// Log dell'errore nella generazione dello stamp
+				log.Printf("Errore nella generazione dello stamp: %v", err)
+				return
+			}
+			fileImage, err := filesystem.NewFileFromBytes(geminiImage, "stamp.png")
+			if err != nil {
+				log.Printf("Errore nella creazione del file immagine: %v", err)
+				return
+			}
+			record.Set("image", fileImage)
+
+			record.Set("description", strings.TrimSpace(strings.ReplaceAll(record.GetString("description"), "[UPDATE]", "")))
+
+			_ = e.App.Save(record)
+
 		}
-		// Generazione dell'immagine del timbro
-		geminiImage, err := aitools.GenerateStamp(descriptionToUse, makeItRed)
-		if err != nil {
-			// Log dell'errore nella generazione dello stamp
-			log.Printf("Errore nella generazione dello stamp: %v", err)
-			return e.Next()
-		}
-		fileImage, err := filesystem.NewFileFromBytes(geminiImage, "stamp.png")
-		if err != nil {
-			log.Printf("Errore nella creazione del file immagine: %v", err)
-			return e.Next()
-		}
-		record.Set("image", fileImage)
-
-		record.Set("description", strings.TrimSpace(strings.ReplaceAll(record.GetString("description"), "[UPDATE]", "")))
-
-		_ = e.App.Save(record)
-
-	}
+	}(e)
 
 	return e.Next()
 }
