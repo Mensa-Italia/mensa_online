@@ -106,7 +106,6 @@ const htmlTemplateStamp = `<!DOCTYPE html>
       Se non l'hai installata, installala dallo store e poi riapri il link.
     </p>
 
-    <a href="{{.DeepLink}}" class="btn">Apri nell'app</a>
     <div>
       <a href="https://apps.apple.com/app/id1524200080" class="btn secondary">App Store</a>
       <a href="https://play.google.com/store/apps/details?id=it.mensa.app" class="btn secondary">Google Play</a>
