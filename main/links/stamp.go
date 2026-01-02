@@ -110,10 +110,6 @@ const htmlTemplateStamp = `<!DOCTYPE html>
       <a href="https://apps.apple.com/app/id1524200080" class="btn secondary">App Store</a>
       <a href="https://play.google.com/store/apps/details?id=it.mensa.app" class="btn secondary">Google Play</a>
     </div>
-
-    <div class="hint">
-      Se l'app è già installata, tocca “Apri nell'app”.
-    </div>
   </div>
 
 </body>
