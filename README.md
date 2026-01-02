@@ -21,11 +21,65 @@ go run main/main.go serve
 ## ENV variables
 The following ENV variables are required to run the database:
 
-| Name | Description                |
-|------|----------------------------|
-|PASSWORD_UUID| The uuid used into uuid v5 |
-|PASSWORD_SALT| The salt used to hash the password |
-|PASSWORD_SALT| The salt used to hash the password |
+### 🔐 Authentication & Security
+
+| Name | Description |
+|------|-------------|
+| PASSWORD_UUID | UUID namespace used for UUID v5 generation related to passwords |
+| PASSWORD_SALT | Global salt used for password hashing |
+| CONVERTER_TOKEN | Authentication token for the document conversion service |
+| IMAGE_ROUTER_KEY | API key for the image routing / proxy service |
+| DOCS_UUID | UUID namespace for document identification and versioning |
+| ZINC_USERNAME | Username for accessing the Zinc service |
+| ZINC_PASSWORD | Password for accessing the Zinc service |
+
+---
+
+### 📧 Email & Communications
+
+| Name | Description |
+|------|-------------|
+| AREA32_INTERNAL_EMAIL | Internal technical email used by Area32 services |
+| AREA32_INTERNAL_PASSWORD | Password associated with the internal email account |
+| EMAIL_PROVIDER_PASSWORD | Password for the external SMTP / email provider |
+
+---
+
+### 🤖 AI & Generative Services
+
+| Name | Description |
+|------|-------------|
+| GEMINI_KEY | API key for accessing Google Gemini services |
+| GEMINI_RESUME_PROMPT | System prompt used for automatic document summarization |
+| UNSPLASH_KEY | API key for accessing Unsplash images |
+| FIREBASE_AUTH_KEY | Firebase Admin SDK service account JSON (base64 or raw) |
+
+---
+
+### 💳 Payments & E-commerce
+
+| Name | Description |
+|------|-------------|
+| STRIPE_SECRET | Stripe secret key for server-side operations |
+| STRIPE_WEBHOOK_SIGNATURE | Secret used to verify Stripe webhooks |
+| PRINTFUL_KEY | API key for Printful integration |
+| PRINTFUL_WEBHOOK_URL | Webhook endpoint for Printful events |
+
+---
+
+### 🌍 Localization & Translations
+
+| Name | Description |
+|------|-------------|
+| TOLGEE_KEY | API key for the Tolgee localization service |
+
+---
+
+### ⚙️ System & Runtime
+
+| Name | Description |
+|------|-------------|
+| PATH | System PATH used by the runtime/container |
 
 
 
