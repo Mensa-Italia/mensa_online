@@ -36,7 +36,7 @@ func GenerateStampPrompt(stampDescription string) string {
 			Role: genai.RoleUser,
 			Parts: []*genai.Part{
 				genai.NewPartFromText(stampDescription),
-				genai.NewPartFromText("Generate a json description of a ink stamp based on the previous description. The json will be used to create an image, make it stylish, describe the internal image of the stamp and the text that goes in the upper and lower part of the stamp. Describe it as more realistic as possible, black and white."),
+				genai.NewPartFromText("Generate a json description of a ink stamp based on the previous description. The json will be used to create an image, make it stylish, describe the internal image of the stamp and the text that goes in the upper and lower part of the stamp. Describe it as more realistic as possible, black and solid white background."),
 			},
 		},
 	}
@@ -61,7 +61,7 @@ func GenerateStamp(prompt string, makeitred bool) ([]byte, error) {
 	images, err := client.Models.GenerateImages(
 		context.Background(),
 		"models/imagen-4.0-generate-001",
-		"Make an ink stamp black and white with the following description: "+newPrompt,
+		"Make an ink stamp black and solid white background with the following description: "+newPrompt,
 		&genai.GenerateImagesConfig{
 			NumberOfImages:   1,
 			OutputMIMEType:   "image/jpeg",
