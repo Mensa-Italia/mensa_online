@@ -255,7 +255,7 @@ func LinksStamps(e *core.RequestEvent) error {
 	}
 
 	if e.Request.URL.Query().Has("qrcode") {
-		dataToEncode := fmt.Sprintf("%s:::%s", idStamp, codeStamp)
+		dataToEncode := fmt.Sprintf("https://svc.mensa.it/links/stamp/%s:::%s", idStamp, codeStamp)
 		code := qrtools.GenQrCode(dataToEncode)
 		if code != nil {
 			return e.Blob(200, "image/jpeg", code.Bytes())
