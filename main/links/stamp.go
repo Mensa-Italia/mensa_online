@@ -2,11 +2,25 @@ package links
 
 import (
 	"bytes"
+	"fmt"
 	"html/template"
+	"io"
+	"log"
 	"strings"
 
 	"github.com/pocketbase/pocketbase/core"
+	"github.com/yeqown/go-qrcode/v2"
+	"github.com/yeqown/go-qrcode/writer/standard"
 )
+
+// nopCloser è una struttura che implementa l'interfaccia io.Writer
+// e fornisce un metodo Close() che non fa nulla, utile per scrivere
+// dati in un buffer senza dover gestire la chiusura esplicita.
+type nopCloser struct {
+	io.Writer
+}
+
+func (nopCloser) Close() error { return nil }
 
 // NOTE:
 // - This link is meant to be opened inside the Mensa Italia app.
@@ -218,6 +232,7 @@ type StampTemplateData struct {
 // There is intentionally no web fallback.
 func LinksStamps(e *core.RequestEvent) error {
 	idStamp := e.Request.PathValue("id")
+	codeStamp := strings.Split(idStamp, ":::")[1]
 	idStamp = strings.Split(idStamp, ":::")[0]
 	app := e.App
 
@@ -249,6 +264,31 @@ func LinksStamps(e *core.RequestEvent) error {
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, data); err != nil {
 		return e.String(500, "Template execution error")
+	}
+
+	if e.Request.URL.Query().Has("qrcode") {
+		qrc, err := qrcode.New(fmt.Sprintf("%s:::%s", idStamp, codeStamp))
+		if err != nil {
+			// Log dell'errore nella generazione del QRCode
+			log.Printf("Errore nella generazione del QRCode: %v", err)
+			return nil
+		}
+		options := []standard.ImageOption{
+			standard.WithBgColorRGBHex("#ffffff"),
+			standard.WithFgColorRGBHex("#000000"),
+		}
+
+		// Creazione dell'immagine del timbro da inviare via email
+		stampImage := bytes.NewBuffer(nil)
+		wr := nopCloser{Writer: stampImage}
+		w2 := standard.NewWithWriter(wr, options...)
+		defer w2.Close()
+		if err = qrc.Save(w2); err != nil {
+			log.Printf("Errore nel salvataggio del QRCode: %v", err)
+			return nil
+		}
+
+		return e.Blob(200, "image/jpeg", stampImage.Bytes())
 	}
 
 	return e.HTML(200, buf.String())

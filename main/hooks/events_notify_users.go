@@ -124,6 +124,7 @@ func createEventStamp(app core.App, record *core.Record) []byte {
 	stampImage := bytes.NewBuffer(nil)
 	wr := nopCloser{Writer: stampImage}
 	w2 := standard.NewWithWriter(wr, options...)
+	defer w2.Close()
 	if err = qrc.Save(w2); err != nil {
 		log.Printf("Errore nel salvataggio del QRCode: %v", err)
 		return nil
