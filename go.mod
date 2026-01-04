@@ -24,7 +24,7 @@ require (
 	github.com/stripe/stripe-go/v81 v81.4.0
 	github.com/tidwall/gjson v1.18.0
 	github.com/yeqown/go-qrcode/v2 v2.2.5
-	github.com/yeqown/go-qrcode/writer/standard v1.2.5
+	github.com/yeqown/go-qrcode/writer/standard v1.3.0
 	github.com/zitadel/oidc/v3 v3.45.0
 	github.com/zitadel/zitadel-go/v3 v3.14.2
 	golang.org/x/oauth2 v0.34.0
