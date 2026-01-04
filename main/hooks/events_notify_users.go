@@ -108,7 +108,7 @@ func createEventStamp(app core.App, record *core.Record) []byte {
 	}
 
 	// Generazione del QR code
-	qrc := fmt.Sprintf("%s:::%s", newRecord.Id, newRecordSecret.GetString("code"))
+	qrc := fmt.Sprintf("https://svc.mensa.it/links/stamp/%s:::%s", newRecord.Id, newRecordSecret.GetString("code"))
 	stampImage := qrtools.GenQrCode(qrc)
 
 	key := record.BaseFilesPath() + "/" + record.GetString("image")
