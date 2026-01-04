@@ -7,14 +7,13 @@ import (
 	"log"
 	"mensadb/tools/aitools"
 	"mensadb/tools/dbtools"
+	"mensadb/tools/qrtools"
 	"net/mail"
 
 	"github.com/google/uuid"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
 	"github.com/pocketbase/pocketbase/tools/mailer"
-	"github.com/yeqown/go-qrcode/v2"
-	"github.com/yeqown/go-qrcode/writer/standard"
 )
 
 // nopCloser è una struttura che implementa l'interfaccia io.Writer
@@ -109,26 +108,8 @@ func createEventStamp(app core.App, record *core.Record) []byte {
 	}
 
 	// Generazione del QR code
-	qrc, err := qrcode.New(fmt.Sprintf("%s:::%s", newRecord.Id, newRecordSecret.GetString("code")))
-	if err != nil {
-		// Log dell'errore nella generazione del QRCode
-		log.Printf("Errore nella generazione del QRCode: %v", err)
-		return nil
-	}
-	options := []standard.ImageOption{
-		standard.WithBgColorRGBHex("#ffffff"),
-		standard.WithFgColorRGBHex("#000000"),
-	}
-
-	// Creazione dell'immagine del timbro da inviare via email
-	stampImage := bytes.NewBuffer(nil)
-	wr := nopCloser{Writer: stampImage}
-	w2 := standard.NewWithWriter(wr, options...)
-	defer w2.Close()
-	if err = qrc.Save(w2); err != nil {
-		log.Printf("Errore nel salvataggio del QRCode: %v", err)
-		return nil
-	}
+	qrc := fmt.Sprintf("%s:::%s", newRecord.Id, newRecordSecret.GetString("code"))
+	stampImage := qrtools.GenQrCode(qrc)
 
 	key := record.BaseFilesPath() + "/" + record.GetString("image")
 
