@@ -325,6 +325,8 @@ github.com/yeqown/go-qrcode/v2 v2.2.5 h1:HCOe2bSjkhZyYoyyNaXNzh4DJZll6inVJQQw+82
 github.com/yeqown/go-qrcode/v2 v2.2.5/go.mod h1:uHpt9CM0V1HeXLz+Wg5MN50/sI/fQhfkZlOM+cOTHxw=
 github.com/yeqown/go-qrcode/writer/standard v1.2.5 h1:m+5BUIcbsaG2md76FIqI/oZULrAju8tsk47eOohovQ0=
 github.com/yeqown/go-qrcode/writer/standard v1.2.5/go.mod h1:O4MbzsotGCvy8upYPCR91j81dr5XLT7heuljcNXW+oQ=
+github.com/yeqown/go-qrcode/writer/standard v1.3.0 h1:chdyhEfRtUPgQtuPeaWVGQ/TQx4rE1PqeoW3U+53t34=
+github.com/yeqown/go-qrcode/writer/standard v1.3.0/go.mod h1:O4MbzsotGCvy8upYPCR91j81dr5XLT7heuljcNXW+oQ=
 github.com/yeqown/reedsolomon v1.0.0 h1:x1h/Ej/uJnNu8jaX7GLHBWmZKCAWjEJTetkqaabr4B0=
 github.com/yeqown/reedsolomon v1.0.0/go.mod h1:P76zpcn2TCuL0ul1Fso373qHRc69LKwAw/Iy6g1WiiM=
 github.com/youmark/pkcs8 v0.0.0-20181117223130-1be2e3e5546d/go.mod h1:rHwXgn7JulP+udvsHwJoVG1YGAP6VLg4y9I5dyZdqmA=
