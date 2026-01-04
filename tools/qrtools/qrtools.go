@@ -70,6 +70,7 @@ func GenQrCode(content string) *bytes.Buffer {
 		standard.WithLogoSizeMultiplier(2),
 		standard.WithLogoSafeZone(),
 		standard.WithCustomShape(shape),
+		standard.WithBorderWidth(4),
 	}
 
 	// Creazione dell'immagine del timbro da inviare via email
