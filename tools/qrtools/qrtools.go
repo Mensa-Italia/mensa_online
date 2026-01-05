@@ -67,10 +67,10 @@ func GenQrCode(content string) *bytes.Buffer {
 	options := []standard.ImageOption{
 		standard.WithQRWidth(data),
 		standard.WithLogoImageFileJPEG("../pb_public/test-2.jpg"),
-		standard.WithLogoSizeMultiplier(20),
+		standard.WithLogoSizeMultiplier(1),
 		standard.WithLogoSafeZone(),
 		standard.WithCustomShape(shape),
-		standard.WithBorderWidth(4),
+		standard.WithBorderWidth(20),
 	}
 
 	// Creazione dell'immagine del timbro da inviare via email
