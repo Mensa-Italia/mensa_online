@@ -6,16 +6,11 @@ import (
 	"strings"
 
 	"github.com/go-resty/resty/v2"
-	"github.com/tidwall/gjson"
+	"github.com/pocketbase/pocketbase/core"
 )
 
 type Language struct {
-	Id           int    `json:"id"`
-	Name         string `json:"name"`
 	Tag          string `json:"tag"`
-	OriginalName string `json:"originalName"`
-	FlagEmoji    string `json:"flagEmoji"`
-	Base         bool   `json:"base"`
 	Tranlsations map[string]string
 }
 
@@ -23,40 +18,32 @@ var ak = ""
 var translations map[string]Language
 var baseLanguage = "en"
 
-func Load(apikey string) {
+func Load(apikey string, app core.App) {
 	log.Println("Loading Tolgee translations")
 	ak = apikey
-	_ = GetLanguages()
+	_ = GetLanguages(app)
 	log.Println("Tolgee translations loaded total languages: ", len(translations))
 }
 
-func GetLanguages() error {
-	languagesData, err := resty.New().R().Get("https://i18n.svc.mensa.it/api/languages")
-	if err != nil {
-		return err
-	}
-	arrayOfLanguages := gjson.ParseBytes(languagesData.Body()).Get("_embedded.languages").Array()
+func GetLanguages(app core.App) error {
+	arrayOfLanguages := strings.Split(getInternalConfig(app, "languages"), ",")
+
 	languageList := make([]Language, len(arrayOfLanguages))
 	for _, language := range arrayOfLanguages {
 		buildLang := Language{
-			Id:           int(language.Get("id").Int()),
-			Name:         language.Get("name").String(),
-			Tag:          language.Get("tag").String(),
-			OriginalName: language.Get("originalName").String(),
-			FlagEmoji:    language.Get("flagEmoji").String(),
-			Base:         language.Get("base").Bool(),
+			Tag: language,
 		}
 		translationData, err := resty.New().R().
 			SetPathParams(
 				map[string]string{
-					"language": buildLang.Tag,
+					"locale": buildLang.Tag,
 				},
 			).
-			Get("https://i18n.svc.mensa.it/api/{language}")
+			Get(getInternalConfig(app, "i18n_flat_url"))
 		if err == nil {
 			_ = json.Unmarshal(translationData.Body(), &buildLang.Tranlsations)
 		}
-		if buildLang.Base {
+		if language == getInternalConfig(app, "base_language") {
 			baseLanguage = buildLang.Tag
 		}
 		languageList = append(languageList, buildLang)
@@ -94,7 +81,7 @@ func GetTranslation(key string, lang string, namedArgs ...map[string]string) str
 		}
 		return translationToUse
 	} else {
-		_ = GetLanguages()
+		//_ = GetLanguages()
 		return getTranslationInternal(key, lang, namedArgs...)
 	}
 }
@@ -127,4 +114,18 @@ func getTranslationInternal(key string, lang string, namedArgs ...map[string]str
 	} else {
 		return key
 	}
+}
+
+func getInternalConfig(app core.App, key string) string {
+	collection, err := app.FindCollectionByNameOrId("configs")
+	if err != nil {
+		return ""
+	}
+
+	record, err := app.FindFirstRecordByData(collection.Id, "key", key)
+	if err != nil || record == nil {
+		return ""
+	}
+
+	return record.GetString("value")
 }

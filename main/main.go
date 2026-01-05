@@ -4,6 +4,7 @@ import (
 	"log"
 	"mensadb/importers"
 	"mensadb/main/api"
+	"mensadb/main/crons"
 	"mensadb/main/hooks"
 	"mensadb/main/links"
 	"mensadb/main/utilities"
@@ -11,7 +12,6 @@ import (
 	"mensadb/printful"
 	"mensadb/tolgee"
 	"mensadb/tools/cdnfiles"
-	"mensadb/tools/dbtools"
 	"mensadb/tools/env"
 	"net/http"
 	"os"
@@ -25,10 +25,10 @@ import (
 
 func main() {
 	app := pocketbase.New()
-	dbtools.CronTasks(app)
+	crons.CronTasks(app)
 
 	app.OnBootstrap().BindFunc(func(e *core.BootstrapEvent) error {
-		tolgee.Load(env.GetTolgeeKey())
+		tolgee.Load(env.GetTolgeeKey(), e.App)
 		printful.Setup(env.GetPrintfulKey())
 		printful.SetupWebhook(env.GetPrintfulWebhookURL())
 		go importers.GetFullMailList()
