@@ -67,7 +67,7 @@ func GenQrCode(content string) *bytes.Buffer {
 	options := []standard.ImageOption{
 		standard.WithQRWidth(data),
 		standard.WithLogoImageFileJPEG("../pb_public/test-2.jpg"),
-		standard.WithLogoSizeMultiplier(2),
+		standard.WithLogoSizeMultiplier(20),
 		standard.WithLogoSafeZone(),
 		standard.WithCustomShape(shape),
 		standard.WithBorderWidth(4),
