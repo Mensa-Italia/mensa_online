@@ -28,7 +28,6 @@ func main() {
 	crons.CronTasks(app)
 
 	app.OnBootstrap().BindFunc(func(e *core.BootstrapEvent) error {
-		tolgee.Load(env.GetTolgeeKey(), e.App)
 		printful.Setup(env.GetPrintfulKey())
 		printful.SetupWebhook(env.GetPrintfulWebhookURL())
 		go importers.GetFullMailList()
@@ -36,6 +35,7 @@ func main() {
 	})
 
 	app.OnServe().BindFunc(func(e *core.ServeEvent) error {
+		tolgee.Load(env.GetTolgeeKey(), e.App)
 		api.Load(e.Router.Group("/api"))
 		e.Router.GET("/ical/{hash}", RetrieveICAL)
 		e.Router.GET("/static/{path...}", apis.Static(os.DirFS("./pb_public"), false))
