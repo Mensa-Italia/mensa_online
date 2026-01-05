@@ -58,7 +58,7 @@ func GetLanguages() error {
 					"language": buildLang.Tag,
 				},
 			).
-			SetQueryParam("nested", "true").
+			SetQueryParam("nested", "false").
 			Get("https://i18n.svc.mensa.it/api/{ak}/{language}")
 		if err == nil {
 			_ = json.Unmarshal(translationData.Body(), &buildLang.Tranlsations)
