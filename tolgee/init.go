@@ -34,12 +34,7 @@ func GetLanguages(app core.App) error {
 			Tag: language,
 		}
 		translationData, err := resty.New().R().
-			SetPathParams(
-				map[string]string{
-					"locale": buildLang.Tag,
-				},
-			).
-			Get(getInternalConfig(app, "i18n_flat_url"))
+			Get(strings.ReplaceAll(getInternalConfig(app, "i18n_flat_url"), "{locale}", buildLang.Tag))
 		if err == nil {
 			_ = json.Unmarshal(translationData.Body(), &buildLang.Tranlsations)
 		}
