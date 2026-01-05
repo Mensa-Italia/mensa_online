@@ -31,11 +31,7 @@ func Load(apikey string) {
 }
 
 func GetLanguages() error {
-	languagesData, err := resty.New().R().SetPathParams(
-		map[string]string{
-			"ak": ak,
-		},
-	).Get("https://i18n.svc.mensa.it/api/{ak}")
+	languagesData, err := resty.New().R().Get("https://i18n.svc.mensa.it/api/languages")
 	if err != nil {
 		return err
 	}
@@ -53,11 +49,10 @@ func GetLanguages() error {
 		translationData, err := resty.New().R().
 			SetPathParams(
 				map[string]string{
-					"ak":       ak,
 					"language": buildLang.Tag,
 				},
 			).
-			Get("https://i18n.svc.mensa.it/api/{ak}/{language}")
+			Get("https://i18n.svc.mensa.it/api/{language}")
 		if err == nil {
 			_ = json.Unmarshal(translationData.Body(), &buildLang.Tranlsations)
 		}
