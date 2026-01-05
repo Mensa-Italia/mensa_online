@@ -2,7 +2,6 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/../mensa-localizations/.idea/mensa-localizations.iml" filepath="$PROJECT_DIR$/../mensa-localizations/.idea/mensa-localizations.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/mensadb.iml" filepath="$PROJECT_DIR$/.idea/mensadb.iml" />
     </modules>
   </component>
