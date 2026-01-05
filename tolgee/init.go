@@ -30,7 +30,6 @@ func Load(apikey string) {
 	log.Println("Tolgee translations loaded total languages: ", len(translations))
 }
 
-// internal api
 func GetLanguages() error {
 	languagesData, err := resty.New().R().SetPathParams(
 		map[string]string{
