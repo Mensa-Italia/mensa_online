@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"log"
 	"strings"
-	"time"
 
 	"github.com/go-resty/resty/v2"
 	"github.com/tidwall/gjson"
@@ -32,12 +31,11 @@ func Load(apikey string) {
 }
 
 func GetLanguages() error {
-	languagesData, err := resty.New().SetTimeout(10 * time.Second).R().SetQueryParams(
+	languagesData, err := resty.New().R().SetPathParams(
 		map[string]string{
-			"ak":   ak,
-			"size": "1000",
+			"ak": ak,
 		},
-	).Get("https://app.tolgee.io/v2/projects/languages")
+	).Get("https://i18n.svc.mensa.it/api/{ak}")
 	if err != nil {
 		return err
 	}
@@ -52,16 +50,15 @@ func GetLanguages() error {
 			FlagEmoji:    language.Get("flagEmoji").String(),
 			Base:         language.Get("base").Bool(),
 		}
-		translationData, err := resty.New().R().SetQueryParams(
-			map[string]string{
-				"ak":                 ak,
-				"size":               "1000",
-				"languages":          buildLang.Tag,
-				"format":             "JSON",
-				"zip":                "false",
-				"structureDelimiter": "",
-			},
-		).Get("https://app.tolgee.io/v2/projects/export")
+		translationData, err := resty.New().R().
+			SetPathParams(
+				map[string]string{
+					"ak":       ak,
+					"language": buildLang.Tag,
+				},
+			).
+			SetQueryParam("nested", "true").
+			Get("https://i18n.svc.mensa.it/api/{ak}/{language}")
 		if err == nil {
 			_ = json.Unmarshal(translationData.Body(), &buildLang.Tranlsations)
 		}
