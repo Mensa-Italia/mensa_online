@@ -5,14 +5,15 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"log"
+	"mensadb/tolgee"
+	"mensadb/tools/env"
+
 	firebase "firebase.google.com/go/v4"
 	"firebase.google.com/go/v4/messaging"
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
 	"google.golang.org/api/option"
-	"log"
-	"mensadb/tolgee"
-	"mensadb/tools/env"
 )
 
 type PushNotification struct {
