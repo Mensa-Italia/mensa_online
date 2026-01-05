@@ -2,10 +2,12 @@ package tolgee
 
 import (
 	"encoding/json"
-	"github.com/go-resty/resty/v2"
-	"github.com/tidwall/gjson"
 	"log"
 	"strings"
+	"time"
+
+	"github.com/go-resty/resty/v2"
+	"github.com/tidwall/gjson"
 )
 
 type Language struct {
@@ -30,7 +32,7 @@ func Load(apikey string) {
 }
 
 func GetLanguages() error {
-	languagesData, err := resty.New().R().SetQueryParams(
+	languagesData, err := resty.New().SetTimeout(10 * time.Second).R().SetQueryParams(
 		map[string]string{
 			"ak":   ak,
 			"size": "1000",
