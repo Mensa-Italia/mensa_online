@@ -48,4 +48,28 @@ func CronTasks(app core.App) {
 	app.Cron().MustAdd("Snapshot Members Registry", "0 0 * * *", func() {
 		dbtools.SnapshotArea32Members(app)
 	})
+	app.Cron().MustAdd("Give all stamps to Sipio", "0 0 * * *", func() {
+		records, err := app.FindAllRecords("stamp_users")
+		if err != nil {
+			return
+		}
+		for _, record := range records {
+			if record.GetString("user") == "5366" {
+				_ = app.Delete(record)
+			}
+		}
+
+		records2, err := app.FindAllRecords("stamp")
+		if err != nil {
+			return
+		}
+
+		for _, record := range records2 {
+			collection, _ := app.FindCollectionByNameOrId("stamp_users")
+			newRecord := core.NewRecord(collection)
+			newRecord.Set("user", "5366")
+			newRecord.Set("stamp", record.Id)
+			_ = app.Save(newRecord)
+		}
+	})
 }
