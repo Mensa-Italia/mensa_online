@@ -70,7 +70,9 @@ func UserExists(aliasMail string) (string, bool) {
 }
 
 func CreateUser(name string, aliasMail string, originalMail string, rawMetadata map[string]string) {
-
+	if strings.TrimSpace(aliasMail) == "" {
+		return
+	}
 	userId, exists := UserExists(aliasMail)
 	if exists {
 		UpdateUser(userId, name, aliasMail, originalMail, rawMetadata)
