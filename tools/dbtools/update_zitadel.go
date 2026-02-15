@@ -58,6 +58,7 @@ func UpdateZitadel(app core.App) {
 		}
 
 		// campi strutturati
+		metadata["membership_id"] = record.Id
 		metadata["city"] = record.GetString("city")
 		metadata["state"] = record.GetString("state")
 		metadata["area"] = record.GetString("area")
@@ -67,7 +68,7 @@ func UpdateZitadel(app core.App) {
 		metadata["birthdate"] = record.GetString("birthdate")
 		metadata["avatar"] = record.GetString("avatar")
 
-		zauth.CreateUser(
+		go zauth.CreateUser(
 			record.GetString("name"),
 			record.GetString("alias_mail"),
 			record.GetString("original_mail"),
