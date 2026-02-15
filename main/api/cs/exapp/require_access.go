@@ -1,11 +1,12 @@
 package exapp
 
 import (
-	"github.com/pocketbase/pocketbase/apis"
-	"github.com/pocketbase/pocketbase/core"
 	"mensadb/main/hooks"
 	"mensadb/tools/dbtools"
 	"strings"
+
+	"github.com/pocketbase/pocketbase/apis"
+	"github.com/pocketbase/pocketbase/core"
 )
 
 func externalAppRequireConfirmation(e *core.RequestEvent) error {
@@ -22,6 +23,7 @@ func externalAppRequireConfirmation(e *core.RequestEvent) error {
 
 	user, err := e.App.FindRecordById("users", userId)
 	if err != nil {
+		
 		return apis.NewBadRequestError("Invalid", err)
 	}
 

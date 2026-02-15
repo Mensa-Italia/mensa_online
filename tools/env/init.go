@@ -2,8 +2,9 @@ package env
 
 import (
 	"fmt"
-	"github.com/caarlos0/env/v11"
 	"os"
+
+	"github.com/caarlos0/env/v11"
 )
 
 type config struct {
@@ -25,6 +26,9 @@ type config struct {
 	UnsplashKey            string `env:"UNSPLASH_KEY" envDefault:""`
 	ZincUsername           string `env:"ZINC_USERNAME" envDefault:""`
 	ZincPassword           string `env:"ZINC_PASSWORD" envDefault:""`
+	ZitadelPAT             string `env:"ZITADEL_PAT" envDefault:""`
+	ZitadelHOST            string `env:"ZITADEL_HOST" envDefault:""`
+	ZitadelOrganizationID  string `env:"ZITADEL_ORGANIZATION_ID" envDefault:""`
 }
 
 var cfg = config{}
@@ -113,4 +117,16 @@ func GetZincUsername() string {
 
 func GetZincPassword() string {
 	return cfg.ZincPassword
+}
+
+func GetZitadelPAT() string {
+	return cfg.ZitadelPAT
+}
+
+func GetZitadelHost() string {
+	return cfg.ZitadelHOST
+}
+
+func GetZitadelOrganizationID() string {
+	return cfg.ZitadelOrganizationID
 }
