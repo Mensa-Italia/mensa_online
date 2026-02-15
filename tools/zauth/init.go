@@ -5,6 +5,8 @@ import (
 	"log"
 	"log/slog"
 	"mensadb/tools/env"
+	"mensadb/tools/nameorder"
+	"regexp"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -33,19 +35,28 @@ func init() {
 	}
 }
 
-func IdentifyName(name string) types.PIIResult {
+var nonLetters = regexp.MustCompile(`[^\p{L}\p{M}\s'-]+`) // lascia lettere unicode + spazi + ' -
 
-	// Create detector with embedded data - works out of the box!
+func tokenizeFullName(s string) []string {
+	s = strings.TrimSpace(s)
+	s = nonLetters.ReplaceAllString(s, " ")
+	s = strings.Join(strings.Fields(s), " ")
+	if s == "" {
+		return nil
+	}
+	return strings.Split(s, " ")
+}
+
+func IdentifyName(name string, email string) types.PIIResult {
+
 	d, err := detector.NewDefault()
 	if err != nil {
 		log.Fatal(err)
 	}
+	ordered := nameorder.OrderTokensByEmailLocalPart(name, email)
+	log.Println(ordered)
 
-	// Detect PII
-	words := strings.Split(name, " ")
-	result := d.DetectPII(words)
-
-	return result
+	return d.DetectPII(ordered)
 }
 
 func UserExists(aliasMail string) (string, bool) {
@@ -87,11 +98,11 @@ func CreateUser(name string, aliasMail string, originalMail string, rawMetadata 
 		})
 	}
 
-	nameDeepInfos := IdentifyName(name)
+	nameDeepInfos := IdentifyName(name, aliasMail)
 	gender := user.Gender_GENDER_MALE
-	if IdentifyName(name).Details.Gender == "Female" {
+	if nameDeepInfos.Details.Gender == "Female" {
 		gender = user.Gender_GENDER_FEMALE
-	} else if IdentifyName(name).Details.Gender == "Male" {
+	} else if nameDeepInfos.Details.Gender == "Male" {
 		gender = user.Gender_GENDER_MALE
 	}
 
@@ -135,7 +146,7 @@ func UpdateUser(userID string, name string, aliasMail string, originalMail strin
 	}
 
 	// --- derive profile fields from name
-	nameDeepInfos := IdentifyName(name)
+	nameDeepInfos := IdentifyName(name, aliasMail)
 
 	// Gender: be conservative (unspecified if detector is unsure)
 	gender := user.Gender_GENDER_UNSPECIFIED
