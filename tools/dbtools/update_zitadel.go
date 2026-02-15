@@ -45,7 +45,7 @@ func UpdateZitadel(app core.App) {
 			full = map[string]any{}
 		}
 
-		metadata := make(map[string]string, len(full)+8)
+		metadata := make(map[string]string, len(full)+10)
 
 		for k, v := range full {
 			mk, ok := mapFullDataKey(k)
