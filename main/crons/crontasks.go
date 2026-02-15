@@ -35,10 +35,9 @@ func CronTasks(app core.App) {
 	app.Cron().MustAdd("Update registry data", "30 0,3,6,9,12,15,18,21 * * *", func() {
 		importers.GetFullMailList()
 		dbtools.RemoteRetrieveMembersFromArea32(app)
-		dbtools.UpdateZitadel(app)
 	})
 
-	app.Cron().MustAdd("Force zitadel sync", "0 0,3 * * *", func() {
+	app.Cron().MustAdd("Force zitadel sync", "0 3 * * *", func() {
 		dbtools.UpdateZitadel(app)
 	})
 
