@@ -5,8 +5,14 @@ import (
 	"log/slog"
 	"mensadb/tools/zauth"
 	"strings"
+	"sync"
 
 	"github.com/pocketbase/pocketbase/core"
+)
+
+var (
+	sem = make(chan struct{}, 10)
+	wg  sync.WaitGroup
 )
 
 var fullDataKeyMap = map[string]string{
@@ -67,12 +73,15 @@ func UpdateZitadel(app core.App) {
 		metadata["birthdate"] = record.GetString("birthdate")
 		metadata["avatar"] = record.GetString("avatar")
 
-		go zauth.CreateUser(
-			record.GetString("name"),
-			record.GetString("alias_mail"),
-			record.GetString("original_mail"),
-			metadata,
-		)
+		wg.Add(1)
+		go func(recID string, name, alias, orig string, md map[string]string) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
 
+			zauth.CreateUser(name, alias, orig, md)
+		}(record.Id, record.GetString("name"), record.GetString("alias_mail"), record.GetString("original_mail"), metadata)
 	}
+
+	wg.Wait()
 }
