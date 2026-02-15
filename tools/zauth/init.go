@@ -22,9 +22,7 @@ var apiClient *client.Client
 var ctx = client.BearerTokenCtx(context.Background(), env.GetZitadelPAT())
 
 func init() {
-
 	domain := env.GetZitadelHost()
-
 	authOption := client.PAT(env.GetZitadelPAT())
 
 	var err error
@@ -48,7 +46,6 @@ func tokenizeFullName(s string) []string {
 }
 
 func IdentifyName(name string, email string) types.PIIResult {
-
 	d, err := detector.NewDefault()
 	if err != nil {
 		log.Fatal(err)
@@ -90,12 +87,15 @@ func CreateUser(name string, aliasMail string, originalMail string, rawMetadata 
 		return
 	}
 
+	// Filtro metadati: include solo quelli con valore non vuoto
 	var metadata []*user.Metadata
 	for key, value := range rawMetadata {
-		metadata = append(metadata, &user.Metadata{
-			Key:   key,
-			Value: []byte(value),
-		})
+		if len(value) > 0 {
+			metadata = append(metadata, &user.Metadata{
+				Key:   key,
+				Value: []byte(value),
+			})
+		}
 	}
 
 	nameDeepInfos := IdentifyName(name, aliasMail)
@@ -115,7 +115,7 @@ func CreateUser(name string, aliasMail string, originalMail string, rawMetadata 
 					GivenName:         strings.Join(nameDeepInfos.Details.FirstNames, " "),
 					FamilyName:        strings.Join(nameDeepInfos.Details.Surnames, " "),
 					NickName:          aws.String(strings.Split(aliasMail, "@")[0]),
-					DisplayName:       aws.String(name),
+					DisplayName:       aws.String(strings.Join(nameDeepInfos.Details.FirstNames, " ") + " " + strings.Join(nameDeepInfos.Details.Surnames, " ")),
 					Gender:            &gender,
 					PreferredLanguage: aws.String("it"),
 				},
@@ -160,7 +160,7 @@ func UpdateUser(userID string, name string, aliasMail string, originalMail strin
 	given := strings.Join(nameDeepInfos.Details.FirstNames, " ")
 	family := strings.Join(nameDeepInfos.Details.Surnames, " ")
 	nick := strings.Split(aliasMail, "@")[0]
-	display := name
+	display := given + " " + family
 	lang := "it"
 
 	// --- update user (username + human patch)
@@ -191,23 +191,28 @@ func UpdateUser(userID string, name string, aliasMail string, originalMail strin
 		return
 	}
 
-	// --- upsert metadata (only if provided)
+	// --- upsert metadata (only if provided and value is not empty)
 	if len(rawMetadata) > 0 {
 		metadata := make([]*user.Metadata, 0, len(rawMetadata))
 		for key, value := range rawMetadata {
-			metadata = append(metadata, &user.Metadata{
-				Key:   key,
-				Value: []byte(value),
-			})
+			if len(value) > 0 {
+				metadata = append(metadata, &user.Metadata{
+					Key:   key,
+					Value: []byte(value),
+				})
+			}
 		}
 
-		_, err = apiClient.UserServiceV2().SetUserMetadata(ctx, &user.SetUserMetadataRequest{
-			UserId:   userID,
-			Metadata: metadata,
-		})
-		if err != nil {
-			slog.Error("failed to set user metadata", "userID", userID, "error", err)
-			return
+		// Procedi solo se dopo il filtraggio abbiamo effettivamente dei metadati da inviare
+		if len(metadata) > 0 {
+			_, err = apiClient.UserServiceV2().SetUserMetadata(ctx, &user.SetUserMetadataRequest{
+				UserId:   userID,
+				Metadata: metadata,
+			})
+			if err != nil {
+				slog.Error("failed to set user metadata", "userID", userID, "error", err)
+				return
+			}
 		}
 	}
 
