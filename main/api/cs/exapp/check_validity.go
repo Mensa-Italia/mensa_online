@@ -1,11 +1,12 @@
 package exapp
 
 import (
+	"mensadb/main/hooks"
+	"slices"
+
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/types"
-	"mensadb/main/hooks"
-	"slices"
 )
 
 func checkValidity(e *core.RequestEvent) error {

@@ -35,6 +35,7 @@ func CronTasks(app core.App) {
 	app.Cron().MustAdd("Update registry data", "30 0,3,6,9,12,15,18,21 * * *", func() {
 		importers.GetFullMailList()
 		dbtools.RemoteRetrieveMembersFromArea32(app)
+		dbtools.UpdateZitadel(app)
 	})
 
 	app.Cron().MustAdd("Upload file to zinc", "0 0,3 * * *", func() {
