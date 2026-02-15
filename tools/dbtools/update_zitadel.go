@@ -45,7 +45,6 @@ func UpdateZitadel(app core.App) {
 			full = map[string]any{}
 		}
 
-		var Metadata map[string]string
 		metadata := make(map[string]string, len(full)+8)
 
 		for k, v := range full {
@@ -72,7 +71,7 @@ func UpdateZitadel(app core.App) {
 			record.GetString("name"),
 			record.GetString("alias_mail"),
 			record.GetString("original_mail"),
-			Metadata,
+			metadata,
 		)
 
 	}
