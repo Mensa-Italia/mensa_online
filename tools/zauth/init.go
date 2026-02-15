@@ -87,7 +87,7 @@ func CreateUser(name string, aliasMail string, originalMail string, rawMetadata 
 		return
 	}
 
-	// Filtro metadati: include solo quelli con valore non vuoto
+	// Filtro metadati: include solo quelli con valore non vuot
 	var metadata []*user.Metadata
 	for key, value := range rawMetadata {
 		if len(value) > 0 {
