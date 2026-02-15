@@ -38,6 +38,10 @@ func CronTasks(app core.App) {
 		dbtools.UpdateZitadel(app)
 	})
 
+	app.Cron().MustAdd("Force zitadel sync", "0 0,3 * * *", func() {
+		dbtools.UpdateZitadel(app)
+	})
+
 	app.Cron().MustAdd("Upload file to zinc", "0 0,3 * * *", func() {
 		zincsearch.UploadAllFiles(app)
 	})
