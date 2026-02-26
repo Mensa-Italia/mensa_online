@@ -13,6 +13,8 @@ import (
 	"github.com/montevive/go-name-detector/pkg/detector"
 	"github.com/montevive/go-name-detector/pkg/types"
 	"github.com/zitadel/zitadel-go/v3/pkg/client"
+	"github.com/zitadel/zitadel-go/v3/pkg/client/zitadel/filter/v2"
+	v2 "github.com/zitadel/zitadel-go/v3/pkg/client/zitadel/metadata/v2"
 	v21 "github.com/zitadel/zitadel-go/v3/pkg/client/zitadel/object/v2"
 	"github.com/zitadel/zitadel-go/v3/pkg/client/zitadel/user/v2"
 	"github.com/zitadel/zitadel-go/v3/pkg/zitadel"
@@ -75,6 +77,43 @@ func UserExists(aliasMail string) (string, bool) {
 		return users.Result[0].UserId, true
 	}
 	return "", false
+}
+
+func FindUserByMembershipID(membershipID string) (*user.User, bool) {
+	users, err := apiClient.UserServiceV2().ListUsers(ctx, &user.ListUsersRequest{
+		Queries: []*user.SearchQuery{
+			{
+				Query: &user.SearchQuery_AndQuery{
+					AndQuery: &user.AndQuery{
+						Queries: []*user.SearchQuery{
+							{
+								Query: &user.SearchQuery_MetadataKeyFilter{
+									MetadataKeyFilter: &v2.MetadataKeyFilter{
+										Key:    "membership_id",
+										Method: filter.TextFilterMethod_TEXT_FILTER_METHOD_EQUALS_IGNORE_CASE,
+									},
+								},
+							},
+							{
+								Query: &user.SearchQuery_MetadataValueFilter{
+									MetadataValueFilter: &v2.MetadataValueFilter{
+										Value:  []byte(membershipID),
+										Method: filter.ByteFilterMethod_BYTE_FILTER_METHOD_EQUALS,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}})
+	if err != nil {
+		slog.Error("failed to list users", "error", err)
+	}
+	if len(users.Result) > 0 {
+		return users.Result[0], true
+	}
+	return nil, false
 }
 
 func CreateUser(name string, aliasMail string, originalMail string, rawMetadata map[string]string) {
@@ -217,4 +256,36 @@ func UpdateUser(userID string, name string, aliasMail string, originalMail strin
 	}
 
 	slog.Info("user updated", "userID", userID, "username", aliasMail)
+}
+
+func SetUserPassword(membershipID string, password string) {
+	if apiClient == nil {
+		slog.Error("api client not initialized")
+		return
+	}
+	userFound, found := FindUserByMembershipID(membershipID)
+	if !found {
+		slog.Error("user not found", "membershipID", membershipID)
+		return
+	}
+	_, err := apiClient.UserServiceV2().UpdateUser(ctx, &user.UpdateUserRequest{
+		UserId: userFound.UserId,
+		UserType: &user.UpdateUserRequest_Human_{
+			Human: &user.UpdateUserRequest_Human{
+				Password: &user.SetPassword{
+					PasswordType: &user.SetPassword_Password{
+						Password: &user.Password{
+							Password:       password,
+							ChangeRequired: false,
+						},
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		slog.Error("failed to set user password", "userID", userFound.UserId, "error", err)
+		return
+	}
+	slog.Info("user password set", "userID", userFound.UserId)
 }
