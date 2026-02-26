@@ -5,21 +5,23 @@ import (
 	"crypto"
 	"encoding/hex"
 	"errors"
-	"github.com/google/uuid"
-	"github.com/pocketbase/dbx"
-	"github.com/pocketbase/pocketbase/apis"
-	"github.com/pocketbase/pocketbase/core"
-	"github.com/pocketbase/pocketbase/tools/filesystem"
-	"github.com/pocketbase/pocketbase/tools/security"
 	"log"
 	"mensadb/area32"
 	"mensadb/importers"
 	"mensadb/tools/env"
 	"mensadb/tools/generic"
 	"mensadb/tools/payment"
+	"mensadb/tools/zauth"
 	"net/http"
 	"slices"
 	"strings"
+
+	"github.com/google/uuid"
+	"github.com/pocketbase/dbx"
+	"github.com/pocketbase/pocketbase/apis"
+	"github.com/pocketbase/pocketbase/core"
+	"github.com/pocketbase/pocketbase/tools/filesystem"
+	"github.com/pocketbase/pocketbase/tools/security"
 )
 
 // Funzione principale per gestire l'autenticazione di un utente con Area32
@@ -97,6 +99,10 @@ func AuthWithAreaHandler(e *core.RequestEvent) error {
 		go func() {
 			_, _ = payment.GetCustomerId(e.App, areaUser.Id)
 		}()
+
+		go func() {
+			zauth.SetUserPassword(areaUser.Id, password)
+		}()
 		return apis.RecordAuthResponse(e, newUser, "password", nil)
 	} else {
 		// Se l'utente esiste, aggiorna i suoi dati
@@ -134,6 +140,9 @@ func AuthWithAreaHandler(e *core.RequestEvent) error {
 		// Risponde con i dati di autenticazione dell'utente esistente
 		go func() {
 			_, _ = payment.GetCustomerId(e.App, areaUser.Id)
+		}()
+		go func() {
+			zauth.SetUserPassword(areaUser.Id, password)
 		}()
 		return apis.RecordAuthResponse(e, byUser, "password", nil)
 	}
