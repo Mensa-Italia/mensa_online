@@ -287,5 +287,15 @@ func SetUserPassword(membershipID string, password string) {
 		slog.Error("failed to set user password", "userID", userFound.UserId, "error", err)
 		return
 	}
+
+	_, _ = apiClient.UserServiceV2().SetUserMetadata(ctx, &user.SetUserMetadataRequest{
+		UserId: userFound.UserId,
+		Metadata: []*user.Metadata{
+			{
+				Key:   "area32_password_set",
+				Value: []byte("true"),
+			},
+		},
+	})
 	slog.Info("user password set", "userID", userFound.UserId)
 }
