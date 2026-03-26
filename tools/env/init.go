@@ -29,6 +29,7 @@ type config struct {
 	ZitadelPAT             string `env:"ZITADEL_PAT" envDefault:""`
 	ZitadelHOST            string `env:"ZITADEL_HOST" envDefault:""`
 	ZitadelOrganizationID  string `env:"ZITADEL_ORGANIZATION_ID" envDefault:""`
+	MCPClientID            string `env:"MCP_CLIENT_ID" envDefault:""`
 }
 
 var cfg = config{}
@@ -129,4 +130,8 @@ func GetZitadelHost() string {
 
 func GetZitadelOrganizationID() string {
 	return cfg.ZitadelOrganizationID
+}
+
+func GetMCPClientID() string {
+	return cfg.MCPClientID
 }
