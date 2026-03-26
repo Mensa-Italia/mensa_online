@@ -64,6 +64,7 @@ func newAuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		rawToken, err := extractBearer(r)
 		if err != nil {
+			setWWWAuthenticate(w, r)
 			http.Error(w, err.Error(), http.StatusUnauthorized)
 			return
 		}
@@ -79,11 +80,13 @@ func newAuthMiddleware(next http.Handler) http.Handler {
 			jwt.WithValidMethods(validMethods),
 		)
 		if err != nil || !token.Valid {
+			setWWWAuthenticate(w, r)
 			http.Error(w, fmt.Sprintf("invalid token: %v", err), http.StatusUnauthorized)
 			return
 		}
 
 		if claims.Issuer != oidcIssuer {
+			setWWWAuthenticate(w, r)
 			http.Error(w, "token issuer not accepted", http.StatusUnauthorized)
 			return
 		}
@@ -94,6 +97,7 @@ func newAuthMiddleware(next http.Handler) http.Handler {
 			inAud := claims.VerifyAudience(clientID, false)
 			inAzp := claims.AuthorizedParty == clientID
 			if !inAud && !inAzp {
+				setWWWAuthenticate(w, r)
 				http.Error(w, "token not authorized for this service", http.StatusUnauthorized)
 				return
 			}
@@ -102,6 +106,19 @@ func newAuthMiddleware(next http.Handler) http.Handler {
 		ctx := context.WithValue(r.Context(), claimsKey, claims)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// setWWWAuthenticate aggiunge il header WWW-Authenticate alla risposta.
+// Il campo resource_metadata punta al well-known endpoint su questo stesso
+// host, così i client MCP (es. Claude Web) sanno dove trovare il metadata
+// dell'authorization server senza fare fallback su {origin}/authorize.
+func setWWWAuthenticate(w http.ResponseWriter, r *http.Request) {
+	scheme := "https"
+	if r.TLS == nil && r.Header.Get("X-Forwarded-Proto") != "https" {
+		scheme = "http"
+	}
+	metaURL := fmt.Sprintf("%s://%s/.well-known/oauth-protected-resource", scheme, r.Host)
+	w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer resource_metadata="%s"`, metaURL))
 }
 
 // ClaimsFromContext retrieves the validated *Claims injected by the auth

@@ -46,6 +46,8 @@ func main() {
 		e.Router.GET("/links/event/{id}", links.LinksEvents)
 		e.Router.GET("/links/stamp/{id}", links.LinksStamps)
 
+		e.Router.GET("/.well-known/oauth-protected-resource", mcp.WellKnownHandler(e.App))
+
 		mcpHandler := mcp.Init(e.App)
 		e.Router.Any("/mcp", func(re *core.RequestEvent) error {
 			mcpHandler.ServeHTTP(re.Response, re.Request)
