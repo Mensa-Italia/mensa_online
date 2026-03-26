@@ -24,6 +24,7 @@ func Init(app core.App) http.Handler {
 	)
 
 	registerDocumentTools(s, app)
+	registerGroupTools(s, app)
 
 	return newAuthMiddleware(server.NewStreamableHTTPServer(s))
 }
