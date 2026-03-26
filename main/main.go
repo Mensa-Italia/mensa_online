@@ -8,6 +8,7 @@ import (
 	"mensadb/main/hooks"
 	"mensadb/main/links"
 	"mensadb/main/utilities"
+	"mensadb/mcp"
 	_ "mensadb/migrations"
 	"mensadb/printful"
 	"mensadb/tolgee"
@@ -44,6 +45,13 @@ func main() {
 		e.Router.GET("/.well-known/assetlinks.json", utilities.AssetLinksWellKnown)
 		e.Router.GET("/links/event/{id}", links.LinksEvents)
 		e.Router.GET("/links/stamp/{id}", links.LinksStamps)
+
+		mcpHandler := mcp.Init(e.App)
+		e.Router.Any("/mcp", func(re *core.RequestEvent) error {
+			mcpHandler.ServeHTTP(re.Response, re.Request)
+			return nil
+		})
+
 		return e.Next()
 	})
 
