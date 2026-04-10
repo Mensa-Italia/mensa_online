@@ -89,7 +89,8 @@ func FindTree(app core.App, file *filesystem.File) DocumentsCitationList {
 	)
 
 	if err != nil {
-		log.Fatal(err)
+		log.Println("FindTree: Gemini error, skipping citation extraction:", err)
+		return DocumentsCitationList{}
 	}
 
 	var responseCitation documentsCitationResponse
