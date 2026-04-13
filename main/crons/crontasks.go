@@ -49,6 +49,10 @@ func CronTasks(app core.App) {
 		dbtools.CheckUserStripeAccount(app)
 	})
 
+	app.Cron().MustAdd("Retry missing documents resume", "0 0 31 2 *", func() {
+		dbtools.RetryMissingDocumentsResume(app)
+	})
+
 	app.Cron().MustAdd("Snapshot Members Registry", "0 0 * * *", func() {
 		dbtools.SnapshotArea32Members(app)
 	})
