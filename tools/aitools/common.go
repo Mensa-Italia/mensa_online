@@ -23,21 +23,29 @@ func prepareFile(client *genai.Client, name string, data []byte) *genai.File {
 		log.Printf("Error detecting MIME type for %s: %v", name, err)
 		return nil
 	}
+	detectedMIME := mtype.String()
+
+	uploadData := data
+	uploadMIME := detectedMIME
+
+	if !geminiSupportedMIMETypes[baseMIME(detectedMIME)] {
+		log.Printf("MIME type %q not supported by Gemini for %s — attempting text extraction", detectedMIME, name)
+		converted, convertedMIME, convErr := convertToTextFallback(data, detectedMIME, name)
+		if convErr != nil {
+			log.Printf("Text extraction failed for %s (%s): %v — skipping", name, detectedMIME, convErr)
+			return nil
+		}
+		uploadData = converted
+		uploadMIME = convertedMIME
+		log.Printf("Text extraction succeeded for %s (%d bytes as %s)", name, len(uploadData), uploadMIME)
+	}
 
 	options := genai.UploadFileConfig{
 		DisplayName: name,
-		MIMEType:    mtype.String(),
+		MIMEType:    uploadMIME,
 	}
 
-	// Reset reader to beginning after MIME detection
-	if seeker, ok := openedFile.(io.Seeker); ok {
-		_, _ = seeker.Seek(0, io.SeekStart)
-	} else {
-		// NopCloser over bytes.Reader is a Seeker, but keep a safe fallback.
-		openedFile = io.NopCloser(bytes.NewReader(data))
-	}
-
-	fileData, err := client.Files.Upload(ctx, openedFile, &options)
+	fileData, err := client.Files.Upload(ctx, io.NopCloser(bytes.NewReader(uploadData)), &options)
 	if err != nil {
 		log.Printf("Error uploading file %s: %v", name, err)
 		return nil
