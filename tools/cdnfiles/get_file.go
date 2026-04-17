@@ -18,7 +18,7 @@ func GetFilePresignedURL(app core.App, bucket, fileKey string) string {
 	if s3settings.Enabled {
 		s3client, err := NewS3(s3settings.Region, s3settings.Endpoint, s3settings.AccessKey, s3settings.Secret, s3settings.ForcePathStyle)
 		if err != nil {
-			app.Logger().Error("create s3 client", err)
+			app.Logger().Error("create s3 client", "error", err)
 			return ""
 		}
 		presignClient := s3.NewPresignClient(s3client)
@@ -29,7 +29,7 @@ func GetFilePresignedURL(app core.App, bucket, fileKey string) string {
 			},
 			s3.WithPresignExpires(time.Hour))
 		if err != nil {
-			app.Logger().Error("create s3 presigned url", err)
+			app.Logger().Error("create s3 presigned url", "error", err)
 			return ""
 		}
 		return presignedUrl.URL

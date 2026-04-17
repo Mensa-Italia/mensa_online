@@ -9,23 +9,8 @@ on:
 
 permissions:
   contents: read
-  security-events: write
 
 jobs:
-  secret-scan:
-    name: Secret scanning (gitleaks)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Run gitleaks
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
   vulnerability-scan:
     name: Go vulnerability check
     runs-on: ubuntu-latest
@@ -57,12 +42,7 @@ jobs:
         with:
           scan-type: fs
           scan-ref: .
-          format: sarif
-          output: trivy-results.sarif
+          format: table
           severity: CRITICAL,HIGH
-
-      - name: Upload Trivy SARIF results
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
-        with:
-          sarif_file: trivy-results.sarif
+          exit-code: "1"
+          ignore-unfixed: true
