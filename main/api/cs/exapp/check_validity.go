@@ -33,7 +33,7 @@ func checkValidity(e *core.RequestEvent) error {
 	if err != nil {
 		return e.String(400, "NOK")
 	}
-	if user.GetBool("is_membership_active") == false {
+	if !user.GetBool("is_membership_active") {
 		return e.String(400, "NOK")
 	}
 	timeOfExpire := user.GetDateTime("expire_membership")

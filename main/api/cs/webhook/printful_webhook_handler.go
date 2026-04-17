@@ -9,7 +9,7 @@ func PrintfulWebhookHandler(e *core.RequestEvent) error {
 	var bodyBytes []byte
 	_, _ = e.Request.Body.Read(bodyBytes)
 
-	printful.HandleWebhook(printful.PrintfulHandlers{
+	_ = printful.HandleWebhook(printful.PrintfulHandlers{
 		ProductSyncedHandler:  handleBodyUpdate(e.App),
 		ProductUpdatedHandler: handleBodyUpdate(e.App),
 		ProductDeletedHandler: handleBodyDelete(e.App),

@@ -21,8 +21,8 @@ import (
 	"github.com/pocketbase/pocketbase/tools/filesystem"
 )
 
-var UNABLE_TO_CONNECT = errors.New("UNABLE_TO_CONNECT")
-var INVALID_CREDENTIALS = errors.New("INVALID_CREDENTIALS")
+var ErrUnableToConnect = errors.New("ErrUnableToConnect")
+var ErrInvalidCredentials = errors.New("ErrInvalidCredentials")
 
 type Area32User struct {
 	Id                 string
@@ -50,7 +50,7 @@ func NewAPI() *ScraperApi {
 func (api *ScraperApi) DoLoginAndRetrieveMain(email, password string) (*Area32User, error) {
 	resp, err := api.client.R().Get("https://www.cloud32.it/Associazioni/utenti/login?codass=170734")
 	if err != nil {
-		return nil, UNABLE_TO_CONNECT
+		return nil, ErrUnableToConnect
 	}
 
 	doc, err := goquery.NewDocumentFromReader(resp.RawBody())
@@ -71,28 +71,28 @@ func (api *ScraperApi) DoLoginAndRetrieveMain(email, password string) (*Area32Us
 		"password": password,
 		"_token":   token,
 	}
-	resp, err = api.client.R().
+	_, err = api.client.R().
 		SetFormData(formData).
 		Post("https://www.cloud32.it/Associazioni/utenti/login")
 	if err != nil {
-		return nil, UNABLE_TO_CONNECT
+		return nil, ErrUnableToConnect
 	}
 
 	resp, err = api.client.R().
 		Get("https://www.cloud32.it/Associazioni/utenti/home")
 	if err != nil {
-		return nil, UNABLE_TO_CONNECT
+		return nil, ErrUnableToConnect
 	}
 
 	doc, err = goquery.NewDocumentFromReader(resp.RawBody())
 	if err != nil {
-		return nil, UNABLE_TO_CONNECT
+		return nil, ErrUnableToConnect
 	}
 
 	imageUrl := retrieveImageUrl(doc)
 	userId := retrieveID(doc)
 	if userId == "" {
-		return nil, INVALID_CREDENTIALS
+		return nil, ErrInvalidCredentials
 	}
 	expireDate := retrieveExpireDate(doc)
 	fullName := retrieveFullName(doc)
@@ -253,7 +253,6 @@ func (api *ScraperApi) GetAllDocuments(app core.App, excludedUID []string) ([]ma
 			break
 		}
 		documents = append(documents, pageDocuments...)
-		break
 	}
 	documents = invertArray(documents)
 	var resultDocuments []map[string]any
