@@ -79,6 +79,13 @@ func convertToTextFallback(data []byte, mimeType, name string) ([]byte, string, 
 		}
 		return []byte(text), "text/plain", nil
 
+	case "application/vnd.openxmlformats-officedocument.presentationml.presentation":
+		text, err := extractPptxText(data)
+		if err != nil {
+			return nil, "", err
+		}
+		return []byte(text), "text/plain", nil
+
 	case "application/vnd.rar", "application/x-rar-compressed", "application/x-rar":
 		text, err := extractRarText(data, name)
 		if err != nil {
@@ -151,6 +158,10 @@ func extractReadableContent(data []byte, name string) string {
 		if text, err := extractXlsxText(data); err == nil {
 			return text
 		}
+	case strings.HasSuffix(lname, ".pptx"):
+		if text, err := extractPptxText(data); err == nil {
+			return text
+		}
 	case strings.HasSuffix(lname, ".txt"),
 		strings.HasSuffix(lname, ".csv"),
 		strings.HasSuffix(lname, ".md"),
@@ -190,6 +201,37 @@ func extractDocxText(data []byte) (string, error) {
 		return stripXMLToText(content), nil
 	}
 	return "", fmt.Errorf("word/document.xml non trovato nel DOCX")
+}
+
+// extractPptxText reads all slides from a PPTX (ZIP) and extracts their text content.
+func extractPptxText(data []byte) (string, error) {
+	r, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		return "", err
+	}
+	var sb strings.Builder
+	slideNum := 0
+	for _, f := range r.File {
+		if !strings.HasPrefix(f.Name, "ppt/slides/slide") || !strings.HasSuffix(f.Name, ".xml") {
+			continue
+		}
+		rc, err := f.Open()
+		if err != nil {
+			continue
+		}
+		content, _ := io.ReadAll(rc)
+		_ = rc.Close()
+		text := strings.TrimSpace(stripXMLToText(content))
+		if text == "" {
+			continue
+		}
+		slideNum++
+		fmt.Fprintf(&sb, "--- Slide %d ---\n%s\n\n", slideNum, text)
+	}
+	if slideNum == 0 {
+		return "", fmt.Errorf("nessuna slide trovata nel PPTX")
+	}
+	return sb.String(), nil
 }
 
 // extractXlsxText reads sheet XML files and shared strings from an XLSX archive.
