@@ -44,21 +44,21 @@ func compressPDFWithGhostscript(data []byte) []byte {
 	if err != nil {
 		return nil
 	}
-	defer os.Remove(inFile.Name())
+	defer func() { _ = os.Remove(inFile.Name()) }()
 
 	outFile, err := os.CreateTemp("", "pdf-out-*.pdf")
 	if err != nil {
-		inFile.Close()
+		_ = inFile.Close()
 		return nil
 	}
-	defer os.Remove(outFile.Name())
-	outFile.Close()
+	defer func() { _ = os.Remove(outFile.Name()) }()
+	_ = outFile.Close()
 
 	if _, err := inFile.Write(data); err != nil {
-		inFile.Close()
+		_ = inFile.Close()
 		return nil
 	}
-	inFile.Close()
+	_ = inFile.Close()
 
 	cmd := exec.Command(gsPath,
 		"-sDEVICE=pdfwrite",
