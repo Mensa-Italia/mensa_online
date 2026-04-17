@@ -42,7 +42,7 @@ func MembersSnapshotsHandler(e *core.RequestEvent) error {
 		History []SnapshotInfoElem `json:"history"`
 	}
 
-	var snapshotInfo SnapshotInfo = SnapshotInfo{
+	snapshotInfo := SnapshotInfo{
 		History: []SnapshotInfoElem{},
 	}
 
@@ -96,7 +96,7 @@ func MemberSnapshotByKeyHandler(e *core.RequestEvent) error {
 	}
 
 	var jsonData interface{}
-	err = json.Unmarshal([]byte(filteredContent), &jsonData)
+	_ = json.Unmarshal([]byte(filteredContent), &jsonData)
 
 	return e.JSON(200, jsonData)
 }

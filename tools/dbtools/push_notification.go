@@ -42,7 +42,7 @@ func (p PushNotification) GetTrNamedParamsAsString() string {
 func SendPushNotificationToUser(app core.App, notificationData PushNotification, store ...bool) {
 	//userCollection, _ := app.FindCollectionByNameOrId("users")
 
-	if store == nil || len(store) == 0 || store[0] { // if store is not provided or is true
+	if len(store) == 0 || store[0] { // if store is not provided or is true
 		translationTitle := tolgee.GetTranslation(notificationData.TrTag+".title", "it", notificationData.TrNamedParams)
 		translationBody := tolgee.GetTranslation(notificationData.TrTag+".body", "it", notificationData.TrNamedParams)
 		collectionNotifications, _ := app.FindCollectionByNameOrId("user_notifications")
@@ -149,7 +149,7 @@ func sendNotification(tokens []string, title, body string, data ...map[string]st
 func getDecodedFireBaseKey() ([]byte, error) {
 	fireBaseAuthKey := env.GetFireBaseAuthKey()
 	if fireBaseAuthKey == "" {
-		return nil, errors.New("Firebase Auth Key non configurata")
+		return nil, errors.New("firebase auth key non configurata")
 	}
 
 	decodedKey, err := base64.StdEncoding.DecodeString(fireBaseAuthKey)

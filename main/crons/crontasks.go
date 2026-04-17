@@ -1,7 +1,6 @@
 package crons
 
 import (
-	"fmt"
 	"mensadb/importers"
 	"mensadb/tolgee"
 	"mensadb/tools/dbtools"
@@ -19,9 +18,7 @@ func CronTasks(app core.App) {
 	app.Cron().MustAdd("Update states managers powers", "1 3 * * *", func() {
 		importers.GetFullMailList()
 		dbtools.RefreshUserStatesManagersPowers(app)
-		app.Logger().Info(
-			fmt.Sprintf("[CRON] Updated the powers of all the users based on the segretari list"),
-		)
+		app.Logger().Info("[CRON] Updated the powers of all the users based on the segretari list")
 	})
 
 	app.Cron().MustAdd("Reload Tolgee Translations", "1 3 * * *", func() {

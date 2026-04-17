@@ -1,7 +1,6 @@
 package nameorder
 
 import (
-	"fmt"
 	"sort"
 	"strings"
 	"unicode"
@@ -88,22 +87,3 @@ func sanitizeString(s string) string {
 	return b.String()
 }
 
-func main() {
-	// Test Case 1
-	fullName1 := "Marrè Brunenghi Ludovico"
-	email1 := "ludovico.marrebrunenghi@mensa.it"
-	res1 := OrderTokensByEmailLocalPart(fullName1, email1)
-	fmt.Printf("INPUT: %q, %q\nOUTPUT: %q\n\n", fullName1, email1, res1)
-
-	// Test Case 2
-	fullName2 := "Marrè Brunenghi Ludovico"
-	email2 := "ludovicomarrebrunenghi@mensa.it"
-	res2 := OrderTokensByEmailLocalPart(fullName2, email2)
-	fmt.Printf("INPUT: %q, %q\nOUTPUT: %q\n\n", fullName2, email2, res2)
-
-	// Test Case 3 (con separatori misti)
-	fullName3 := "Marrè Brunenghi Ludovico"
-	email3 := "ludovicomarre.brunenghi@mensa.it"
-	res3 := OrderTokensByEmailLocalPart(fullName3, email3)
-	fmt.Printf("INPUT: %q, %q\nOUTPUT: %q\n\n", fullName3, email3, res3)
-}

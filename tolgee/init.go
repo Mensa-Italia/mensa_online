@@ -14,13 +14,12 @@ type Language struct {
 	Tranlsations map[string]string
 }
 
-var ak = ""
 var translations map[string]Language
 var baseLanguage = "en"
 
 func Load(apikey string, app core.App) {
 	log.Println("Loading Tolgee translations")
-	ak = apikey
+	_ = apikey
 	_ = GetLanguages(app)
 	log.Println("Tolgee translations loaded total languages: ", len(translations))
 }
