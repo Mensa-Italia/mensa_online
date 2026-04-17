@@ -49,18 +49,21 @@ func prepareFile(client *genai.Client, name string, data []byte) *genai.File {
 		uploadData = converted
 		uploadMIME = convertedMIME
 		log.Printf("Text extraction succeeded for %s (%d bytes as %s)", name, len(uploadData), uploadMIME)
-	}
 
-	if len(uploadData) > maxUploadBytes {
-		log.Printf("Extracted text too large (%d bytes) for %s — reducing via per-section summarization", len(uploadData), name)
-		reduced, reduceErr := reduceToSummary(client, data, detectedMIME, uploadData, name)
-		if reduceErr != nil {
-			log.Printf("Section summarization failed for %s: %v — skipping", name, reduceErr)
-			return nil
+		// Il check dimensione si applica solo al testo estratto da formati non supportati.
+		// I formati nativi (PDF, immagini…) vengono caricati direttamente via Files API
+		// che accetta fino a 2 GB; il limite di token riguarda il contenuto, non il file.
+		if len(uploadData) > maxUploadBytes {
+			log.Printf("Extracted text too large (%d bytes) for %s — reducing via per-section summarization", len(uploadData), name)
+			reduced, reduceErr := reduceToSummary(client, data, detectedMIME, uploadData, name)
+			if reduceErr != nil {
+				log.Printf("Section summarization failed for %s: %v — skipping", name, reduceErr)
+				return nil
+			}
+			uploadData = reduced
+			uploadMIME = "text/plain"
+			log.Printf("Reduced to %d bytes for %s", len(uploadData), name)
 		}
-		uploadData = reduced
-		uploadMIME = "text/plain"
-		log.Printf("Reduced to %d bytes for %s", len(uploadData), name)
 	}
 
 	options := genai.UploadFileConfig{
