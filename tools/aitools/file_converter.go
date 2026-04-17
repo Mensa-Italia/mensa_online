@@ -13,6 +13,12 @@ import (
 	"github.com/nwaples/rardecode/v2"
 )
 
+// archiveEntry holds the extracted text for a single file inside an archive.
+type archiveEntry struct {
+	Name string
+	Text string
+}
+
 // geminiSupportedMIMETypes lists MIME types accepted by the Gemini Files API.
 var geminiSupportedMIMETypes = map[string]bool{
 	"application/pdf":        true,
@@ -364,4 +370,61 @@ func isPrintableUTF8(data []byte) bool {
 		}
 	}
 	return true
+}
+
+// extractZipEntries returns one archiveEntry per non-directory file in the ZIP.
+func extractZipEntries(data []byte) ([]archiveEntry, error) {
+	r, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		return nil, err
+	}
+	var entries []archiveEntry
+	for _, f := range r.File {
+		if f.FileInfo().IsDir() {
+			continue
+		}
+		rc, err := f.Open()
+		if err != nil {
+			continue
+		}
+		content, _ := io.ReadAll(rc)
+		_ = rc.Close()
+		text := extractReadableContent(content, f.Name)
+		if strings.TrimSpace(text) == "" || strings.HasPrefix(text, "[file binario:") {
+			continue
+		}
+		entries = append(entries, archiveEntry{Name: f.Name, Text: text})
+	}
+	return entries, nil
+}
+
+// extractRarEntries returns one archiveEntry per non-directory file in the RAR.
+func extractRarEntries(data []byte) ([]archiveEntry, error) {
+	r, err := rardecode.NewReader(bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	var entries []archiveEntry
+	for {
+		header, err := r.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			break
+		}
+		if header.IsDir {
+			continue
+		}
+		content, err := io.ReadAll(r)
+		if err != nil {
+			continue
+		}
+		text := extractReadableContent(content, header.Name)
+		if strings.TrimSpace(text) == "" || strings.HasPrefix(text, "[file binario:") {
+			continue
+		}
+		entries = append(entries, archiveEntry{Name: header.Name, Text: text})
+	}
+	return entries, nil
 }
