@@ -17,6 +17,10 @@ func ResumeDocument(app core.App, reader *filesystem.File) string {
 	client := GetAIClient()
 
 	usageFile := UploadFileToAIClient(client, reader)
+	if usageFile == nil {
+		log.Printf("ResumeDocument: upload failed for %s, aborting", reader.Name)
+		return ""
+	}
 
 	treeOfDocumentsIds, err := app.FindRecordsByIds("documents", FindTree(app, reader).RetrieveIDs())
 	if err != nil {
