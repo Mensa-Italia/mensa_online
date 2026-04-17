@@ -27,7 +27,7 @@ func RetryMissingDocumentsResume(app core.App) {
 		log.Println("[RetryResume] Errore nell'apertura del filesystem:", err)
 		return
 	}
-	defer fsys.Close()
+	defer func() { _ = fsys.Close() }()
 
 	found := 0
 	success := 0

@@ -58,8 +58,5 @@ func ValidateSignature(payload string, signature string, publicKey string) bool 
 		return false
 	}
 	err = rsa.VerifyPKCS1v15(pub, 0, []byte(payload), sig)
-	if err != nil {
-		return false
-	}
-	return true
+	return err == nil
 }

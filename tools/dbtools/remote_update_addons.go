@@ -70,7 +70,7 @@ func RemoteUpdateAddons(app core.App) {
 				}
 
 				// Salva il record aggiornato nel database
-				err = app.Save(record)
+				_ = app.Save(record)
 			} else {
 				// Se l'ID dell'addon non corrisponde, imposta l'addon come non valido
 				record.Set("is_ready", false)

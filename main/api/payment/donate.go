@@ -24,7 +24,7 @@ func donateHandler(e *core.RequestEvent) error {
 		return e.String(400, "Invalid amount")
 	}
 
-	_, paymentIntent, err := createPayment(e.App, authUser.Id, int(intAmount))
+	_, paymentIntent, _ := createPayment(e.App, authUser.Id, int(intAmount))
 
 	return e.JSON(200, paymentIntent)
 }

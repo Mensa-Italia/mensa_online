@@ -46,7 +46,7 @@ func CheckKey(app core.App, key, requiredPerm string) bool {
 	}
 	permsOnRecord := record[0].GetStringSlice("permissions")
 	for _, perm := range permsOnRecord {
-		if strings.ToUpper(perm) == strings.ToUpper(requiredPerm) {
+		if strings.EqualFold(perm, requiredPerm) {
 			return true
 		}
 	}

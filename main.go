@@ -1,9 +1,9 @@
 package main
 
 import (
-	"io/ioutil"
 	"log"
 	"mensadb/tools/aipower"
+	"os"
 )
 
 func main() {
@@ -21,7 +21,7 @@ func main() {
 		log.Fatalf("Errore: %v", err)
 	}
 
-	if err := ioutil.WriteFile("output.png", imgBytes, 0644); err != nil {
+	if err := os.WriteFile("output.png", imgBytes, 0644); err != nil {
 		log.Fatalf("Impossibile salvare: %v", err)
 	}
 }

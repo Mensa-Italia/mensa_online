@@ -77,7 +77,7 @@ func GenQrCode(content string) *bytes.Buffer {
 	stampImage := bytes.NewBuffer(nil)
 	wr := nopCloser{Writer: stampImage}
 	w2 := standard.NewWithWriter(wr, options...)
-	defer w2.Close()
+	defer func() { _ = w2.Close() }()
 	if err = qrc.Save(w2); err != nil {
 		log.Printf("Errore nel salvataggio del QRCode: %v", err)
 		return nil

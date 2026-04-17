@@ -70,11 +70,3 @@ func payloadToBase64(payload string) string {
 	return base64.RawURLEncoding.EncodeToString([]byte(payload))
 }
 
-func payloadFromBase64(payload string) string {
-	decoded, err := base64.RawURLEncoding.DecodeString(payload)
-	if err != nil {
-		return ""
-	}
-
-	return string(decoded)
-}

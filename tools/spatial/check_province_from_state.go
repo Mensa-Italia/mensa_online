@@ -14,7 +14,7 @@ func CheckProvinceFromState(state string) string {
 	province := gjson.ParseBytes(dataRead)
 
 	for _, item := range province.Array() {
-		if strings.ToLower(item.Get("nome").String()) == strings.ToLower(state) {
+		if strings.EqualFold(item.Get("nome").String(), state) {
 			return item.Get("regione").String()
 		}
 	}

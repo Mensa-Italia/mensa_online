@@ -131,14 +131,14 @@ func ClaimsFromContext(ctx context.Context) (*Claims, bool) {
 func extractBearer(r *http.Request) (string, error) {
 	h := r.Header.Get("Authorization")
 	if h == "" {
-		return "", fmt.Errorf("Authorization header missing")
+		return "", fmt.Errorf("authorization header missing")
 	}
 	if !strings.HasPrefix(h, "Bearer ") {
-		return "", fmt.Errorf("Authorization header must use Bearer scheme")
+		return "", fmt.Errorf("authorization header must use Bearer scheme")
 	}
 	tok := strings.TrimPrefix(h, "Bearer ")
 	if tok == "" {
-		return "", fmt.Errorf("Bearer token is empty")
+		return "", fmt.Errorf("bearer token is empty")
 	}
 	return tok, nil
 }

@@ -27,7 +27,7 @@ func externalAppRequireConfirmation(e *core.RequestEvent) error {
 		return apis.NewBadRequestError("Invalid", err)
 	}
 
-	if strings.ToLower(user.GetString("email")) != strings.ToLower(userEmail) {
+	if !strings.EqualFold(user.GetString("email"), userEmail) {
 		return apis.NewBadRequestError("Invalid", nil)
 	}
 

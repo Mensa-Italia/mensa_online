@@ -88,7 +88,7 @@ func RemoteRetrieveMembersFromArea32(app core.App) {
 			}
 		} else {
 			userInside, err := app.FindRecordById("users", member)
-			if err == nil && userInside.GetBool("is_membership_active") == false {
+			if err == nil && !userInside.GetBool("is_membership_active") {
 				userInside.Set("is_membership_active", true)
 				_ = app.Save(userInside)
 			}

@@ -18,7 +18,7 @@ func createBoutiquePaymentHandler(e *core.RequestEvent) error {
 		return e.String(400, "Invalid products")
 	}
 
-	collectionBoutique, err := e.App.FindCollectionByNameOrId("boutique")
+	collectionBoutique, _ := e.App.FindCollectionByNameOrId("boutique")
 	total := 0
 	for _, product := range products {
 		prod, err := e.App.FindRecordById(collectionBoutique, product)

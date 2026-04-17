@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"mensadb/tools/env"
 	"mensadb/tools/nameorder"
-	"regexp"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -33,18 +32,6 @@ func init() {
 		slog.Error("could not create api client", "error", err)
 		return
 	}
-}
-
-var nonLetters = regexp.MustCompile(`[^\p{L}\p{M}\s'-]+`) // lascia lettere unicode + spazi + ' -
-
-func tokenizeFullName(s string) []string {
-	s = strings.TrimSpace(s)
-	s = nonLetters.ReplaceAllString(s, " ")
-	s = strings.Join(strings.Fields(s), " ")
-	if s == "" {
-		return nil
-	}
-	return strings.Split(s, " ")
 }
 
 func IdentifyName(name string, email string) types.PIIResult {
@@ -139,9 +126,10 @@ func CreateUser(name string, aliasMail string, originalMail string, rawMetadata 
 
 	nameDeepInfos := IdentifyName(name, aliasMail)
 	gender := user.Gender_GENDER_MALE
-	if nameDeepInfos.Details.Gender == "Female" {
+	switch nameDeepInfos.Details.Gender {
+	case "Female":
 		gender = user.Gender_GENDER_FEMALE
-	} else if nameDeepInfos.Details.Gender == "Male" {
+	case "Male":
 		gender = user.Gender_GENDER_MALE
 	}
 

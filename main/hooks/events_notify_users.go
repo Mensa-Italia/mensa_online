@@ -16,15 +16,6 @@ import (
 	"github.com/pocketbase/pocketbase/tools/mailer"
 )
 
-// nopCloser è una struttura che implementa l'interfaccia io.Writer
-// e fornisce un metodo Close() che non fa nulla, utile per scrivere
-// dati in un buffer senza dover gestire la chiusura esplicita.
-type nopCloser struct {
-	io.Writer
-}
-
-func (nopCloser) Close() error { return nil }
-
 // EventsNotifyUsersAsync avvia due operazioni asincrone:
 // 1. Notifica gli utenti riguardo all'evento.
 // 2. Crea e salva un timbro per l'evento.
@@ -114,10 +105,10 @@ func createEventStamp(app core.App, record *core.Record) []byte {
 	key := record.BaseFilesPath() + "/" + record.GetString("image")
 
 	fsys, _ := app.NewFilesystem()
-	defer fsys.Close()
+	defer func() { _ = fsys.Close() }()
 
 	blob, _ := fsys.GetReader(key)
-	defer blob.Close()
+	defer func() { _ = blob.Close() }()
 
 	// Preparazione del messaggio email da inviare
 	message := &mailer.Message{
