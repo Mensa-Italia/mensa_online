@@ -39,6 +39,10 @@ func FindTree(app core.App, file *filesystem.File) DocumentsCitationList {
 	client := GetAIClient()
 
 	uploaded := UploadFileToAIClient(client, file)
+	if uploaded == nil {
+		log.Printf("FindTree: upload failed for %s, skipping citation extraction", file.Name)
+		return DocumentsCitationList{}
+	}
 
 	promptTemp := strings.ReplaceAll(provaPrompt, "{nameFile}", file.Name)
 	promptTemp = strings.ReplaceAll(promptTemp, "{docs}", retrieveAllDocumentsList(app))
