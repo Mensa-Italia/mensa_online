@@ -10,9 +10,32 @@ import (
 	"time"
 
 	"github.com/gabriel-vasile/mimetype"
+	pdfcpuapi "github.com/pdfcpu/pdfcpu/pkg/api"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
 	"google.golang.org/genai"
 )
+
+// largePDFThreshold è la soglia oltre la quale si tenta la compressione del PDF prima
+// di inviarlo a Gemini (10 MB).
+const largePDFThreshold = 10_000_000
+
+// compressPDF ottimizza un PDF con pdfcpu riducendone le dimensioni.
+// Restituisce i byte originali se la compressione fallisce o non porta vantaggi.
+func compressPDF(data []byte) []byte {
+	in := bytes.NewReader(data)
+	var out bytes.Buffer
+	if err := pdfcpuapi.Optimize(in, &out, nil); err != nil {
+		log.Printf("compressPDF: ottimizzazione fallita (%v) — uso originale", err)
+		return data
+	}
+	compressed := out.Bytes()
+	if len(compressed) >= len(data) {
+		return data
+	}
+	log.Printf("compressPDF: %d → %d byte (-%d%%)", len(data), len(compressed),
+		100*(len(data)-len(compressed))/len(data))
+	return compressed
+}
 
 // maxUploadBytes is the safe upper bound for text sent to Gemini in a single call.
 // Gemini's hard limit is 1 048 576 tokens; at ~4 chars/token this is ~4 MB,
@@ -38,6 +61,12 @@ func prepareFile(client *genai.Client, name string, data []byte) *genai.File {
 
 	uploadData := data
 	uploadMIME := detectedMIME
+
+	// Comprimi i PDF grandi prima di inviarli a Gemini.
+	if baseMIME(detectedMIME) == "application/pdf" && len(uploadData) > largePDFThreshold {
+		log.Printf("PDF grande (%d byte) per %s — tentativo compressione", len(uploadData), name)
+		uploadData = compressPDF(uploadData)
+	}
 
 	if !geminiSupportedMIMETypes[baseMIME(detectedMIME)] {
 		log.Printf("MIME type %q not supported by Gemini for %s — attempting text extraction", detectedMIME, name)
