@@ -29,7 +29,7 @@ func ResumeDocument(app core.App, reader *filesystem.File) string {
 	}
 
 	fsys, _ := app.NewFilesystem()
-	defer fsys.Close()
+	defer func() { _ = fsys.Close() }()
 
 	var listOfCitatedFiles []*genai.Part
 	for _, record := range treeOfDocumentsIds {

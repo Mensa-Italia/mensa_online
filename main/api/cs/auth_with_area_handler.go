@@ -2,13 +2,10 @@ package cs
 
 import (
 	"context"
-	"crypto"
-	"encoding/hex"
 	"errors"
 	"log"
 	"mensadb/area32"
 	"mensadb/importers"
-	"mensadb/tools/env"
 	"mensadb/tools/generic"
 	"mensadb/tools/payment"
 	"mensadb/tools/zauth"
@@ -16,7 +13,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/google/uuid"
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
@@ -33,7 +29,7 @@ func AuthWithAreaHandler(e *core.RequestEvent) error {
 	// Inizializza l'API Area32 per autenticare l'utente e recuperare i suoi dati principali
 	scraperApi := area32.NewAPI()
 	areaUser, err := scraperApi.DoLoginAndRetrieveMain(email, password)
-	if err != nil && errors.Is(err, area32.UNABLE_TO_CONNECT) {
+	if err != nil && errors.Is(err, area32.ErrUnableToConnect) {
 		byUser, err := e.App.FindFirstRecordByFilter("users", "email={:email} ", dbx.Params{"email": email})
 		if err != nil || !byUser.ValidatePassword(password) || byUser == nil {
 			return apis.NewApiError(http.StatusServiceUnavailable, "Unable to connect to area32", err)
@@ -146,13 +142,6 @@ func AuthWithAreaHandler(e *core.RequestEvent) error {
 		}()
 		return apis.RecordAuthResponse(e, byUser, "password", nil)
 	}
-}
-
-// Genera una password sicura basata sull'ID utente e altri parametri
-func generatePassword(id string) string {
-	pass := crypto.SHA256.New()
-	pass.Write([]byte(id + uuid.NewMD5(uuid.MustParse(env.GetPasswordUUID()), []byte(id)).String() + env.GetPasswordSalt()))
-	return hex.EncodeToString(pass.Sum(nil))
 }
 
 // Rimuove un elemento specifico da una slice di stringhe

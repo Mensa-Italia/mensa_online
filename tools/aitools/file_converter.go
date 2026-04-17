@@ -108,20 +108,20 @@ func extractZipText(data []byte, zipName string) (string, error) {
 	}
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Archivio ZIP: %s\n\n", zipName))
+	fmt.Fprintf(&sb, "Archivio ZIP: %s\n\n", zipName)
 
 	for _, f := range r.File {
 		if f.FileInfo().IsDir() {
 			continue
 		}
-		sb.WriteString(fmt.Sprintf("--- %s ---\n", f.Name))
+		fmt.Fprintf(&sb, "--- %s ---\n", f.Name)
 		rc, err := f.Open()
 		if err != nil {
 			sb.WriteString("[errore apertura file]\n")
 			continue
 		}
 		content, err := io.ReadAll(rc)
-		rc.Close()
+		_ = rc.Close()
 		if err != nil {
 			sb.WriteString("[errore lettura file]\n")
 			continue
@@ -177,7 +177,7 @@ func extractDocxText(data []byte) (string, error) {
 			return "", err
 		}
 		content, err := io.ReadAll(rc)
-		rc.Close()
+		_ = rc.Close()
 		if err != nil {
 			return "", err
 		}
@@ -200,7 +200,7 @@ func extractXlsxText(data []byte) (string, error) {
 		}
 		rc, _ := f.Open()
 		content, _ := io.ReadAll(rc)
-		rc.Close()
+		_ = rc.Close()
 		sharedStrings = parseXLSXSharedStrings(content)
 		break
 	}
@@ -210,13 +210,13 @@ func extractXlsxText(data []byte) (string, error) {
 		if !strings.HasPrefix(f.Name, "xl/worksheets/sheet") || !strings.HasSuffix(f.Name, ".xml") {
 			continue
 		}
-		sb.WriteString(fmt.Sprintf("=== Foglio: %s ===\n", f.Name))
+		fmt.Fprintf(&sb, "=== Foglio: %s ===\n", f.Name)
 		rc, err := f.Open()
 		if err != nil {
 			continue
 		}
 		content, _ := io.ReadAll(rc)
-		rc.Close()
+		_ = rc.Close()
 		sb.WriteString(parseXLSXSheet(content, sharedStrings))
 		sb.WriteString("\n")
 	}
@@ -272,7 +272,7 @@ func parseXLSXSheet(data []byte, sharedStrings []string) string {
 			val := cell.V
 			if cell.T == "s" {
 				idx := 0
-				fmt.Sscanf(val, "%d", &idx)
+				_, _ = fmt.Sscanf(val, "%d", &idx)
 				if idx < len(sharedStrings) {
 					val = sharedStrings[idx]
 				}
@@ -302,7 +302,7 @@ func extractRarText(data []byte, rarName string) (string, error) {
 	}
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Archivio RAR: %s\n\n", rarName))
+	fmt.Fprintf(&sb, "Archivio RAR: %s\n\n", rarName)
 
 	for {
 		header, err := r.Next()
@@ -315,7 +315,7 @@ func extractRarText(data []byte, rarName string) (string, error) {
 		if header.IsDir {
 			continue
 		}
-		sb.WriteString(fmt.Sprintf("--- %s ---\n", header.Name))
+		fmt.Fprintf(&sb, "--- %s ---\n", header.Name)
 		content, err := io.ReadAll(r)
 		if err != nil {
 			sb.WriteString("[errore lettura file]\n")
@@ -331,7 +331,7 @@ func extractRarText(data []byte, rarName string) (string, error) {
 // extractOLEPrintableText extracts legible runs of printable ASCII from old binary Office formats.
 func extractOLEPrintableText(data []byte, name string) string {
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Documento: %s (formato binario OLE/legacy)\n\n", name))
+	fmt.Fprintf(&sb, "Documento: %s (formato binario OLE/legacy)\n\n", name)
 	sb.WriteString(extractPrintableText(data))
 	return sb.String()
 }

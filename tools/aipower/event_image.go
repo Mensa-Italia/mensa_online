@@ -5,57 +5,14 @@ import (
 	"context"
 	"fmt"
 	"github.com/fogleman/gg"
-	"github.com/go-resty/resty/v2"
-	"github.com/hbagdi/go-unsplash/unsplash"
 	"github.com/tidwall/gjson"
-	"golang.org/x/oauth2"
 	"google.golang.org/genai"
 	"image"
 	"image/png"
 	"log"
 	"math"
-	"math/rand/v2"
 	"mensadb/tools/env"
 )
-
-func _generateEventImagePromptUplashQuery(prompt string) (string, error) {
-	ctx := context.Background()
-	client, _ := genai.NewClient(ctx, &genai.ClientConfig{
-		APIKey:  env.GetGeminiKey(),
-		Backend: genai.BackendGeminiAPI,
-	})
-
-	temp := float32(1)
-	topP := float32(0.95)
-	topK := float32(40.0)
-	maxOutputTokens := int32(8192)
-
-	config := &genai.GenerateContentConfig{
-		ResponseMIMEType: "application/json",
-		Temperature:      &temp,
-		TopP:             &topP,
-		TopK:             &topK,
-		MaxOutputTokens:  maxOutputTokens,
-		ResponseSchema: &genai.Schema{
-			Type: genai.TypeObject,
-			Properties: map[string]*genai.Schema{
-				"query": &genai.Schema{
-					Type: genai.TypeString,
-				},
-			},
-		},
-	}
-	result, _ := client.Models.GenerateContent(
-		ctx,
-		"gemini-2.0-flash",
-		genai.Text(fmt.Sprintf("-----\n%s\n\n----\n\nMake a search query for unsplash. You should use just a bunch words.", prompt)),
-		config,
-	)
-	data := gjson.Parse(result.Text())
-	promptToUse := data.Get("query").String()
-	log.Println("Generated prompt for image search:", promptToUse)
-	return promptToUse, nil
-}
 
 func _generateEventImageGenerationPrompt(prompt string) (string, error) {
 
@@ -102,33 +59,6 @@ func _generateEventImageGenerationPrompt(prompt string) (string, error) {
 	log.Println("Generated prompt for image generation:", promptToUse)
 
 	return promptToUse, nil
-}
-
-func _generateBackgroundImage(prompt string) ([]byte, error) {
-
-	prompt, err := _generateEventImagePromptUplashQuery(prompt)
-	ts := oauth2.StaticTokenSource(
-		&oauth2.Token{AccessToken: "Client-ID " + env.GetUnsplashKey()},
-	)
-	client := oauth2.NewClient(oauth2.NoContext, ts)
-	//use the http.Client to instantiate unsplash
-	unsplashClient := unsplash.New(client)
-	// requests can be now made to the API
-	searchedPhoto, _, err := unsplashClient.Search.Photos(&unsplash.SearchOpt{
-		Query:   prompt,
-		PerPage: 50,
-	})
-	if err != nil || searchedPhoto == nil || searchedPhoto.Results == nil || len(*searchedPhoto.Results) == 0 {
-		return nil, fmt.Errorf("error searching for photos: %w", err)
-	}
-
-	randomIndex := 0 // You can randomize this if you want
-	if len(*searchedPhoto.Results) > 1 {
-		randomIndex = rand.IntN(len(*searchedPhoto.Results))
-	}
-
-	downloadPhoto, _ := resty.New().R().Get((*(searchedPhoto.Results))[randomIndex].Urls.Raw.String())
-	return downloadPhoto.Body(), nil
 }
 
 func _generateBackgroundImageAI(prompt string) ([]byte, error) {

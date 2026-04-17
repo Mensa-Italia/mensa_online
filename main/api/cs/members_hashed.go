@@ -51,7 +51,7 @@ func MembersHashedHandler(e *core.RequestEvent) error {
 
 	// Prepariamo la risposta come array di map generiche.
 	// Usare `any` permette di costruire dinamicamente oggetti e sotto-oggetti.
-	var finalData []map[string]any = make([]map[string]any, 0)
+	finalData := make([]map[string]any, 0)
 
 	for _, record := range records {
 		// Convertiamo il record PocketBase in JSON per poterlo attraversare in modo generico.
