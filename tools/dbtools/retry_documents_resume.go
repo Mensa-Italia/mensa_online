@@ -3,6 +3,7 @@ package dbtools
 import (
 	"log"
 	"mensadb/tools/aitools"
+	"sort"
 
 	"github.com/pocketbase/pocketbase/core"
 )
@@ -15,6 +16,11 @@ func RetryMissingDocumentsResume(app core.App) {
 		log.Println("[RetryResume] Errore nel recupero dei documenti:", err)
 		return
 	}
+
+	// Ordina dal più recente al più vecchio — i documenti senza riassunto più recenti sono prioritari
+	sort.Slice(documents, func(i, j int) bool {
+		return documents[i].GetDateTime("created").Time().After(documents[j].GetDateTime("created").Time())
+	})
 
 	fsys, err := app.NewFilesystem()
 	if err != nil {
