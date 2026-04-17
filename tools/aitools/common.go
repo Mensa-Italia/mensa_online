@@ -114,7 +114,12 @@ func summarizeArchiveEntries(client *genai.Client, entries []archiveEntry, archi
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "Contenuto dell'archivio %s (riassunto per file):\n\n", archiveName)
 	for _, entry := range entries {
-		summary := summarizeSection(client, entry.Text, entry.Name)
+		var summary string
+		if len(entry.Text) > maxUploadBytes {
+			summary = summarizeInChunks(client, entry.Text, entry.Name, 1)
+		} else {
+			summary = summarizeSection(client, entry.Text, entry.Name)
+		}
 		if summary != "" {
 			fmt.Fprintf(&sb, "### %s\n%s\n\n", entry.Name, summary)
 		}
