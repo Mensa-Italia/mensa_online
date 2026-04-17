@@ -49,7 +49,7 @@ func CronTasks(app core.App) {
 		dbtools.CheckUserStripeAccount(app)
 	})
 
-	app.Cron().MustAdd("Retry missing documents resume", "0 0 31 2 *", func() {
+	app.Cron().MustAdd("Retry missing documents resume", "0 3 1 * *", func() {
 		dbtools.RetryMissingDocumentsResume(app)
 	})
 
