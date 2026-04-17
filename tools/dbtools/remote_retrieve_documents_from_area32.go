@@ -45,27 +45,33 @@ func RemoteRetrieveDocumentsFromArea32(app core.App) {
 	// Recupera i nuovi documenti da Area32 che non sono già nel database
 	newDocuments, _ := scraperApi.GetAllDocuments(app, documentsUids)
 	idOfDocument := ""
-	for _, document := range newDocuments {
-		idOfDocument = UpdateDocuments(app, document) // Aggiorna i documenti in modo concorrente
+	savedCount := 0
+	savedIdx := 0
+	for i, document := range newDocuments {
+		if id := UpdateDocuments(app, document); id != "" {
+			idOfDocument = id
+			savedIdx = i
+			savedCount++
+		}
 	}
 
-	// Notifica gli utenti se sono stati aggiunti nuovi documenti
+	// Notifica gli utenti solo per i documenti effettivamente salvati nel DB
 	if GetInternalConfig(app, "notify_documents_new") == "true" {
-		if len(newDocuments) > 1 {
+		if savedCount > 1 {
 			SendPushNotificationToAllUsers(app, PushNotification{
 				TrTag: "push_notification.new_documents_available",
 				TrNamedParams: map[string]string{
-					"count": fmt.Sprintf("%d", len(newDocuments)),
+					"count": fmt.Sprintf("%d", savedCount),
 				},
 				Data: map[string]string{
 					"type": "multiple_documents",
 				},
 			})
-		} else if len(newDocuments) == 1 {
+		} else if savedCount == 1 {
 			SendPushNotificationToAllUsers(app, PushNotification{
 				TrTag: "push_notification.new_document_available",
 				TrNamedParams: map[string]string{
-					"name": newDocuments[0]["description"].(string),
+					"name": newDocuments[savedIdx]["description"].(string),
 				},
 				Data: map[string]string{
 					"type":        "single_document",
@@ -77,11 +83,12 @@ func RemoteRetrieveDocumentsFromArea32(app core.App) {
 
 	// Log dell'operazione completata
 	app.Logger().Info(
-		fmt.Sprintf("[CRON] Downloaded %d new documents from Area32", len(newDocuments)),
+		fmt.Sprintf("[CRON] Found %d new documents from Area32, saved %d", len(newDocuments), savedCount),
 	)
 }
 
-// UpdateDocuments aggiorna il database con un nuovo documento recuperato da Area32
+// UpdateDocuments aggiorna il database con un nuovo documento recuperato da Area32.
+// Ritorna l'ID del record salvato, o "" se il salvataggio fallisce.
 func UpdateDocuments(app core.App, document map[string]any) string {
 	collection, err := app.FindCollectionByNameOrId("documents")
 	if err != nil {
@@ -90,6 +97,13 @@ func UpdateDocuments(app core.App, document map[string]any) string {
 
 	// Genera un UID univoco per il documento basato sul link
 	uid := uuid.NewMD5(uuid.MustParse(env.GetDocsUUID()), []byte(document["link"].(string))).String()
+
+	// Evita duplicati: se esiste già un documento con questo UID, non crearne un altro
+	existing, _ := app.FindFirstRecordByData("documents", "uid", uid)
+	if existing != nil {
+		app.Logger().Warn(fmt.Sprintf("[UpdateDocuments] documento con uid %s già presente (id=%s), skip", uid, existing.Id))
+		return ""
+	}
 
 	// Crea un nuovo record nella collezione "documents"
 	newDocument := core.NewRecord(collection)
@@ -107,19 +121,22 @@ func UpdateDocuments(app core.App, document map[string]any) string {
 	newDocument.Set("uploaded_by", "5031")
 
 	// Salva il nuovo documento nel database
-	_ = app.Save(newDocument)
+	if err := app.Save(newDocument); err != nil {
+		app.Logger().Error(fmt.Sprintf("[UpdateDocuments] errore salvataggio documento uid=%s nome=%q: %v", uid, document["description"], err))
+		return ""
+	}
 
 	if document["resume"] != nil && document["resume"].(string) != "" {
-		// Crea un nuovo record nella collezione "resumes"
 		resumeCollection, _ := app.FindCollectionByNameOrId("documents_elaborated")
 		newResume := core.NewRecord(resumeCollection)
 		newResume.Set("document", newDocument.Id)
 		newResume.Set("ia_resume", document["resume"].(string))
-		_ = app.Save(newResume)
-
-		// Aggiorna il documento con il riferimento al resume
-		newDocument.Set("elaborated", newResume.Id)
-		_ = app.Save(newDocument)
+		if err := app.Save(newResume); err != nil {
+			app.Logger().Error(fmt.Sprintf("[UpdateDocuments] errore salvataggio resume per documento %s: %v", newDocument.Id, err))
+		} else {
+			newDocument.Set("elaborated", newResume.Id)
+			_ = app.Save(newDocument)
+		}
 	}
 
 	return newDocument.Id
