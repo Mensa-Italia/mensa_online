@@ -2,6 +2,7 @@
 
 [![Lint](https://github.com/Mensa-Italia/mensa_online/actions/workflows/lint.yaml/badge.svg)](https://github.com/Mensa-Italia/mensa_online/actions/workflows/lint.yaml)
 [![Security](https://github.com/Mensa-Italia/mensa_online/actions/workflows/security.yaml/badge.svg)](https://github.com/Mensa-Italia/mensa_online/actions/workflows/security.yaml)
+[![Gitleaks](https://github.com/Mensa-Italia/mensa_online/actions/workflows/gitleaks.yaml/badge.svg)](https://github.com/Mensa-Italia/mensa_online/actions/workflows/gitleaks.yaml)
 [![Build](https://github.com/Mensa-Italia/mensa_online/actions/workflows/main.yaml/badge.svg)](https://github.com/Mensa-Italia/mensa_online/actions/workflows/main.yaml)
 ![Go](https://img.shields.io/badge/Go-1.25.9-00ADD8?style=flat-square&logo=go&logoColor=white)
 ![PocketBase](https://img.shields.io/badge/PocketBase-0.35-B8DBE4?style=flat-square)
