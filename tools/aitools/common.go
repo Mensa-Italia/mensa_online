@@ -99,13 +99,17 @@ func reduceToSummary(client *genai.Client, originalData []byte, mimeType string,
 		return []byte(result), nil
 
 	default:
-		result := summarizeInChunks(client, string(extractedText), name)
+		result := summarizeInChunks(client, string(extractedText), name, 1)
 		return []byte(result), nil
 	}
 }
 
+// maxSummarizeDepth evita loop infiniti nel caso i riassunti siano ancora troppo grandi.
+const maxSummarizeDepth = 4
+
 // summarizeArchiveEntries riassume ogni voce di un archivio con Gemini
-// e restituisce i riassunti concatenati.
+// e restituisce i riassunti concatenati. Se il risultato è ancora troppo
+// grande viene ridotto ulteriormente con summarizeInChunks.
 func summarizeArchiveEntries(client *genai.Client, entries []archiveEntry, archiveName string) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "Contenuto dell'archivio %s (riassunto per file):\n\n", archiveName)
@@ -115,14 +119,25 @@ func summarizeArchiveEntries(client *genai.Client, entries []archiveEntry, archi
 			fmt.Fprintf(&sb, "### %s\n%s\n\n", entry.Name, summary)
 		}
 	}
-	return sb.String()
+	result := sb.String()
+	if len(result) > maxUploadBytes {
+		log.Printf("summarizeArchiveEntries: combined summaries still too large (%d bytes) for %s — reducing further", len(result), archiveName)
+		result = summarizeInChunks(client, result, archiveName, 1)
+	}
+	return result
 }
 
 // summarizeInChunks divide il testo in blocchi da chunkSize byte,
 // riassume ogni blocco con Gemini e concatena i risultati.
-func summarizeInChunks(client *genai.Client, text, name string) string {
+// Se il risultato combinato è ancora troppo grande si chiama ricorsivamente
+// fino a maxSummarizeDepth livelli.
+func summarizeInChunks(client *genai.Client, text, name string, depth int) string {
 	if len(text) <= maxUploadBytes {
 		return text
+	}
+	if depth > maxSummarizeDepth {
+		log.Printf("summarizeInChunks: max depth reached for %s — hard truncating", name)
+		return text[:maxUploadBytes]
 	}
 	total := (len(text) + chunkSize - 1) / chunkSize
 	var parts []string
@@ -137,7 +152,12 @@ func summarizeInChunks(client *genai.Client, text, name string) string {
 			parts = append(parts, summary)
 		}
 	}
-	return strings.Join(parts, "\n\n---\n\n")
+	combined := strings.Join(parts, "\n\n---\n\n")
+	if len(combined) > maxUploadBytes {
+		log.Printf("summarizeInChunks: combined still too large (%d bytes) at depth %d for %s — going deeper", len(combined), depth, name)
+		return summarizeInChunks(client, combined, name, depth+1)
+	}
+	return combined
 }
 
 // summarizeSection invia un blocco di testo a Gemini e restituisce il riassunto.
