@@ -1,9 +1,7 @@
 # Mensa App Database
 
-[![Build](https://github.com/Mensa-Italia/mensa_app_database/actions/workflows/main.yaml/badge.svg)](https://github.com/Mensa-Italia/mensa_app_database/actions/workflows/main.yaml)
-[![Lint](https://github.com/Mensa-Italia/mensa_app_database/actions/workflows/lint.yaml/badge.svg)](https://github.com/Mensa-Italia/mensa_app_database/actions/workflows/lint.yaml)
-[![Security](https://github.com/Mensa-Italia/mensa_app_database/actions/workflows/security.yaml/badge.svg)](https://github.com/Mensa-Italia/mensa_app_database/actions/workflows/security.yaml)
-![Go](https://img.shields.io/badge/Go-1.24-00ADD8?style=flat-square&logo=go&logoColor=white)
+[![CI](https://github.com/Mensa-Italia/mensa_online/actions/workflows/main.yaml/badge.svg)](https://github.com/Mensa-Italia/mensa_online/actions/workflows/main.yaml)
+![Go](https://img.shields.io/badge/Go-1.25.9-00ADD8?style=flat-square&logo=go&logoColor=white)
 ![PocketBase](https://img.shields.io/badge/PocketBase-0.35-B8DBE4?style=flat-square)
 ![Docker](https://img.shields.io/badge/Docker-ready-2496ED?style=flat-square&logo=docker&logoColor=white)
 
