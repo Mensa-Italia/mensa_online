@@ -26,7 +26,7 @@ FROM alpine:latest AS deploy
 
 WORKDIR /
 
-RUN apk --no-cache add tzdata
+RUN apk --no-cache add tzdata ghostscript
 
 RUN mkdir "./pb"
 
