@@ -9,6 +9,8 @@ import (
 	"regexp"
 	"strings"
 	"unicode"
+
+	"github.com/nwaples/rardecode/v2"
 )
 
 // geminiSupportedMIMETypes lists MIME types accepted by the Gemini Files API.
@@ -66,6 +68,13 @@ func convertToTextFallback(data []byte, mimeType, name string) ([]byte, string, 
 
 	case "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
 		text, err := extractXlsxText(data)
+		if err != nil {
+			return nil, "", err
+		}
+		return []byte(text), "text/plain", nil
+
+	case "application/vnd.rar", "application/x-rar-compressed", "application/x-rar":
+		text, err := extractRarText(data, name)
 		if err != nil {
 			return nil, "", err
 		}
@@ -283,6 +292,40 @@ func stripXMLToText(data []byte) string {
 	text := xmlTagRe.ReplaceAllString(string(data), " ")
 	text = whitespaceRe.ReplaceAllString(text, " ")
 	return strings.TrimSpace(text)
+}
+
+// extractRarText extracts readable content from a RAR archive.
+func extractRarText(data []byte, rarName string) (string, error) {
+	r, err := rardecode.NewReader(bytes.NewReader(data))
+	if err != nil {
+		return "", err
+	}
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Archivio RAR: %s\n\n", rarName))
+
+	for {
+		header, err := r.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			break
+		}
+		if header.IsDir {
+			continue
+		}
+		sb.WriteString(fmt.Sprintf("--- %s ---\n", header.Name))
+		content, err := io.ReadAll(r)
+		if err != nil {
+			sb.WriteString("[errore lettura file]\n")
+			continue
+		}
+		sb.WriteString(extractReadableContent(content, header.Name))
+		sb.WriteString("\n")
+	}
+
+	return sb.String(), nil
 }
 
 // extractOLEPrintableText extracts legible runs of printable ASCII from old binary Office formats.
