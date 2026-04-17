@@ -9,6 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"os"
+	"os/exec"
+
 	"github.com/gabriel-vasile/mimetype"
 	pdfcpuapi "github.com/pdfcpu/pdfcpu/pkg/api"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
@@ -19,20 +22,83 @@ import (
 // di inviarlo a Gemini (10 MB).
 const largePDFThreshold = 10_000_000
 
-// compressPDF ottimizza un PDF con pdfcpu riducendone le dimensioni.
-// Restituisce i byte originali se la compressione fallisce o non porta vantaggi.
+// compressPDF riduce le dimensioni di un PDF abbassando la qualità delle immagini
+// embedded. Prova prima ghostscript (più efficace), poi pdfcpu come fallback.
+// Restituisce i byte originali se entrambi falliscono o non portano vantaggi.
 func compressPDF(data []byte) []byte {
+	if result := compressPDFWithGhostscript(data); result != nil {
+		return result
+	}
+	return compressPDFWithPdfcpu(data)
+}
+
+// compressPDFWithGhostscript usa gs per ridurre qualità immagini e stream.
+// Ritorna nil se gs non è disponibile o la compressione fallisce.
+func compressPDFWithGhostscript(data []byte) []byte {
+	gsPath, err := exec.LookPath("gs")
+	if err != nil {
+		return nil
+	}
+
+	inFile, err := os.CreateTemp("", "pdf-in-*.pdf")
+	if err != nil {
+		return nil
+	}
+	defer os.Remove(inFile.Name())
+
+	outFile, err := os.CreateTemp("", "pdf-out-*.pdf")
+	if err != nil {
+		inFile.Close()
+		return nil
+	}
+	defer os.Remove(outFile.Name())
+	outFile.Close()
+
+	if _, err := inFile.Write(data); err != nil {
+		inFile.Close()
+		return nil
+	}
+	inFile.Close()
+
+	cmd := exec.Command(gsPath,
+		"-sDEVICE=pdfwrite",
+		"-dCompatibilityLevel=1.4",
+		"-dPDFSETTINGS=/ebook", // 150 dpi — leggibile da Gemini, molto più leggero
+		"-dNOPAUSE",
+		"-dQUIET",
+		"-dBATCH",
+		"-sOutputFile="+outFile.Name(),
+		inFile.Name(),
+	)
+	if err := cmd.Run(); err != nil {
+		log.Printf("compressPDF: ghostscript fallito (%v) — provo pdfcpu", err)
+		return nil
+	}
+
+	result, err := os.ReadFile(outFile.Name())
+	if err != nil || len(result) == 0 || len(result) >= len(data) {
+		return nil
+	}
+
+	log.Printf("compressPDF (gs): %d → %d byte (-%d%%)", len(data), len(result),
+		100*(len(data)-len(result))/len(data))
+	return result
+}
+
+// compressPDFWithPdfcpu ottimizza un PDF con pdfcpu (pure Go, nessun binario esterno).
+// Non riduce la qualità delle immagini ma comprime stream e rimuove oggetti ridondanti.
+func compressPDFWithPdfcpu(data []byte) []byte {
 	in := bytes.NewReader(data)
 	var out bytes.Buffer
 	if err := pdfcpuapi.Optimize(in, &out, nil); err != nil {
-		log.Printf("compressPDF: ottimizzazione fallita (%v) — uso originale", err)
+		log.Printf("compressPDF (pdfcpu): ottimizzazione fallita (%v) — uso originale", err)
 		return data
 	}
 	compressed := out.Bytes()
 	if len(compressed) >= len(data) {
 		return data
 	}
-	log.Printf("compressPDF: %d → %d byte (-%d%%)", len(data), len(compressed),
+	log.Printf("compressPDF (pdfcpu): %d → %d byte (-%d%%)", len(data), len(compressed),
 		100*(len(data)-len(compressed))/len(data))
 	return compressed
 }
