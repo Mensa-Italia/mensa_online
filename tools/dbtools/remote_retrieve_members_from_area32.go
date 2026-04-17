@@ -293,7 +293,7 @@ func SnapshotArea32Members(app core.App) {
 
 	compressed, err := cdnfiles.GzipCompressBytes(marshaledSnapshot, "members_registry.json")
 	if err != nil {
-		app.Logger().Error("gzip snapshot members_registry", err)
+		app.Logger().Error("gzip snapshot members_registry", "error", err)
 		return
 	}
 
@@ -314,7 +314,7 @@ func SnapshotArea32Members(app core.App) {
 		"snapshot-md5":            snapshotMD5Hex,
 		"created-by":              "mensadb-cron-snapshot",
 	}); err != nil {
-		app.Logger().Error("upload snapshot members_registry", err)
+		app.Logger().Error("upload snapshot members_registry", "error", err)
 		return
 	}
 }
