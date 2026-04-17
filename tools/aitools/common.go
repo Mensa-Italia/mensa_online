@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/gabriel-vasile/mimetype"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
@@ -166,7 +167,8 @@ func summarizeInChunks(client *genai.Client, text, name string, depth int) strin
 }
 
 // summarizeSection invia un blocco di testo a Gemini e restituisce il riassunto.
-// Se il testo è ancora troppo grande per il modello viene troncato come ultima risorsa.
+// In caso di 429 (rate limit) ritenta con backoff esponenziale fino a maxRetries volte.
+// Se il testo è ancora troppo grande viene troncato come ultima risorsa.
 func summarizeSection(client *genai.Client, text, label string) string {
 	ctx := context.Background()
 
@@ -180,20 +182,36 @@ func summarizeSection(client *genai.Client, text, label string) string {
 		label, text,
 	)
 
-	result, err := client.Models.GenerateContent(
-		ctx,
-		"gemini-2.0-flash",
-		[]*genai.Content{{Role: genai.RoleUser, Parts: []*genai.Part{genai.NewPartFromText(prompt)}}},
-		nil,
-	)
-	if err != nil {
+	const maxRetries = 5
+	wait := 4 * time.Second
+
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		result, err := client.Models.GenerateContent(
+			ctx,
+			"gemini-2.0-flash",
+			[]*genai.Content{{Role: genai.RoleUser, Parts: []*genai.Part{genai.NewPartFromText(prompt)}}},
+			nil,
+		)
+		if err == nil {
+			return result.Text()
+		}
+
+		errStr := err.Error()
+		isRateLimit := strings.Contains(errStr, "429") || strings.Contains(errStr, "RESOURCE_EXHAUSTED")
+		if isRateLimit && attempt < maxRetries {
+			log.Printf("summarizeSection: rate limit per %q (tentativo %d/%d) — attendo %s", label, attempt, maxRetries, wait)
+			time.Sleep(wait)
+			wait *= 2
+			continue
+		}
+
 		log.Printf("summarizeSection: Gemini error for %q: %v", label, err)
 		if len(text) > 2000 {
 			return text[:2000] + "…[troncato]"
 		}
 		return text
 	}
-	return result.Text()
+	return ""
 }
 
 func UploadFileToAIClient(client *genai.Client, reader *filesystem.File) *genai.File {
