@@ -1,112 +1,115 @@
-# Mensa App Database
+<h1 align="center">Mensa Online</h1>
 
-[![Lint](https://github.com/Mensa-Italia/mensa_online/actions/workflows/lint.yaml/badge.svg)](https://github.com/Mensa-Italia/mensa_online/actions/workflows/lint.yaml)
-[![Security](https://github.com/Mensa-Italia/mensa_online/actions/workflows/security.yaml/badge.svg)](https://github.com/Mensa-Italia/mensa_online/actions/workflows/security.yaml)
-[![Gitleaks](https://github.com/Mensa-Italia/mensa_online/actions/workflows/gitleaks.yaml/badge.svg)](https://github.com/Mensa-Italia/mensa_online/actions/workflows/gitleaks.yaml)
-[![Build](https://github.com/Mensa-Italia/mensa_online/actions/workflows/main.yaml/badge.svg)](https://github.com/Mensa-Italia/mensa_online/actions/workflows/main.yaml)
-![Go](https://img.shields.io/badge/Go-1.25.9-00ADD8?style=flat-square&logo=go&logoColor=white)
-![PocketBase](https://img.shields.io/badge/PocketBase-0.35-B8DBE4?style=flat-square)
-![Docker](https://img.shields.io/badge/Docker-ready-2496ED?style=flat-square&logo=docker&logoColor=white)
+<p align="center">
+  <em>Backend Go + PocketBase che alimenta l'infrastruttura digitale di Mensa Italia.</em>
+</p>
 
-> Backend service che alimenta l'app mobile di **Mensa Italia**. Un singolo binario Go costruito su [PocketBase](https://pocketbase.io/) che gestisce anagrafica soci, eventi, SIG, pagamenti, documenti AI, timbri, notifiche push e molto altro.
+<p align="center">
+  <a href="https://github.com/Mensa-Italia/mensa_online/actions/workflows/lint.yaml"><img alt="Lint" src="https://github.com/Mensa-Italia/mensa_online/actions/workflows/lint.yaml/badge.svg"></a>
+  <a href="https://github.com/Mensa-Italia/mensa_online/actions/workflows/security.yaml"><img alt="Security" src="https://github.com/Mensa-Italia/mensa_online/actions/workflows/security.yaml/badge.svg"></a>
+  <a href="https://github.com/Mensa-Italia/mensa_online/actions/workflows/gitleaks.yaml"><img alt="Gitleaks" src="https://github.com/Mensa-Italia/mensa_online/actions/workflows/gitleaks.yaml/badge.svg"></a>
+  <a href="https://github.com/Mensa-Italia/mensa_online/actions/workflows/main.yaml"><img alt="Build" src="https://github.com/Mensa-Italia/mensa_online/actions/workflows/main.yaml/badge.svg"></a>
+</p>
 
----
-
-## Indice
-
-- [Funzionalità](#funzionalità)
-- [Architettura](#architettura)
-- [Avvio locale](#avvio-locale)
-- [Deploy con Docker](#deploy-con-docker)
-- [API](#api)
-- [Job pianificati](#job-pianificati)
-- [Variabili d'ambiente](#variabili-dambiente)
-- [Collezioni del database](#collezioni-del-database)
+<p align="center">
+  <a href="https://go.dev/"><img alt="Go" src="https://img.shields.io/badge/Go-1.25.9-00ADD8?logo=go&logoColor=white"></a>
+  <a href="https://pocketbase.io/"><img alt="PocketBase" src="https://img.shields.io/badge/PocketBase-0.35-B8DBE4"></a>
+  <a href="https://www.docker.com/"><img alt="Docker" src="https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white"></a>
+  <a href="https://github.com/Mensa-Italia/mensa_online/pkgs/container/mensa_online"><img alt="ghcr" src="https://img.shields.io/badge/ghcr.io-mensa__online-181717?logo=github"></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-GPL--2.0-green"></a>
+</p>
 
 ---
+
+## Panoramica
+
+**Mensa Online** è il backend che alimenta l'app mobile ufficiale di Mensa Italia e i servizi digitali dell'associazione. Un singolo binario Go costruito su [PocketBase](https://pocketbase.io/) che espone API REST + realtime, un admin UI integrato e tutta la logica custom registrata come hook, cron e route HTTP.
+
+Il servizio in produzione è raggiungibile su `https://svc.mensa.it`. Il client mobile è pubblicato in [Mensa-Italia/mensa_italia_app](https://github.com/Mensa-Italia/mensa_italia_app).
 
 ## Funzionalità
 
-| | Funzionalità | Dettaglio |
-|:---:|---|---|
-| 👥 | **Anagrafica soci** | Sync da Area32 ogni 3 ore · snapshot giornalieri immutabili |
-| 📅 | **Eventi** | Creazione, scheduling, export iCal · notifiche push su create/update |
-| 🔵 | **SIG** | Gestione Special Interest Group con relazioni tra soci |
-| 🏢 | **Sezioni locali** | Dati sezionali · admin · workflow accoglienza nuovi soci |
-| 🏅 | **Timbri e badge** | Immagini generate da Gemini AI · verifica QR · validazione via secret |
-| 📄 | **Documenti** | Fetch da Area32 · estrazione testo · riassunto AI (Gemini) · indice Zinc |
-| 💳 | **Pagamenti** | Donazioni Stripe · ordini boutique · metodi di pagamento · webhook |
-| 🛍️ | **E-commerce** | Integrazione Printful · lifecycle ordini via webhook |
-| 🔔 | **Notifiche push** | Firebase FCM · attivate da eventi, offerte e azioni di sistema |
-| 🔐 | **Autenticazione** | Zitadel OIDC · autenticazione app esterne · firma crittografica payload |
-| 🎨 | **Generazione immagini** | Card evento e timbri generati da Gemini con testo dinamico |
-| 🌍 | **Localizzazione** | Stringhe multilingua via Tolgee |
-| 🔍 | **Ricerca full-text** | Indicizzazione documenti con Zinc Search |
-| ☁️ | **Cloud storage** | CDN S3-compatible · presigned URL |
-| 📆 | **Link calendario** | Feed iCal personali con accesso hash-based |
+- **Anagrafica soci** — sync da Area32 ogni 3 ore, snapshot giornalieri immutabili
+- **Eventi** — creazione, scheduling, export iCal, notifiche push su create/update
+- **SIG** — gestione Special Interest Group con relazioni tra soci
+- **Sezioni locali** — dati sezionali, admin, workflow accoglienza nuovi soci
+- **Timbri e badge** — immagini generate da Gemini AI, verifica QR, validazione via secret
+- **Documenti** — fetch da Area32, estrazione testo, riassunto AI (Gemini), indice Zinc
+- **Pagamenti** — donazioni Stripe, ordini boutique, metodi di pagamento, webhook firmati
+- **E-commerce Printful** — catalogo + lifecycle ordini via webhook
+- **Notifiche push** — Firebase FCM attivate da eventi, offerte e azioni di sistema
+- **Autenticazione** — Zitadel OIDC, fallback Area32, firma crittografica payload
+- **Generazione immagini AI** — card evento e timbri con testo dinamico via Gemini
+- **Localizzazione** — stringhe multilingua via Tolgee
+- **Ricerca full-text** — indicizzazione documenti con Zinc Search
+- **Cloud storage** — CDN S3-compatible con presigned URL
+- **Link calendario** — feed iCal personali con accesso hash-based
+- **MCP server** — esposizione tool su `/mcp` protetti da OAuth 2.0
 
----
+## Stack tecnologico
 
-## Architettura
+| Categoria | Tecnologia |
+|---|---|
+| Linguaggio | Go 1.25.9 |
+| Framework | [PocketBase 0.35](https://pocketbase.io/) (SQLite embedded) |
+| HTTP | Router integrato PocketBase + `net/http` |
+| Migrations | `migratecmd` (automigrate in dev, JSON baseline + Go files) |
+| Identity | [Zitadel OIDC](https://zitadel.com/) · Area32 legacy scraper |
+| Pagamenti | [Stripe Go SDK v81](https://github.com/stripe/stripe-go) |
+| E-commerce | [Printful API](https://developers.printful.com/) |
+| AI | [Google Gemini](https://ai.google.dev/) (testo + immagini) via `google.golang.org/genai` |
+| Push notifications | [Firebase Admin SDK](https://firebase.google.com/docs/admin/setup) |
+| i18n | [Tolgee](https://tolgee.io/) |
+| Full-text search | [Zinc Search](https://zincsearch-docs.zinc.dev/) |
+| Storage | AWS S3 SDK v2 (presigned URL) |
+| Images | [Unsplash](https://unsplash.com/developers) · Image Router proxy |
+| PDF | `pdfcpu` + Ghostscript nel container |
+| Calendar | `arran4/golang-ical` |
+| QR codes | `yeqown/go-qrcode` |
+| MCP | [mark3labs/mcp-go](https://github.com/mark3labs/mcp-go) |
+| Container | Docker multi-stage (Alpine) |
+| Registry | `ghcr.io/mensa-italia/mensa_app_database` |
+| Reverse proxy | [Traefik](https://traefik.io/) (HTTPS auto) |
+| CI | GitHub Actions (lint · security · gitleaks · build · update) |
 
-Il servizio è un **singolo binario** HTTP sulla porta `8080`. PocketBase fornisce il database SQLite embedded, l'admin UI su `/_/` e un'API REST con realtime. Tutta la logica custom è registrata all'avvio tramite hook, cron e route.
+## Prerequisiti
 
-```
-mensa_online/
-│
-├── main/
-│   ├── main.go                  # Bootstrap PocketBase e registrazione route
-│   ├── api/
-│   │   ├── cs/                  # Core services: auth, chiavi, firma, webhook
-│   │   ├── payment/             # Route Stripe
-│   │   └── position/            # Stato posizioni
-│   ├── crons/                   # Task schedulati in background
-│   ├── hooks/                   # Hook sugli eventi dei record PocketBase
-│   ├── links/                   # Redirect deep-link
-│   └── utilities/               # Endpoint /.well-known
-│
-├── tools/
-│   ├── aitools/                 # Riassunto documenti con Gemini
-│   ├── aipower/                 # Generazione immagini AI (card evento, timbri)
-│   ├── cdnfiles/                # Gestione file S3
-│   ├── dbtools/                 # Sync DB remoto, gestione utenti
-│   ├── env/                     # Caricamento tipizzato variabili d'ambiente
-│   ├── notification/            # Invio notifiche push
-│   ├── qrtools/                 # Generazione QR code
-│   ├── signatures/              # Firma e verifica payload
-│   ├── spatial/                 # Utilità geospaziali
-│   ├── zauth/                   # Client OIDC Zitadel
-│   └── zincsearch/              # Indicizzazione Zinc Search
-│
-├── area32/                      # Scraper e client API Area32
-├── importers/                   # Utilità importazione dati
-├── printful/                    # Integrazione API Printful
-├── tolgee/                      # Servizio traduzioni
-├── migrations/                  # Migrazioni schema applicate automaticamente
-└── Dockerfile                   # Build multi-stage (Go → Alpine)
-```
+- [Go 1.25.9+](https://go.dev/dl/) (versione pinnata in `go.mod`)
+- [Docker](https://www.docker.com/) (opzionale, per build container e deploy)
+- Accesso alle chiavi dei servizi esterni usati nei flussi completi (Gemini, Stripe, Firebase, Printful, Zitadel, Tolgee, Zinc, S3, Area32, Unsplash). Per lo sviluppo locale basta un sottoinsieme — vedi la [Configuration wiki](https://github.com/Mensa-Italia/mensa_online/wiki/Configuration).
 
----
-
-## Avvio locale
-
-**Prerequisiti:** Go 1.24+
+## Setup
 
 ```bash
-git clone https://github.com/Mensa-Italia/mensa_app_database.git
-cd mensa_app_database
+# 1. Clone
+git clone https://github.com/Mensa-Italia/mensa_online.git
+cd mensa_online
 
-# Esporta le variabili d'ambiente necessarie (vedi sezione dedicata)
-export GEMINI_KEY=...
-export STRIPE_SECRET=...
+# 2. Esporta (o imposta via .env con DEBUG=true) le variabili minime
+export PASSWORD_UUID=<uuid>
+export PASSWORD_SALT=<salt>
+# + chiavi dei servizi che vuoi testare: GEMINI_KEY, STRIPE_SECRET, ...
 
+# 3. Avvio in sviluppo (automigrate attivo)
 go run main/main.go serve
 ```
 
-L'admin UI è disponibile su `http://localhost:8080/_/`.
-Al primo avvio con `go run`, tutte le migrazioni pendenti vengono applicate automaticamente.
+- Admin UI: [http://localhost:8080/_/](http://localhost:8080/_/)
+- API REST collezioni: `http://localhost:8080/api/collections/*`
+- API custom: `http://localhost:8080/api/*`
 
----
+Al primo avvio con `go run` tutte le migrazioni pendenti vengono applicate automaticamente.
+
+### Build & test
+
+```bash
+# Build binario
+go build ./...
+
+# Vet + lint
+go vet ./...
+golangci-lint run --timeout=5m
+```
 
 ## Deploy con Docker
 
@@ -120,7 +123,7 @@ docker run -p 8080:8080 \
   ghcr.io/mensa-italia/mensa_app_database:main
 ```
 
-**Con Compose** (esempio minimale):
+**Compose** (esempio minimale, produzione usa Traefik come in `compose.yaml`):
 
 ```yaml
 services:
@@ -133,13 +136,11 @@ services:
     environment:
       PASSWORD_UUID: <uuid>
       PASSWORD_SALT: <salt>
-      # vedi la sezione variabili d'ambiente
+      # + tutte le altre chiavi dei servizi esterni
 
 volumes:
   mensa_app_server_storage:
 ```
-
-> Il file `compose.yaml` incluso nel repository contiene i label Traefik per HTTPS automatico.
 
 **Build locale:**
 
@@ -147,163 +148,153 @@ volumes:
 docker build -t mensa_app_database .
 ```
 
----
+## Architettura
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    PocketBase (SQLite + Admin UI)                │
+│                                                                   │
+│   HTTP Router :8080   →   /api/collections/*  (CRUD)             │
+│                       →   /api/*             (custom handlers)   │
+│                       →   /_/                (admin UI)          │
+│                       →   /mcp               (MCP + OAuth)       │
+│                       →   /.well-known/*     (OIDC + AASA)       │
+│                                                                   │
+│   Hooks   (record lifecycle)    Cron scheduler   (scheduled jobs)│
+└──────────────┬──────────────────────────────────────────────────┘
+               │
+   ┌───────────┼───────────┬───────────┬───────────┬───────────┐
+   ▼           ▼           ▼           ▼           ▼           ▼
+ Stripe     Printful    Gemini     Firebase    Zitadel    Area32
+(payments) (e-commerce) (AI)       (push)     (OIDC)    (legacy)
+                                                              │
+                                           ┌──────────────────┴─┐
+                                           ▼                    ▼
+                                        Tolgee            Zinc Search
+                                         (i18n)          (full-text)
+                                                              │
+                                                              ▼
+                                                        S3 / CDN
+```
+
+Per un'analisi completa con diagrammi mermaid vedi [Architecture Overview](https://github.com/Mensa-Italia/mensa_online/wiki/Architecture-Overview).
+
+## Struttura del progetto
+
+```
+mensa_online/
+├── main/
+│   ├── main.go                  # Bootstrap PocketBase e registrazione route
+│   ├── api/
+│   │   ├── cs/                  # Core services: auth, chiavi, firma, webhook
+│   │   ├── payment/             # Route Stripe
+│   │   └── position/            # Stato posizioni
+│   ├── crons/                   # Task schedulati in background
+│   ├── hooks/                   # Hook sugli eventi dei record PocketBase
+│   ├── links/                   # Redirect deep-link
+│   └── utilities/               # Endpoint /.well-known
+│
+├── mcp/                         # Server MCP (Model Context Protocol) su /mcp
+│
+├── tools/
+│   ├── aitools/                 # Riassunto documenti con Gemini
+│   ├── aipower/                 # Generazione immagini AI (card evento, timbri)
+│   ├── cdnfiles/                # Gestione file S3 + presigned URL
+│   ├── dbtools/                 # Sync DB remoto, gestione utenti
+│   ├── env/                     # Caricamento tipizzato variabili d'ambiente
+│   ├── notification/            # Invio notifiche push (Firebase FCM)
+│   ├── qrtools/                 # Generazione QR code
+│   ├── signatures/              # Firma e verifica payload
+│   ├── spatial/                 # Utilità geospaziali
+│   ├── zauth/                   # Client OIDC Zitadel
+│   └── zincsearch/              # Indicizzazione Zinc Search
+│
+├── area32/                      # Scraper e client API Area32 (identity legacy)
+├── importers/                   # Utilità importazione dati
+├── printful/                    # Integrazione API Printful
+├── tolgee/                      # Servizio traduzioni
+├── migrations/                  # Schema versionato, applicato automaticamente
+├── pb_public/                   # File statici serviti su /static
+├── Dockerfile                   # Build multi-stage (Go → Alpine)
+├── compose.yaml                 # Stack produzione con label Traefik
+└── go.mod                       # Dipendenze Go (module: mensadb)
+```
 
 ## API
 
-Tutte le route custom sono registrate sotto `/api`. L'API REST standard di PocketBase per le collezioni è disponibile su `/api/collections`.
+Route principali:
 
-### Pagamenti — `/api/payment`
-
-| Metodo | Path | Descrizione |
+| Gruppo | Base path | Contenuto |
 |---|---|---|
-| `POST` | `/method` | Aggiunge un metodo di pagamento Stripe |
-| `GET` | `/method` | Elenca i metodi di pagamento salvati |
-| `POST` | `/default` | Imposta il metodo di pagamento predefinito |
-| `GET` | `/customer` | Recupera i dati del cliente Stripe |
-| `POST` | `/donate` | Processa una donazione |
-| `POST` | `/webhook` | Ricevitore webhook Stripe |
-| `GET` | `/{id}` | Recupera un payment intent |
-| `POST` | `/boutique` | Crea un pagamento boutique |
-| `GET` | `/receipt/*` | Scarica/visualizza una ricevuta |
+| Pagamenti | `/api/payment` | Metodi, donazioni, boutique, webhook Stripe, ricevute |
+| Core services | `/api/cs` | Auth Area32, notifiche, chiavi, firma/verifica, exapp, webhook Printful |
+| Posizioni | `/api/position` | Stato della posizione corrente |
+| Collezioni | `/api/collections/*` | API REST PocketBase standard |
+| Link | `/links/event/{id}` · `/links/stamp/{id}` | Redirect deep-link |
+| iCal | `/ical/{hash}` | Feed iCalendar personale |
+| OIDC | `/.well-known/oauth-*` · `/authorize` | Metadati OAuth 2.0 + MCP |
+| App links | `/.well-known/apple-app-site-association` · `/assetlinks.json` | Universal links iOS/Android |
+| MCP | `/mcp` | MCP streamable HTTP server (tool use) |
 
-### Core services — `/api/cs`
-
-| Metodo | Path | Descrizione |
-|---|---|---|
-| `POST` | `/auth-with-area` | Autenticazione tramite membership Area32 |
-| `POST` | `/send-update-notify` | Invia una notifica push di aggiornamento |
-| `GET` | `/force-update-addons` | Forza sync dei dati addon |
-| `GET` | `/force-notification` | Forza l'invio di una notifica pendente |
-| `GET` | `/force-update-state-managers` | Aggiorna i permessi utente da Area32 |
-| `GET` | `/force-update-docs` | Avvia il sync dei documenti |
-| `GET` | `/generate-event-card` | Genera e restituisce una card evento AI |
-| `GET` | `/members-hashed` | Restituisce la lista soci in forma hash |
-| `GET` | `/members-snapshots` | Elenca gli snapshot dell'anagrafica soci |
-| `GET` | `/members-snapshots/{key}` | Recupera uno snapshot specifico |
-| `POST` | `/keys` | Operazioni di gestione chiavi |
-| `POST` | `/sign-payload` | Firma crittografica di un payload |
-| `POST` | `/verify-signature` | Verifica la firma di un payload |
-| `POST` | `/exapp/auth` | Autentica un'applicazione esterna |
-| `POST` | `/webhook/printful` | Webhook ordini Printful |
-
-### Posizioni — `/api/position`
-
-| Metodo | Path | Descrizione |
-|---|---|---|
-| `GET` | `/state` | Recupera lo stato della posizione corrente |
-
-### Route speciali
-
-| Metodo | Path | Descrizione |
-|---|---|---|
-| `GET` | `/ical/{hash}` | Esporta il feed iCalendar personale |
-| `GET` | `/static/{path...}` | Serving file statici |
-| `GET` | `/force-stamp-gen/{id}` | Rigenera l'immagine di un timbro |
-| `GET` | `/links/event/{id}` | Redirect deep-link a un evento |
-| `GET` | `/links/stamp/{id}` | Redirect deep-link a un timbro |
-| `GET` | `/.well-known/apple-app-site-association` | Universal links iOS |
-| `GET` | `/.well-known/assetlinks.json` | App links Android |
-| `GET` | `/.well-known/oauth-protected-resource` | Metadati OAuth 2.0 resource |
-| `GET` | `/.well-known/oauth-authorization-server` | Metadati OAuth 2.0 server |
-| `GET` | `/authorize` | Endpoint di autorizzazione OAuth |
-
----
+Il riferimento completo, parametri e auth required sono nella [API Reference wiki](https://github.com/Mensa-Italia/mensa_online/wiki/API-Reference).
 
 ## Job pianificati
 
-I task vengono registrati all'avvio tramite il cron scheduler di PocketBase. Tutti gli orari sono in **UTC**.
+Tutti gli orari sono in **UTC**. Registrati via `app.Cron().MustAdd(...)` all'avvio.
 
-| Schedule | Task | Descrizione |
-|---|---|---|
-| `1 3 * * *` | Update remote addons | Sync dati addon da Area32 |
-| `1 3 * * *` | Update state manager powers | Aggiorna matrice ruoli/permessi utente |
-| `1 3 * * *` | Reload Tolgee translations | Scarica le ultime stringhe di localizzazione |
-| `0 6-20 * * *` | Update documents data | Sync orario documenti (Area32), solo ore lavorative |
-| `30 0,3,6,9,12,15,18,21 * * *` | Update registry data | Sync anagrafica soci ogni 3 ore |
-| `0 3 * * *` | Force Zitadel sync | Riconciliazione completa con l'identity provider |
-| `0 0,3 * * *` | Upload files to Zinc | Re-indicizzazione documenti in Zinc Search |
-| `0 */6 * * *` | Check user Stripe accounts | Validazione metodi di pagamento salvati |
-| `0 3 1 * *` | Retry missing document summaries | Re-esecuzione mensile per doc senza riassunto AI |
-| `0 0 * * *` | Snapshot members registry | Snapshot giornaliero immutabile dell'anagrafica |
-
----
-
-## Variabili d'ambiente
-
-### 🔐 Autenticazione e sicurezza
-
-| Variabile | Descrizione |
+| Schedule | Task |
 |---|---|
-| `PASSWORD_UUID` | Namespace UUID v5 per la derivazione delle password |
-| `PASSWORD_SALT` | Salt globale per l'hashing delle password |
-| `CONVERTER_TOKEN` | Token per il servizio di conversione documenti |
-| `IMAGE_ROUTER_KEY` | API key per il proxy/router immagini |
-| `DOCS_UUID` | Namespace UUID per l'identificazione dei documenti |
-| `ZINC_USERNAME` | Username Zinc Search |
-| `ZINC_PASSWORD` | Password Zinc Search |
+| `1 3 * * *` | Update remote addons · state manager powers · Tolgee reload |
+| `0 6-20 * * *` | Update documents data da Area32 (ore lavorative) |
+| `30 0,3,6,9,12,15,18,21 * * *` | Update registry soci ogni 3 ore |
+| `0 3 * * *` | Force Zitadel sync |
+| `0 0,3 * * *` | Upload file a Zinc Search |
+| `0 */6 * * *` | Check Stripe accounts utenti |
+| `0 3 1 * *` | Retry mensile documenti senza riassunto |
+| `0 0 * * *` | Snapshot giornaliero anagrafica soci |
 
-### 📧 Email e comunicazioni
+Dettagli in [Background Jobs & Hooks](https://github.com/Mensa-Italia/mensa_online/wiki/Background-Jobs-and-Hooks).
 
-| Variabile | Descrizione |
-|---|---|
-| `AREA32_INTERNAL_EMAIL` | Email interna usata per le chiamate ai servizi Area32 |
-| `AREA32_INTERNAL_PASSWORD` | Password per l'account interno Area32 |
-| `EMAIL_PROVIDER_PASSWORD` | Password del provider SMTP |
+## Documentazione
 
-### 🤖 AI e servizi generativi
+La documentazione tecnica completa è mantenuta nella [**Wiki del repository**](https://github.com/Mensa-Italia/mensa_online/wiki):
 
-| Variabile | Descrizione |
-|---|---|
-| `GEMINI_KEY` | API key Google Gemini (riassunti documenti + generazione immagini) |
-| `GEMINI_RESUME_PROMPT` | System prompt per la riepilogazione documenti (default: `PARLI SOLO ITALIANO`) |
-| `UNSPLASH_KEY` | API key Unsplash per le immagini degli eventi |
-| `FIREBASE_AUTH_KEY` | Service account Firebase Admin SDK in JSON (raw o base64) |
+- [Getting Started](https://github.com/Mensa-Italia/mensa_online/wiki/Getting-Started) — setup esteso, prerequisiti, primo avvio
+- [Architecture Overview](https://github.com/Mensa-Italia/mensa_online/wiki/Architecture-Overview) — diagrammi, componenti, flusso richieste
+- [Configuration](https://github.com/Mensa-Italia/mensa_online/wiki/Configuration) — variabili d'ambiente, PocketBase, secrets
+- [API Reference](https://github.com/Mensa-Italia/mensa_online/wiki/API-Reference) — endpoint, parametri, auth
+- [Database Schema](https://github.com/Mensa-Italia/mensa_online/wiki/Database-Schema) — 35 collezioni, viste, ER diagram
+- [Authentication & Authorization](https://github.com/Mensa-Italia/mensa_online/wiki/Authentication-and-Authorization)
+- [Background Jobs & Hooks](https://github.com/Mensa-Italia/mensa_online/wiki/Background-Jobs-and-Hooks)
+- [External Integrations](https://github.com/Mensa-Italia/mensa_online/wiki/External-Integrations)
+- [Deployment](https://github.com/Mensa-Italia/mensa_online/wiki/Deployment) — Docker, CI/CD, Traefik
+- [Troubleshooting & FAQ](https://github.com/Mensa-Italia/mensa_online/wiki/Troubleshooting-and-FAQ)
+- [Contributing Guidelines](https://github.com/Mensa-Italia/mensa_online/wiki/Contributing-Guidelines)
 
-### 💳 Pagamenti ed e-commerce
+## Contributing
 
-| Variabile | Descrizione |
-|---|---|
-| `STRIPE_SECRET` | Chiave segreta Stripe |
-| `STRIPE_WEBHOOK_SIGNATURE` | Secret per la verifica dei webhook Stripe |
-| `PRINTFUL_KEY` | API key Printful |
-| `PRINTFUL_WEBHOOK_URL` | URL webhook registrato su Printful |
+I contributi sono benvenuti. Prima di aprire una Pull Request leggi le [Contributing Guidelines](https://github.com/Mensa-Italia/mensa_online/wiki/Contributing-Guidelines) complete. In sintesi:
 
-### 🪪 Identity provider (Zitadel)
+1. Fork del repository e branch dedicato dal ramo `dev` (`feature/xxx` o `fix/xxx`)
+2. `go build ./...` + `go vet ./...` devono essere puliti
+3. `golangci-lint run --timeout=5m` passa senza warning
+4. Nessun segreto committato (il workflow Gitleaks blocca i PR)
+5. Se aggiungi una nuova variabile d'ambiente: aggiorna `tools/env/init.go` + la pagina [Configuration](https://github.com/Mensa-Italia/mensa_online/wiki/Configuration)
+6. Se modifichi lo schema: aggiungi una migrazione in `migrations/<timestamp>_<nome>.go` e verifica che l'automigrate funzioni
+7. Commit in italiano con prefisso conventional (`feat:`, `fix:`, `chore:`, `refactor:`, `docs:`)
+8. Apri la PR contro `dev` con descrizione dettagliata
 
-| Variabile | Descrizione |
-|---|---|
-| `ZITADEL_PAT` | Personal access token Zitadel |
-| `ZITADEL_HOST` | Hostname dell'istanza Zitadel |
-| `ZITADEL_ORGANIZATION_ID` | ID organizzazione Zitadel |
+Per segnalare bug apri una [issue](https://github.com/Mensa-Italia/mensa_online/issues). Per vulnerabilità di sicurezza utilizza [GitHub Security Advisories](https://github.com/Mensa-Italia/mensa_online/security/advisories) — **non** aprire issue pubbliche.
 
-### 🌍 Localizzazione e runtime
+## License
 
-| Variabile | Descrizione |
-|---|---|
-| `TOLGEE_KEY` | API key Tolgee per il sync delle stringhe di traduzione |
-| `DEBUG` | Impostare a `true` per abilitare il logging verbose |
+Distribuito sotto licenza **GNU General Public License v2.0**. Vedi [`LICENSE`](LICENSE) per il testo completo.
 
----
+## Link utili
 
-## Collezioni del database
-
-Il database SQLite embedded contiene **35 collezioni** gestite e migrate da PocketBase. Lo schema è versionato in `migrations/` e applicato automaticamente all'avvio.
-
-| Categoria | Collezioni |
-|---|---|
-| **Utenti** | `users` · `users_metadata` · `users_devices` · `users_secrets` · `users_payment_method` |
-| **Organizzazione** | `local_offices` · `local_offices_admins` · `local_offices_welcomes_new_members` · `positions` |
-| **Soci** | `members_registry` |
-| **Eventi** | `events` · `events_schedule` · `events_schedule_subscribers` |
-| **Offerte** | `deals` · `deals_contacts` |
-| **SIG** | `sigs` |
-| **Add-on** | `addons` · `addons_private_keys` |
-| **Timbri** | `stamp` · `stamp_users` · `stamp_secret` |
-| **Pagamenti** | `payments` |
-| **Boutique** | `boutique` · `boutique_orders` |
-| **Documenti** | `documents` · `documents_elaborated` |
-| **Contenuti** | `chart` · `configs` |
-| **App esterne** | `ex_apps` · `ex_keys` · `ex_granted_permissions` |
-| **Calendario** | `calendar_link` |
-| **Notifiche** | `user_notifications` · `tickets` |
+- Sito ufficiale: [mensa.it](https://www.mensa.it)
+- App mobile: [mensa_italia_app](https://github.com/Mensa-Italia/mensa_italia_app)
+- Wiki: [github.com/Mensa-Italia/mensa_online/wiki](https://github.com/Mensa-Italia/mensa_online/wiki)
+- Issue tracker: [github.com/Mensa-Italia/mensa_online/issues](https://github.com/Mensa-Italia/mensa_online/issues)
+- Container image: [`ghcr.io/mensa-italia/mensa_app_database`](https://github.com/Mensa-Italia/mensa_online/pkgs/container/mensa_online)
+- PocketBase docs: [pocketbase.io/docs](https://pocketbase.io/docs/)
