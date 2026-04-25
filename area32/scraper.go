@@ -1,6 +1,7 @@
 package area32
 
 import (
+	"context"
 	"errors"
 	"io"
 	"log"
@@ -12,6 +13,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
@@ -19,6 +21,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
+	"golang.org/x/sync/errgroup"
 )
 
 var ErrUnableToConnect = errors.New("ErrUnableToConnect")
@@ -316,6 +319,12 @@ func (api *ScraperApi) DownloadFile(url string) (*filesystem.File, error) {
 }
 
 func (api *ScraperApi) GetAllRegSoci() ([]map[string]any, error) {
+	// NOTE: la sorgente non espone il numero totale di pagine, quindi non possiamo
+	// scaricare le pagine in parallelo a priori (servirebbe sapere quante sono).
+	// La parallelizzazione vera è dentro `GetRegSoci`, dove per ogni riga della
+	// pagina facciamo download immagine + deep data: ora vengono fetchate in
+	// parallelo con un semaforo limitato.
+	// TODO: parallelizzare anche le pagine se in futuro l'HTML esporrà il totale.
 	var allUsers []map[string]any
 	i := 1
 	for ; ; i++ {
@@ -348,44 +357,106 @@ func (api *ScraperApi) GetRegSoci(page int, search string) ([]map[string]any, er
 
 	visitedIds := map[string]bool{}
 	var users []map[string]any
+	var usersMu sync.Mutex
 
 	parseTable := func(doc *goquery.Document) {
+		// Prima passata: raccogli i dati "leggeri" (solo parsing HTML).
+		type rowData struct {
+			id        string
+			name      string
+			birthDate time.Time
+			city      string
+			state     string
+			imgSrc    string
+			link      string
+		}
+		var rows []rowData
 		doc.Find("table").First().Find("tr").Each(func(i int, s *goquery.Selection) {
-			if i != 0 {
-				tds := s.Find("td")
-				if tds.Length() < 7 {
-					return
-				}
-				id := strings.TrimSpace(tds.Eq(1).Text())
-				if visitedIds[id] {
-					return
-				}
-				visitedIds[id] = true
-
-				birthDateStr := strings.TrimSpace(tds.Eq(3).Text())
-				loc, _ := time.LoadLocation("Europe/Rome")
-				var birthDate time.Time
-				birthDate, _ = time.ParseInLocation("02/01/2006", birthDateStr, loc)
-
-				imgSrc, _ := tds.Eq(0).Find("img").Attr("src")
-				link, _ := tds.Eq(6).Find("a").Attr("href")
-
-				user := map[string]any{
-					"uid":               id,
-					"name":              strings.TrimSpace(tds.Eq(2).Text()),
-					"birthDate":         birthDate,
-					"city":              strings.TrimSpace(tds.Eq(4).Text()),
-					"state":             strings.TrimSpace(tds.Eq(5).Text()),
-					"area":              spatial.CheckProvinceFromState(strings.TrimSpace(tds.Eq(5).Text())),
-					"image":             api.DownloadFileNoError("https://www.cloud32.it" + imgSrc),
-					"linkToFullProfile": "https://www.cloud32.it" + link,
-					"deepData":          api.GetRegSocioDeepData("https://www.cloud32.it" + link),
-					"full_profile_link": "https://www.cloud32.it" + link,
-				}
-				users = append(users, user)
-
+			if i == 0 {
+				return
 			}
+			tds := s.Find("td")
+			if tds.Length() < 7 {
+				return
+			}
+			id := strings.TrimSpace(tds.Eq(1).Text())
+			if visitedIds[id] {
+				return
+			}
+			visitedIds[id] = true
+
+			birthDateStr := strings.TrimSpace(tds.Eq(3).Text())
+			loc, _ := time.LoadLocation("Europe/Rome")
+			var birthDate time.Time
+			birthDate, _ = time.ParseInLocation("02/01/2006", birthDateStr, loc)
+
+			imgSrc, _ := tds.Eq(0).Find("img").Attr("src")
+			link, _ := tds.Eq(6).Find("a").Attr("href")
+
+			rows = append(rows, rowData{
+				id:        id,
+				name:      strings.TrimSpace(tds.Eq(2).Text()),
+				birthDate: birthDate,
+				city:      strings.TrimSpace(tds.Eq(4).Text()),
+				state:     strings.TrimSpace(tds.Eq(5).Text()),
+				imgSrc:    imgSrc,
+				link:      link,
+			})
 		})
+
+		if len(rows) == 0 {
+			return
+		}
+
+		// Seconda passata: per ogni riga, scarica immagine + deep data in
+		// parallelo con un semaforo (max 5 richieste concorrenti per non
+		// sovraccaricare il server remoto). Errori non bloccanti: gli scarichi
+		// falliti restituiscono nil/map vuoto come prima.
+		g, ctx := errgroup.WithContext(context.Background())
+		sem := make(chan struct{}, 5)
+		fetched := make([]map[string]any, len(rows))
+
+		for idx, r := range rows {
+			idx, r := idx, r
+			g.Go(func() error {
+				select {
+				case sem <- struct{}{}:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+				defer func() { <-sem }()
+
+				image := api.DownloadFileNoError("https://www.cloud32.it" + r.imgSrc)
+				deepData := api.GetRegSocioDeepData("https://www.cloud32.it" + r.link)
+
+				fetched[idx] = map[string]any{
+					"uid":               r.id,
+					"name":              r.name,
+					"birthDate":         r.birthDate,
+					"city":              r.city,
+					"state":             r.state,
+					"area":              spatial.CheckProvinceFromState(r.state),
+					"image":             image,
+					"linkToFullProfile": "https://www.cloud32.it" + r.link,
+					"deepData":          deepData,
+					"full_profile_link": "https://www.cloud32.it" + r.link,
+				}
+				return nil
+			})
+		}
+		// errgroup non dovrebbe mai fallire qui (i fetch sono best-effort),
+		// ma in caso di ctx cancellato logghiamo e continuiamo con quanto raccolto.
+		if err := g.Wait(); err != nil {
+			log.Println("GetRegSoci parallel fetch warning:", err)
+		}
+
+		usersMu.Lock()
+		for _, u := range fetched {
+			if u != nil {
+				users = append(users, u)
+			}
+		}
+		usersMu.Unlock()
 	}
 	makeRequest := func(name, surname string) {
 		url := "https://www.cloud32.it/Associazioni/utenti/regsocio?s_cognome=" + surname +
