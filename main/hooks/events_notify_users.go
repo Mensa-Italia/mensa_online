@@ -63,7 +63,11 @@ func createEventStamp(app core.App, record *core.Record) []byte {
 		return nil
 	}
 
-	stampCollection, _ := app.FindCollectionByNameOrId("stamp")
+	stampCollection, err := app.FindCollectionByNameOrId("stamp")
+	if err != nil || stampCollection == nil {
+		app.Logger().Error("find collection stamp failed", "err", err)
+		return nil
+	}
 	newRecord := core.NewRecord(stampCollection)
 
 	// Generazione dell'immagine del timbro
@@ -88,7 +92,11 @@ func createEventStamp(app core.App, record *core.Record) []byte {
 		return nil
 	}
 
-	stampSecretCollection, _ := app.FindCollectionByNameOrId("stamp_secret")
+	stampSecretCollection, err := app.FindCollectionByNameOrId("stamp_secret")
+	if err != nil || stampSecretCollection == nil {
+		app.Logger().Error("find collection stamp_secret failed", "err", err)
+		return nil
+	}
 	newRecordSecret := core.NewRecord(stampSecretCollection)
 	newRecordSecret.Set("stamp", newRecord.Id)
 	newRecordSecret.Set("code", uuid.New().String())

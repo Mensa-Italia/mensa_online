@@ -19,6 +19,8 @@ func GeneratePublicPrivateKeys(e *core.RecordEvent) error {
 	record := core.NewRecord(collection)
 	record.Set("private_key", keyPriv)
 	record.Set("addon", e.Record.Id)
-	_ = e.App.Save(record)
+	if err := e.App.Save(record); err != nil {
+		e.App.Logger().Error("save record failed", "collection", record.Collection().Name, "addon", e.Record.Id, "err", err)
+	}
 	return e.Next()
 }

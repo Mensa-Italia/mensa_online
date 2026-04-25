@@ -22,12 +22,18 @@ func CheckUserStripeAccount(app core.App) {
 				user.GetString("email"),
 			)
 			if customer != nil {
-				collection, _ := app.FindCollectionByNameOrId("users_secrets")
+				collection, err := app.FindCollectionByNameOrId("users_secrets")
+				if err != nil || collection == nil {
+					app.Logger().Error("find collection users_secrets failed", "err", err)
+					continue
+				}
 				record := core.NewRecord(collection)
 				record.Set("user", user.Id)
 				record.Set("key", "stripe_customer_id")
 				record.Set("value", customer.ID)
-				_ = app.Save(record)
+				if err := app.Save(record); err != nil {
+					app.Logger().Error("save record failed", "collection", record.Collection().Name, "user", user.Id, "err", err)
+				}
 			}
 		}
 	}

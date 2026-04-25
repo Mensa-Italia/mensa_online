@@ -60,7 +60,9 @@ func StampUpdateImageAsync(e *core.RecordEvent) error {
 
 			record.Set("description", strings.TrimSpace(strings.ReplaceAll(record.GetString("description"), "[UPDATE]", "")))
 
-			_ = e.App.Save(record)
+			if err := e.App.Save(record); err != nil {
+				e.App.Logger().Error("save record failed", "collection", record.Collection().Name, "id", record.Id, "err", err)
+			}
 
 		}
 	}(e)
