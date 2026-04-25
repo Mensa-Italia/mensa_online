@@ -55,7 +55,10 @@ func GetUsersByState(app core.App, state string) ([]string, error) {
 	for _, record := range records {
 		var notifyMeEvents []string
 		value := record.GetString("value")
-		_ = json.Unmarshal([]byte(value), &notifyMeEvents)
+		if err := json.Unmarshal([]byte(value), &notifyMeEvents); err != nil {
+			app.Logger().Warn("unmarshal notify_me_events failed", "user", record.GetString("user"), "err", err)
+			continue
+		}
 		if slices.Contains(notifyMeEvents, state) {
 			userIDs = append(userIDs, record.GetString("user"))
 		}

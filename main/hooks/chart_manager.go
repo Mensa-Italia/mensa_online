@@ -7,12 +7,18 @@ import (
 )
 
 func addToChart(app core.App, key, data, chart string) {
-	collection, _ := app.FindCollectionByNameOrId("chart")
+	collection, err := app.FindCollectionByNameOrId("chart")
+	if err != nil || collection == nil {
+		app.Logger().Error("find collection chart failed", "err", err)
+		return
+	}
 	record := core.NewRecord(collection)
 	record.Set("key", key)
 	record.Set("data", data)
 	record.Set("chart", chart)
-	_ = app.Save(record)
+	if err := app.Save(record); err != nil {
+		app.Logger().Error("save record failed", "collection", record.Collection().Name, "key", key, "err", err)
+	}
 }
 
 func LogUserChart(e *core.RecordEvent) error {

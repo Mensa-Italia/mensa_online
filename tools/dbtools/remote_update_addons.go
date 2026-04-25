@@ -70,16 +70,22 @@ func RemoteUpdateAddons(app core.App) {
 				}
 
 				// Salva il record aggiornato nel database
-				_ = app.Save(record)
+				if err := app.Save(record); err != nil {
+					app.Logger().Error("save record failed", "collection", record.Collection().Name, "id", record.Id, "err", err)
+				}
 			} else {
 				// Se l'ID dell'addon non corrisponde, imposta l'addon come non valido
 				record.Set("is_ready", false)
-				_ = app.Save(record)
+				if err := app.Save(record); err != nil {
+					app.Logger().Error("save record failed", "collection", record.Collection().Name, "id", record.Id, "err", err)
+				}
 			}
 		} else {
 			// Se la richiesta HTTP fallisce, imposta l'addon come non valido
 			record.Set("is_ready", false)
-			_ = app.Save(record)
+			if err := app.Save(record); err != nil {
+				app.Logger().Error("save record failed", "collection", record.Collection().Name, "id", record.Id, "err", err)
+			}
 		}
 	}
 }
