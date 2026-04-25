@@ -3,17 +3,25 @@ package aitools
 import (
 	"bytes"
 	"context"
+	"errors"
 	"image"
 	"image/color"
 	"image/png"
+	"time"
 
 	"github.com/tidwall/gjson"
 	"google.golang.org/genai"
 )
 
+var errStampClientUnavailable = errors.New("gemini client unavailable")
+
 func GenerateStampPrompt(stampDescription string) string {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
 	client := GetAIClient()
+	if client == nil {
+		return ""
+	}
 
 	config := &genai.GenerateContentConfig{
 		ThinkingConfig: &genai.ThinkingConfig{
@@ -57,9 +65,15 @@ func GenerateStampPrompt(stampDescription string) string {
 func GenerateStamp(prompt string, makeitred bool) ([]byte, error) {
 	newPrompt := GenerateStampPrompt(prompt)
 	client := GetAIClient()
+	if client == nil {
+		return nil, errStampClientUnavailable
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
 
 	images, err := client.Models.GenerateImages(
-		context.Background(),
+		ctx,
 		"models/imagen-4.0-generate-001",
 		"Make an ink stamp black and solid white background with the following description: "+newPrompt,
 		&genai.GenerateImagesConfig{

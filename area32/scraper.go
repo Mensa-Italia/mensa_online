@@ -24,6 +24,10 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// maxResumeConcurrency limita le chiamate Gemini parallele durante il sync
+// dei documenti scraped. 5 è un compromesso fra throughput e rate-limit Gemini.
+const maxResumeConcurrency = 5
+
 var ErrUnableToConnect = errors.New("ErrUnableToConnect")
 var ErrInvalidCredentials = errors.New("ErrInvalidCredentials")
 
@@ -258,18 +262,58 @@ func (api *ScraperApi) GetAllDocuments(app core.App, excludedUID []string) ([]ma
 		documents = append(documents, pageDocuments...)
 	}
 	documents = invertArray(documents)
-	var resultDocuments []map[string]any
+
+	// Pre-filtra i documenti da processare mantenendo l'indice originale
+	// per preservare l'ordinamento finale.
+	type pendingDoc struct {
+		idx int
+		doc map[string]any
+	}
+	var pending []pendingDoc
 	for i, document := range documents {
 		uid := uuid.NewMD5(uuid.MustParse(env.GetDocsUUID()), []byte(document["link"].(string))).String()
 		if !slices.Contains(excludedUID, uid) {
-			fs, err := api.DownloadFile(document["link"].(string))
+			pending = append(pending, pendingDoc{idx: i, doc: document})
+		}
+	}
+
+	// Fan-out controllato: download + resume Gemini in parallelo (max maxResumeConcurrency).
+	// Errori isolati per singolo documento: se Gemini fallisce/timeout salviamo
+	// resume="" e l'errore non blocca il batch — il riassunto verrà rigenerato
+	// al prossimo sync.
+	g, ctx := errgroup.WithContext(context.Background())
+	g.SetLimit(maxResumeConcurrency)
+	var mu sync.Mutex
+	processed := make(map[int]map[string]any, len(pending))
+
+	for _, p := range pending {
+		p := p
+		g.Go(func() error {
+			if err := ctx.Err(); err != nil {
+				return nil
+			}
+			fs, err := api.DownloadFile(p.doc["link"].(string))
 			if err != nil {
 				log.Println("Error downloading file:", err)
-				continue
+				return nil
 			}
-			documents[i]["file"] = fs
-			documents[i]["resume"] = aitools.ResumeDocument(app, fs)
-			resultDocuments = append(resultDocuments, documents[i])
+			p.doc["file"] = fs
+			// ResumeDocument non propaga errori: in caso di fallimento Gemini
+			// ritorna stringa vuota e logga internamente.
+			p.doc["resume"] = aitools.ResumeDocument(app, fs)
+			mu.Lock()
+			processed[p.idx] = p.doc
+			mu.Unlock()
+			return nil
+		})
+	}
+	_ = g.Wait()
+
+	// Ricostruisce il risultato preservando l'ordine originale.
+	var resultDocuments []map[string]any
+	for _, p := range pending {
+		if d, ok := processed[p.idx]; ok {
+			resultDocuments = append(resultDocuments, d)
 		}
 	}
 	return resultDocuments, nil
