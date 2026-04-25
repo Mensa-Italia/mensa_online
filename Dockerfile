@@ -1,37 +1,36 @@
 FROM golang:alpine AS builder
 
-RUN apk add build-base
+RUN apk add --no-cache build-base
 
-WORKDIR mensaapp_server
+WORKDIR /src
 
+# Layer cache: scarica dipendenze prima del codice
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copia sorgenti
 COPY . .
-
 
 ARG CGO_ENABLED=1
 ARG GOOS=linux
 ARG GOARCH=amd64
 ARG CGO_CFLAGS="-D_LARGEFILE64_SOURCE"
 
-RUN go get ./...
-RUN go install ./...
-
-RUN  go build -o /main ./main
-
-RUN mkdir /pb_public
-
-RUN cp -r ./pb_public/* /pb_public/
+RUN go build -trimpath -ldflags="-s -w" -o /out/main ./main
 
 
 FROM alpine:latest AS deploy
 
-WORKDIR /
+RUN apk --no-cache add tzdata ghostscript ca-certificates && \
+    adduser -D -u 10001 app && \
+    mkdir -p /pb/main /pb_public && \
+    chown -R app:app /pb /pb_public
 
-RUN apk --no-cache add tzdata ghostscript
+COPY --from=builder --chown=app:app /out/main /pb/main/main
+COPY --from=builder --chown=app:app /src/pb_public/ /pb_public/
 
-RUN mkdir "./pb"
-
-COPY --from=builder /main ./pb/main/main
-COPY --from=builder /pb_public/ ./pb_public/
+USER app
+WORKDIR /pb/main
 
 EXPOSE 8080
 CMD ["/pb/main/main", "serve", "--http=0.0.0.0:8080"]
