@@ -5,6 +5,7 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/stripe/stripe-go/v81/webhook"
 	"io"
+	"mensadb/tools/dbtools"
 	"mensadb/tools/env"
 	"net/http"
 	"strings"
@@ -21,6 +22,11 @@ func webhookStripe(e *core.RequestEvent) error {
 	event, err := webhook.ConstructEvent(payload, e.Request.Header.Get("Stripe-Signature"), env.GetStripeWebhookSignature())
 	if err != nil {
 		return e.JSON(http.StatusBadRequest, err.Error())
+	}
+
+	if !dbtools.MarkWebhookEventProcessed(e.App, "stripe", event.ID) {
+		e.App.Logger().Info("stripe webhook: duplicate event, skipping", "event_id", event.ID)
+		return e.String(http.StatusOK, "OK")
 	}
 
 	if strings.Contains(string(event.Type), "payment_intent") {
