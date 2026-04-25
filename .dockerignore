@@ -1,0 +1,13 @@
+.git
+.github
+.gitignore
+.dockerignore
+.claude
+.idea
+.vscode
+**/*_test.go
+**/.DS_Store
+README.md
+*.md
+pb_data
+mails.json

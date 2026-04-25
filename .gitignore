@@ -1,0 +1,36 @@
+# binaries
+/main
+*.exe
+*.test
+*.out
+
+# pocketbase data
+pb_data/
+pb_public/db.sqlite*
+pb_public/uploads/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# env
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+**/.DS_Store
+Thumbs.db
+
+# editors
+.idea/
+.vscode/
+*.swp
+
+# build/tooling locale
+mails.json
+/tmp
+/dist
+
+# claude / planning artefatti locali
+.claude/local/
