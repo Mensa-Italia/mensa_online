@@ -3,6 +3,7 @@ package cs
 import (
 	"mensadb/main/hooks"
 	"mensadb/tools/dbtools"
+	"mensadb/tools/env"
 	"strings"
 
 	"github.com/pocketbase/dbx"
@@ -11,27 +12,28 @@ import (
 )
 
 // MembersHashedHandler espone un endpoint che restituisce un elenco di record della collezione
-// `members_registry` (solo quelli attivi) trasformando *tutti* i valori in hash MD5.
+// `members_registry` (solo quelli attivi) trasformando *tutti* i valori in hash HMAC-SHA256.
 //
 // Obiettivo pratico:
 // - consentire ad un client di sincronizzare/validare dati sensibili senza ricevere i valori in chiaro.
 // - mantenere una struttura JSON simile all'originale, ma con chiavi normalizzate e valori hashed.
 //
 // Meccanismo di sicurezza:
-// - richiede una chiave di autorizzazione (Authorization header o query param `authKey`).
+// - richiede una chiave di autorizzazione tramite header `Authorization` (no query string).
 // - la chiave viene validata tramite hooks.CheckKey con permesso "GET_MEMBERS_HASH".
 //
 // Forma della risposta:
 // - array di oggetti; ogni oggetto rappresenta un membro.
-// - ogni oggetto contiene i campi originali (con chiavi normalizzate) ma con valori MD5(salt+value).
-// - viene aggiunto un campo `salt` per record, derivato dall'ID del record.
+// - ogni oggetto contiene i campi originali (con chiavi normalizzate) ma con valori HMAC-SHA256.
+//
+// BREAKING: il salt non viene più ritornato. Il client deve negoziare il salt
+// out-of-band o accettare gli hash come opachi (non più reversibili lato client).
 func MembersHashedHandler(e *core.RequestEvent) error {
-	// Recupero della chiave di autorizzazione.
-	// 1) Preferiamo l'header standard `Authorization`.
-	// 2) In fallback accettiamo anche `authKey` in query string (utile per debug/integrazioni semplici).
+	// Recupero della chiave di autorizzazione: solo header `Authorization`.
+	// Il fallback in query string è stato rimosso per evitare leak nei log/referer.
 	authKey := e.Request.Header.Get("Authorization")
 	if authKey == "" {
-		authKey = e.Request.URL.Query().Get("authKey")
+		return e.String(401, "Unauthorized")
 	}
 
 	// Blocco immediato se la chiave non è valida o non ha la capability richiesta.
@@ -64,22 +66,19 @@ func MembersHashedHandler(e *core.RequestEvent) error {
 		// Parsing JSON con gjson: fornisce accesso rapido a mappe/oggetti annidati.
 		elems := gjson.ParseBytes(json)
 
-		// Salt per-record:
-		// - viene derivato dall'ID del record.
-		// - usato come "chiave"/sale per hashare i valori.
-		// Importante: non è un salt segreto (viene infatti *restituito* al client).
-		// Serve principalmente a differenziare gli hash tra record diversi e rendere meno utili
-		// confronti diretti tra dataset differenti.
-		salt := dbtools.GetMD5Hash(record.Id, "")
+		// Salt per-record server-side:
+		// - derivato da record.Id concatenato al PASSWORD_SALT lato server, hashato con HMAC-SHA256.
+		// - NON viene ritornato al client: gli hash diventano opachi.
+		// - serve a differenziare gli hash tra record diversi e a renderli non riproducibili senza
+		//   conoscere il segreto server.
+		// BREAKING: il salt non viene più ritornato. Il client deve negoziare il salt
+		// out-of-band o accettare gli hash come opachi (non più reversibili lato client).
+		salt := dbtools.GetHMACSHA256Hash(record.Id, env.GetPasswordSalt())
 
 		// Ricorsivamente:
 		// - normalizziamo le chiavi (es. case/accents/spazi) per avere una forma stabile.
-		// - hashiamo ogni valore scalare con MD5(value, salt).
+		// - hashiamo ogni valore scalare con HMAC-SHA256(value, salt).
 		data := recurseMap(elems.Map(), salt)
-
-		// Aggiungiamo il salt in chiaro per questo record.
-		// Così un client può ricalcolare gli hash dei valori noti localmente e confrontarli.
-		data["salt"] = salt
 
 		finalData = append(finalData, data)
 	}
@@ -92,12 +91,12 @@ func MembersHashedHandler(e *core.RequestEvent) error {
 //
 // Regole di trasformazione:
 // - Per ogni chiave:
-//   - la chiave viene normalizzata con dbtools.NormalizeTextForHash(key)
+//   - la chiave viene normalizzata con dbtools.NormalizeTextForHashAndRemoveSpecialCharsOrAccents(key)
 //     (tipicamente per ridurre differenze di casing/punteggiatura/spazi).
 //
 // - Per ogni valore:
 //   - se è un oggetto JSON annidato, si ricorre su quell'oggetto.
-//   - altrimenti si converte in stringa e si calcola l'hash MD5 usando `salt`.
+//   - altrimenti si converte in stringa e si calcola l'hash HMAC-SHA256 usando `salt`.
 //
 // Nota sui tipi JSON:
 // - gjson.Result può rappresentare stringhe, numeri, booleani, null, array e oggetti.
@@ -120,9 +119,8 @@ func recurseMap(data map[string]gjson.Result, salt string) map[string]any {
 			continue
 		}
 
-		// Caso: valore scalare (o array/non-oggetto) => hash.
-		// GetMD5Hash(value, salt) tipicamente concatena/combina valore e salt prima di hashare.
-		finalData[normalizedKey] = dbtools.GetMD5Hash(value.String(), salt)
+		// Caso: valore scalare (o array/non-oggetto) => hash HMAC-SHA256.
+		finalData[normalizedKey] = dbtools.GetHMACSHA256Hash(value.String(), salt)
 	}
 
 	return finalData

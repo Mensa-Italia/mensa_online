@@ -6,6 +6,9 @@ import (
 )
 
 func forceNotification(e *core.RequestEvent) error {
+	if !dbtools.RequireSuperuser(e) {
+		return e.String(401, "Unauthorized")
+	}
 	user, _ := e.App.FindRecordById("users", "5366")
 
 	dbtools.SendPushNotificationToUser(e.App, dbtools.PushNotification{
