@@ -4,7 +4,6 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
-	"log"
 	"mensadb/area32"
 	"mensadb/importers"
 	"mensadb/tools/cdnfiles"
@@ -63,34 +62,38 @@ func RemoteRetrieveMembersFromArea32(app core.App) {
 		membersUids = append(membersUids, member.Id)
 	}
 
+	// Costruisci un set degli ID restituiti da Area32 per lookup O(1)
+	// (prima era un doppio loop O(n^2) su ~50k membri).
+	existing := make(map[string]struct{}, len(allMembersIDs))
+	for _, id := range allMembersIDs {
+		existing[id] = struct{}{}
+	}
+
 	// per i memberi in memberUids che non sono in allMembersIDs imposto is_active a false
 	for _, member := range membersUids {
-		found := false
-		for _, memberId := range allMembersIDs {
-			if member == memberId {
-				found = true
-				break
-			}
-		}
+		_, found := existing[member]
 		if !found {
 			memberInside, err := app.FindRecordById(membersRegistryCollection, member)
 			if err == nil {
 				memberInside.Set("is_active", false)
-				err = app.Save(memberInside)
-				if err != nil {
-					log.Println("Error saving member: ", err.Error())
+				if err := app.Save(memberInside); err != nil {
+					app.Logger().Error("members sync: save failed", "id", memberInside.Id, "err", err)
 				}
 			}
 			userInside, err := app.FindRecordById("users", member)
 			if err == nil {
 				userInside.Set("is_membership_active", false)
-				_ = app.Save(userInside)
+				if err := app.Save(userInside); err != nil {
+					app.Logger().Error("members sync: save failed", "id", userInside.Id, "err", err)
+				}
 			}
 		} else {
 			userInside, err := app.FindRecordById("users", member)
 			if err == nil && !userInside.GetBool("is_membership_active") {
 				userInside.Set("is_membership_active", true)
-				_ = app.Save(userInside)
+				if err := app.Save(userInside); err != nil {
+					app.Logger().Error("members sync: save failed", "id", userInside.Id, "err", err)
+				}
 			}
 		}
 	}
@@ -138,9 +141,8 @@ func UpdateMembers(app core.App, member map[string]any) string {
 	newRecord.Set("is_active", true)
 	newRecord.Set("full_profile_link", member["full_profile_link"])
 	// Salva il record nel database
-	err = app.Save(newRecord)
-	if err != nil {
-		log.Println("Error saving member: ", err.Error())
+	if err := app.Save(newRecord); err != nil {
+		app.Logger().Error("members sync: save failed", "id", newRecord.Id, "err", err)
 	}
 
 	return memberId
