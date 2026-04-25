@@ -5,9 +5,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"io"
+	"net/http"
 
 	"github.com/pocketbase/pocketbase/core"
 	"mensadb/printful"
+	"mensadb/tools/dbtools"
 	"mensadb/tools/env"
 )
 
@@ -15,7 +17,7 @@ func PrintfulWebhookHandler(e *core.RequestEvent) error {
 	bodyBytes, err := io.ReadAll(e.Request.Body)
 	if err != nil {
 		e.App.Logger().Error("printful webhook: read body failed", "err", err)
-		return e.String(200, "OK")
+		return e.String(http.StatusOK, "OK")
 	}
 	defer e.Request.Body.Close()
 
@@ -24,7 +26,21 @@ func PrintfulWebhookHandler(e *core.RequestEvent) error {
 			"ip", e.Request.RemoteAddr,
 			"len", len(bodyBytes),
 		)
-		return e.String(200, "OK")
+		return e.String(http.StatusOK, "OK")
+	}
+
+	eventID := e.Request.Header.Get("X-PF-Webhook-Id")
+	if eventID == "" {
+		eventID = e.Request.Header.Get("X-PF-Webhook-ID")
+	}
+	if eventID == "" {
+		sum := sha256.Sum256(bodyBytes)
+		eventID = hex.EncodeToString(sum[:16])
+	}
+
+	if !dbtools.MarkWebhookEventProcessed(e.App, "printful", eventID) {
+		e.App.Logger().Info("printful webhook: duplicate, skipping", "event_id", eventID)
+		return e.String(http.StatusOK, "OK")
 	}
 
 	if err := printful.HandleWebhook(printful.PrintfulHandlers{
@@ -35,7 +51,7 @@ func PrintfulWebhookHandler(e *core.RequestEvent) error {
 		e.App.Logger().Error("printful webhook: handler failed", "err", err)
 	}
 
-	return e.String(200, "OK")
+	return e.String(http.StatusOK, "OK")
 }
 
 func verifyPrintfulSignature(signature string, body []byte) bool {
@@ -61,11 +77,9 @@ func handleBodyUpdate(app core.App) func(model printful.WebhookProductModel) err
 			app.Logger().Error("printful webhook: boutique collection not found", "err", err)
 			return nil
 		}
-		// FIX: era invertito (== nil). Adesso creiamo il record solo se la collection esiste.
 		record := core.NewRecord(boutiqueCollection)
 		record.Set("name", model.Data.SyncProduct.Name)
 		record.Set("description", model.Data.SyncProduct.Name)
-		// FIX: persistere il record. Se fallisce, log e proseguiamo (nessun 5xx all'utente esterno).
 		if err := app.Save(record); err != nil {
 			app.Logger().Error("printful webhook: save record failed", "err", err)
 		}
