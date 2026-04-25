@@ -127,7 +127,11 @@ func UpdateDocuments(app core.App, document map[string]any) string {
 	}
 
 	if document["resume"] != nil && document["resume"].(string) != "" {
-		resumeCollection, _ := app.FindCollectionByNameOrId("documents_elaborated")
+		resumeCollection, err := app.FindCollectionByNameOrId("documents_elaborated")
+		if err != nil || resumeCollection == nil {
+			app.Logger().Error("find collection documents_elaborated failed", "err", err)
+			return newDocument.Id
+		}
 		newResume := core.NewRecord(resumeCollection)
 		newResume.Set("document", newDocument.Id)
 		newResume.Set("ia_resume", document["resume"].(string))
@@ -135,7 +139,9 @@ func UpdateDocuments(app core.App, document map[string]any) string {
 			app.Logger().Error(fmt.Sprintf("[UpdateDocuments] errore salvataggio resume per documento %s: %v", newDocument.Id, err))
 		} else {
 			newDocument.Set("elaborated", newResume.Id)
-			_ = app.Save(newDocument)
+			if err := app.Save(newDocument); err != nil {
+				app.Logger().Error("save record failed", "collection", newDocument.Collection().Name, "id", newDocument.Id, "err", err)
+			}
 		}
 	}
 

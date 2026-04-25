@@ -60,7 +60,9 @@ func CronTasks(app core.App) {
 		}
 		for _, record := range records {
 			if record.GetString("user") == "5366" {
-				_ = app.Delete(record)
+				if err := app.Delete(record); err != nil {
+					app.Logger().Error("delete record failed", "collection", record.Collection().Name, "id", record.Id, "err", err)
+				}
 			}
 		}
 
@@ -70,11 +72,17 @@ func CronTasks(app core.App) {
 		}
 
 		for _, record := range records2 {
-			collection, _ := app.FindCollectionByNameOrId("stamp_users")
+			collection, err := app.FindCollectionByNameOrId("stamp_users")
+			if err != nil || collection == nil {
+				app.Logger().Error("find collection stamp_users failed", "err", err)
+				continue
+			}
 			newRecord := core.NewRecord(collection)
 			newRecord.Set("user", "5366")
 			newRecord.Set("stamp", record.Id)
-			_ = app.Save(newRecord)
+			if err := app.Save(newRecord); err != nil {
+				app.Logger().Error("save record failed", "collection", newRecord.Collection().Name, "stamp", record.Id, "err", err)
+			}
 		}
 	})
 }

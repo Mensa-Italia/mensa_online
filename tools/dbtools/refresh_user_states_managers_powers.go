@@ -63,7 +63,9 @@ func RefreshUserStatesManagersPowers(app core.App) {
 		// Se lo stato del potere 'events' è cambiato, aggiorna il record
 		if hasEventsPower != hadEventsPower {
 			record.Set("powers", newPowers)
-			_ = app.Save(record) // Salva le modifiche senza gestire esplicitamente l'errore
+			if err := app.Save(record); err != nil {
+				app.Logger().Error("save record failed", "collection", record.Collection().Name, "id", record.Id, "err", err)
+			}
 		}
 	}
 }
