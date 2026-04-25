@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
@@ -33,8 +34,13 @@ type documentsCitationResponse struct {
 const provaPrompt = ``
 
 func FindTree(app core.App, file *filesystem.File) DocumentsCitationList {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
 	client := GetAIClient()
+	if client == nil {
+		log.Printf("FindTree: gemini client unavailable for %s — fallback to empty citation list", file.Name)
+		return DocumentsCitationList{}
+	}
 
 	uploaded := UploadFileToAIClient(client, file)
 	if uploaded == nil {

@@ -5,6 +5,7 @@ import (
 	"log"
 	"mensadb/tools/env"
 	"strings"
+	"time"
 
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
@@ -12,9 +13,20 @@ import (
 	"google.golang.org/genai"
 )
 
+// resumeDocumentTimeout copre upload di più file + GenerateContent con thinking high.
+// Se Gemini non risponde entro questo limite consideriamo l'operazione fallita
+// e ritorniamo un placeholder vuoto: il documento sarà comunque visibile,
+// il riassunto verrà rigenerato al prossimo retry.
+const resumeDocumentTimeout = 120 * time.Second
+
 func ResumeDocument(app core.App, reader *filesystem.File) string {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), resumeDocumentTimeout)
+	defer cancel()
 	client := GetAIClient()
+	if client == nil {
+		log.Printf("ResumeDocument: gemini client unavailable for %s — fallback to empty resume", reader.Name)
+		return ""
+	}
 
 	usageFile := UploadFileToAIClient(client, reader)
 	if usageFile == nil {
@@ -81,7 +93,7 @@ func ResumeDocument(app core.App, reader *filesystem.File) string {
 	)
 
 	if err != nil {
-		log.Println("Error generating content:", err)
+		log.Printf("ResumeDocument: gemini summarize failed for %s: %v — fallback to empty resume", reader.Name, err)
 		return ""
 	}
 

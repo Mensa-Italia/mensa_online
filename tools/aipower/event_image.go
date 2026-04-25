@@ -11,16 +11,18 @@ import (
 	"image/png"
 	"log"
 	"math"
-	"mensadb/tools/env"
+	"mensadb/tools/aitools"
+	"time"
 )
 
 func _generateEventImageGenerationPrompt(prompt string) (string, error) {
 
-	ctx := context.Background()
-	client, _ := genai.NewClient(ctx, &genai.ClientConfig{
-		APIKey:  env.GetGeminiKey(),
-		Backend: genai.BackendGeminiAPI,
-	})
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	client := aitools.GetAIClient()
+	if client == nil {
+		return "", fmt.Errorf("gemini client unavailable")
+	}
 
 	temp := float32(1)
 	topP := float32(0.95)
@@ -62,11 +64,12 @@ func _generateEventImageGenerationPrompt(prompt string) (string, error) {
 }
 
 func _generateBackgroundImageAI(prompt string) ([]byte, error) {
-	ctx := context.Background()
-	client, _ := genai.NewClient(ctx, &genai.ClientConfig{
-		APIKey:  env.GetGeminiKey(),
-		Backend: genai.BackendGeminiAPI,
-	})
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+	client := aitools.GetAIClient()
+	if client == nil {
+		return nil, fmt.Errorf("gemini client unavailable")
+	}
 
 	promptToUse, err := _generateEventImageGenerationPrompt(prompt)
 	if err != nil {
