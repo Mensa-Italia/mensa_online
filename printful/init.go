@@ -1,13 +1,15 @@
 package printful
 
 import (
+	"time"
+
 	"github.com/go-resty/resty/v2"
 )
 
-var restyClient = resty.New()
+var restyClient = resty.New().SetTimeout(30 * time.Second)
 
 func Setup(apiKey string) {
-	restyClient = resty.New().SetAuthToken(apiKey).SetBaseURL("https://api.printful.com")
+	restyClient = resty.New().SetTimeout(30 * time.Second).SetAuthToken(apiKey).SetBaseURL("https://api.printful.com")
 }
 
 func SetupWebhook(url string) {

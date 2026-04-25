@@ -43,7 +43,7 @@ type ScraperApi struct {
 
 func NewAPI() *ScraperApi {
 	cookieJar, _ := cookiejar.New(nil)
-	client := resty.New().SetCookieJar(cookieJar).SetDoNotParseResponse(true)
+	client := resty.New().SetTimeout(30 * time.Second).SetCookieJar(cookieJar).SetDoNotParseResponse(true)
 	return &ScraperApi{client: client}
 }
 
