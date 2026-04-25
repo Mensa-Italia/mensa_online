@@ -25,6 +25,10 @@ import (
 )
 
 func main() {
+	if err := env.MustValidate(); err != nil {
+		log.Fatalf("invalid configuration: %v", err)
+	}
+
 	app := pocketbase.New()
 	crons.CronTasks(app)
 
