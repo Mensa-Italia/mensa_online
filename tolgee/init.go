@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/go-resty/resty/v2"
 	"github.com/pocketbase/pocketbase/core"
@@ -32,7 +33,7 @@ func GetLanguages(app core.App) error {
 		buildLang := Language{
 			Tag: language,
 		}
-		translationData, err := resty.New().R().
+		translationData, err := resty.New().SetTimeout(30 * time.Second).R().
 			Get(strings.ReplaceAll(getInternalConfig(app, "i18n_flat_url"), "{locale}", buildLang.Tag))
 		if err == nil {
 			_ = json.Unmarshal(translationData.Body(), &buildLang.Tranlsations)

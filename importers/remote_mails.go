@@ -6,10 +6,12 @@ import (
 	"io"
 	"log"
 	"mensadb/tools/env"
+	"mensadb/tools/httpx"
 	"net/http"
 	"os"
 	"slices"
 	"strings"
+	"time"
 )
 
 // Forwarding rappresenta la sezione "forwarding" restituita dall'API remota.
@@ -85,7 +87,7 @@ func GetFullMailList() {
 	request.Header.Set("HTTP_AUTH_LOGIN", "dev")
 	request.Header.Set("HTTP_AUTH_PASSWD", env.GetEmailProviderPassword())
 
-	client := &http.Client{}
+	client := httpx.New(30 * time.Second)
 	resp, err := client.Do(request)
 	if err != nil {
 		log.Println("remote_mails: do request:", err)
