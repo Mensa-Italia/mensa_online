@@ -111,8 +111,16 @@ const maxUploadBytes = 800_000
 // chunkSize is the target size for each chunk when splitting large text.
 const chunkSize = 500_000
 
+// uploadTimeout limita il tempo per il singolo upload a Gemini.
+// Anche per file grossi (post-compressione) 90s è sufficiente sulla rete tipica.
+const uploadTimeout = 90 * time.Second
+
+// summarizeSectionTimeout limita ogni chiamata Generate per chunk/sezione.
+const summarizeSectionTimeout = 60 * time.Second
+
 func prepareFile(client *genai.Client, name string, data []byte) *genai.File {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), uploadTimeout)
+	defer cancel()
 	log.Println("Uploading file to Gemini:", name)
 
 	openedFile := io.NopCloser(bytes.NewReader(data))
@@ -268,8 +276,6 @@ func summarizeInChunks(client *genai.Client, text, name string, depth int) strin
 // In caso di 429 (rate limit) ritenta con backoff esponenziale fino a maxRetries volte.
 // Se il testo è ancora troppo grande viene troncato come ultima risorsa.
 func summarizeSection(client *genai.Client, text, label string) string {
-	ctx := context.Background()
-
 	if len(text) > maxUploadBytes {
 		text = text[:maxUploadBytes]
 	}
@@ -284,12 +290,14 @@ func summarizeSection(client *genai.Client, text, label string) string {
 	wait := 4 * time.Second
 
 	for attempt := 1; attempt <= maxRetries; attempt++ {
+		ctx, cancel := context.WithTimeout(context.Background(), summarizeSectionTimeout)
 		result, err := client.Models.GenerateContent(
 			ctx,
 			"gemini-2.0-flash",
 			[]*genai.Content{{Role: genai.RoleUser, Parts: []*genai.Part{genai.NewPartFromText(prompt)}}},
 			nil,
 		)
+		cancel()
 		if err == nil {
 			return result.Text()
 		}
