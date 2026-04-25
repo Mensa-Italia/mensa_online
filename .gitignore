@@ -1,5 +1,5 @@
-# binaries
-/main
+# binaries (rimosso "/main" perche` confligge con la directory main/;
+# il binario di build viene messo in /tmp o /dist via -o)
 *.exe
 *.test
 *.out
