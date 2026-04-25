@@ -44,7 +44,7 @@ func RemoteUpdateAddons(app core.App) {
 		urlToCheck := record.Get("url").(string) + "/mensadata.json"
 
 		// Effettua una richiesta HTTP GET per recuperare i dati dell'addon
-		get, err := resty.New().R().Get(urlToCheck)
+		get, err := resty.New().SetTimeout(30 * time.Second).R().Get(urlToCheck)
 		if err == nil && get.StatusCode() == 200 && get.Body() != nil {
 			// Parsea il JSON di risposta
 			dataToUse := gjson.ParseBytes(get.Body())
