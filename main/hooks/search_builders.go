@@ -115,11 +115,6 @@ func resolvePositionLabel(app core.App, positionId string) (city, state string) 
 	return rec.GetString("name"), rec.GetString("state")
 }
 
-func resolvePositionRegion(app core.App, positionId string) string {
-	_, state := resolvePositionLabel(app, positionId)
-	return state
-}
-
 func loadIaResume(app core.App, docRec *core.Record) string {
 	elaboratedId := docRec.GetString("elaborated")
 	if elaboratedId == "" {
