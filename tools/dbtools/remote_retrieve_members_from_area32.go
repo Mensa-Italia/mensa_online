@@ -36,12 +36,11 @@ func RemoteRetrieveMembersFromArea32(app core.App) {
 		return
 	}
 
-	// Recupera i nuovi membri da Area32 che non sono già nel database
-	newMembers, _ := scraperApi.GetAllRegSoci()
-	// Aggiorna i membri in modo concorrente
-	allMembersIDs := []string{}
-	for _, member := range newMembers {
-		allMembersIDs = append(allMembersIDs, UpdateMembers(app, member))
+	// Recupera i nuovi membri da Area32
+	newMembers, err := scraperApi.GetAllRegSoci()
+	if err != nil {
+		app.Logger().Error("members sync: GetAllRegSoci failed, abort to avoid mass deactivation", "err", err)
+		return
 	}
 
 	// Recupera la collezione "members_registry" dal database
@@ -54,6 +53,21 @@ func RemoteRetrieveMembersFromArea32(app core.App) {
 	membersInside, err := app.FindAllRecords(membersRegistryCollection)
 	if err != nil {
 		return
+	}
+
+	// Tripwire: se Area32 ha restituito una lista sospettosamente piccola rispetto
+	// allo stato del DB, abortisce senza toccare nulla. Evita il caso "scrape fallito
+	// a meta` e disattiva tutti tranne i pochi visti".
+	if len(membersInside) > 100 && len(newMembers)*2 < len(membersInside) {
+		app.Logger().Error("members sync: aborting, suspiciously few members from Area32",
+			"got", len(newMembers), "db_total", len(membersInside))
+		return
+	}
+
+	// Aggiorna i membri trovati su Area32
+	allMembersIDs := []string{}
+	for _, member := range newMembers {
+		allMembersIDs = append(allMembersIDs, UpdateMembers(app, member))
 	}
 
 	// Costruisce un elenco degli ID dei membri esistenti
