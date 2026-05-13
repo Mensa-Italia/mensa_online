@@ -1,18 +1,26 @@
 package hooks
 
 import (
+	"strings"
+
 	"github.com/pocketbase/pocketbase/core"
 	"mensadb/tools/search"
 )
 
 func BuildEventDoc(app core.App, rec *core.Record) search.Doc {
+	ownerName := fetchUserName(app, rec.GetString("owner"))
+	posCity, posState := resolvePositionLabel(app, rec.GetString("position"))
+
+	body := joinNonEmpty(" ", rec.GetString("description"), ownerName, posCity, posState)
+	tags := filterNonEmpty(posState)
+
 	return search.Doc{
 		ID:            rec.Id,
 		Type:          "event",
 		Title:         rec.GetString("name"),
-		Body:          rec.GetString("description"),
-		Tags:          nil,
-		Region:        resolvePositionRegion(app, rec.GetString("position")),
+		Body:          body,
+		Tags:          tags,
+		Region:        posState,
 		Visibility:    "public",
 		RequiredPower: "",
 		UpdatedAt:     rec.GetDateTime("updated").Time(),
@@ -20,10 +28,7 @@ func BuildEventDoc(app core.App, rec *core.Record) search.Doc {
 }
 
 func BuildSigDoc(app core.App, rec *core.Record) search.Doc {
-	var tags []string
-	if gt := rec.GetString("group_type"); gt != "" {
-		tags = []string{gt}
-	}
+	tags := filterNonEmpty(rec.GetString("group_type"))
 	return search.Doc{
 		ID:         rec.Id,
 		Type:       "sig",
@@ -37,22 +42,29 @@ func BuildSigDoc(app core.App, rec *core.Record) search.Doc {
 }
 
 func BuildDealDoc(app core.App, rec *core.Record) search.Doc {
+	ownerName := fetchUserName(app, rec.GetString("owner"))
+	posCity, posState := resolvePositionLabel(app, rec.GetString("position"))
+
+	body := joinNonEmpty(" ", rec.GetString("details"), ownerName, posCity, posState)
 	tags := filterNonEmpty(rec.GetString("commercial_sector"), rec.GetString("who"))
+
 	return search.Doc{
 		ID:         rec.Id,
 		Type:       "deal",
 		Title:      rec.GetString("name"),
-		Body:       rec.GetString("details"),
+		Body:       body,
 		Tags:       tags,
-		Region:     resolvePositionRegion(app, rec.GetString("position")),
+		Region:     posState,
 		Visibility: "members",
 		UpdatedAt:  rec.GetDateTime("updated").Time(),
 	}
 }
 
 func BuildDocumentDoc(app core.App, rec *core.Record) search.Doc {
-	body := rec.GetString("description") + " " + loadIaResume(app, rec)
+	uploaderName := fetchUserName(app, rec.GetString("uploaded_by"))
+	body := joinNonEmpty(" ", rec.GetString("description"), loadIaResume(app, rec), uploaderName)
 	tags := filterNonEmpty(rec.GetString("category"))
+
 	return search.Doc{
 		ID:         rec.Id,
 		Type:       "document",
@@ -70,31 +82,44 @@ func BuildUserDoc(app core.App, rec *core.Record) search.Doc {
 		ID:         rec.Id,
 		Type:       "user",
 		Title:      rec.GetString("name"),
-		Body:       "",
+		Body:       rec.GetString("username"),
 		Tags:       nil,
-		Region:     resolvePositionRegion(app, rec.GetString("position")),
+		Region:     "",
 		Visibility: "members",
 		UpdatedAt:  rec.GetDateTime("updated").Time(),
 	}
 }
 
-// resolvePositionRegion fetches the positions record and returns its "state"
-// field, which holds the Italian region (e.g. "Lombardia"). The positions
-// collection has no "region" field — "state" is the region selector.
-// Returns "" on any error or empty positionId.
-func resolvePositionRegion(app core.App, positionId string) string {
-	if positionId == "" {
+func fetchUserName(app core.App, userId string) string {
+	if userId == "" {
 		return ""
 	}
-	posRec, err := app.FindRecordById("positions", positionId)
+	rec, err := app.FindRecordById("users", userId)
 	if err != nil {
 		return ""
 	}
-	return posRec.GetString("state")
+	if n := rec.GetString("name"); n != "" {
+		return n
+	}
+	return rec.GetString("username")
 }
 
-// loadIaResume returns the ia_resume text from the linked documents_elaborated
-// record. Returns "" on any failure.
+func resolvePositionLabel(app core.App, positionId string) (city, state string) {
+	if positionId == "" {
+		return "", ""
+	}
+	rec, err := app.FindRecordById("positions", positionId)
+	if err != nil {
+		return "", ""
+	}
+	return rec.GetString("name"), rec.GetString("state")
+}
+
+func resolvePositionRegion(app core.App, positionId string) string {
+	_, state := resolvePositionLabel(app, positionId)
+	return state
+}
+
 func loadIaResume(app core.App, docRec *core.Record) string {
 	elaboratedId := docRec.GetString("elaborated")
 	if elaboratedId == "" {
@@ -107,8 +132,6 @@ func loadIaResume(app core.App, docRec *core.Record) string {
 	return elaborated.GetString("ia_resume")
 }
 
-// filterNonEmpty returns a slice of only the non-empty strings from vals.
-// Returns nil if none remain.
 func filterNonEmpty(vals ...string) []string {
 	var out []string
 	for _, v := range vals {
@@ -117,4 +140,8 @@ func filterNonEmpty(vals ...string) []string {
 		}
 	}
 	return out
+}
+
+func joinNonEmpty(sep string, vals ...string) string {
+	return strings.Join(filterNonEmpty(vals...), sep)
 }
