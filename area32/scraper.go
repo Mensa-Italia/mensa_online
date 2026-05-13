@@ -3,6 +3,7 @@ package area32
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"errors"
 	"io"
 	"log"
@@ -69,7 +70,16 @@ func NewAPI() *ScraperApi {
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 			return dialer.DialContext(ctx, "tcp4", addr)
 		},
-		ForceAttemptHTTP2:     true,
+		// Forza HTTP/1.1: il bump di Go 1.25.9 -> 1.25.10 + x/net v0.53 ha
+		// cambiato l'handling delle SETTINGS HTTP/2 (CVE GO-2026-4918). AFD
+		// davanti a cloud32 fingerprinta il client h2 e classifica come bot,
+		// emettendo solo cookies framework e non quelli applicativi.
+		// HTTP/1.1 elude completamente il fingerprint h2.
+		TLSNextProto: map[string]func(string, *tls.Conn) http.RoundTripper{},
+		// Force HTTP/1.1 anche tramite ALPN nel ClientHello.
+		TLSClientConfig: &tls.Config{
+			NextProtos: []string{"http/1.1"},
+		},
 		TLSHandshakeTimeout:   10 * time.Second,
 		ResponseHeaderTimeout: 15 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
