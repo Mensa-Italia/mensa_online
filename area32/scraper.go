@@ -147,13 +147,28 @@ func (api *ScraperApi) DoLoginAndRetrieveMain(email, password string) (*Area32Us
 		}
 		log.Printf("area32 login: POST Set-Cookie: %s (full len=%d)", name, len(sc))
 	}
-	if u, err := url.Parse("https://www.cloud32.it"); err == nil {
-		jarCookies := api.jar.Cookies(u)
+	homeURL, _ := url.Parse("https://www.cloud32.it/Associazioni/utenti/home")
+	if homeURL != nil {
+		jarCookies := api.jar.Cookies(homeURL)
 		names := make([]string, 0, len(jarCookies))
 		for _, c := range jarCookies {
 			names = append(names, c.Name)
 		}
-		log.Printf("area32 login: jar after POST has %d cookies: %v", len(jarCookies), names)
+		log.Printf("area32 login: jar would send to /home %d cookies: %v", len(jarCookies), names)
+	}
+	// Parse ogni Set-Cookie del POST per vedere Path/Domain/Attributes
+	for _, sc := range postResp.Header().Values("Set-Cookie") {
+		// log primi 60 caratteri + attributi (path/domain) — niente valore raw per privacy
+		parts := strings.Split(sc, ";")
+		head := parts[0]
+		if i := strings.Index(head, "="); i > 0 {
+			head = head[:i] + "=<val>"
+		}
+		attrs := []string{}
+		for _, p := range parts[1:] {
+			attrs = append(attrs, strings.TrimSpace(p))
+		}
+		log.Printf("area32 login: cookie attrs %s | %s", head, strings.Join(attrs, " ; "))
 	}
 
 	resp, err = api.client.R().
