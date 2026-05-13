@@ -34,14 +34,14 @@ Il servizio in produzione è raggiungibile su `https://svc.mensa.it`. Il client 
 - **SIG** — gestione Special Interest Group con relazioni tra soci
 - **Sezioni locali** — dati sezionali, admin, workflow accoglienza nuovi soci
 - **Timbri e badge** — immagini generate da Gemini AI, verifica QR, validazione via secret
-- **Documenti** — fetch da Area32, estrazione testo, riassunto AI (Gemini), indice Zinc
+- **Documenti** — fetch da Area32, estrazione testo, riassunto AI (Gemini), indice Bleve embedded
 - **Pagamenti** — donazioni Stripe, ordini boutique, metodi di pagamento, webhook firmati
 - **E-commerce Printful** — catalogo + lifecycle ordini via webhook
 - **Notifiche push** — Firebase FCM attivate da eventi, offerte e azioni di sistema
 - **Autenticazione** — Zitadel OIDC, fallback Area32, firma crittografica payload
 - **Generazione immagini AI** — card evento e timbri con testo dinamico via Gemini
 - **Localizzazione** — stringhe multilingua via Tolgee
-- **Ricerca full-text** — indicizzazione documenti con Zinc Search
+- **Ricerca full-text** — indicizzazione documenti con Bleve embedded via hook e reconciliation cron
 - **Cloud storage** — CDN S3-compatible con presigned URL
 - **Link calendario** — feed iCal personali con accesso hash-based
 - **MCP server** — esposizione tool su `/mcp` protetti da OAuth 2.0
@@ -60,7 +60,7 @@ Il servizio in produzione è raggiungibile su `https://svc.mensa.it`. Il client 
 | AI | [Google Gemini](https://ai.google.dev/) (testo + immagini) via `google.golang.org/genai` |
 | Push notifications | [Firebase Admin SDK](https://firebase.google.com/docs/admin/setup) |
 | i18n | [Tolgee](https://tolgee.io/) |
-| Full-text search | [Zinc Search](https://zincsearch-docs.zinc.dev/) |
+| Full-text search | [Bleve](https://blevesearch.com/) (embedded Go library) |
 | Storage | AWS S3 SDK v2 (presigned URL) |
 | Images | [Unsplash](https://unsplash.com/developers) · Image Router proxy |
 | PDF | `pdfcpu` + Ghostscript nel container |
@@ -76,7 +76,7 @@ Il servizio in produzione è raggiungibile su `https://svc.mensa.it`. Il client 
 
 - [Go 1.25.9+](https://go.dev/dl/) (versione pinnata in `go.mod`)
 - [Docker](https://www.docker.com/) (opzionale, per build container e deploy)
-- Accesso alle chiavi dei servizi esterni usati nei flussi completi (Gemini, Stripe, Firebase, Printful, Zitadel, Tolgee, Zinc, S3, Area32, Unsplash). Per lo sviluppo locale basta un sottoinsieme — vedi la [Configuration wiki](https://github.com/Mensa-Italia/mensa_online/wiki/Configuration).
+- Accesso alle chiavi dei servizi esterni usati nei flussi completi (Gemini, Stripe, Firebase, Printful, Zitadel, Tolgee, S3, Area32, Unsplash). Per lo sviluppo locale basta un sottoinsieme — vedi la [Configuration wiki](https://github.com/Mensa-Italia/mensa_online/wiki/Configuration).
 
 ## Setup
 
@@ -170,7 +170,7 @@ docker build -t mensa_app_database .
                                                               │
                                            ┌──────────────────┴─┐
                                            ▼                    ▼
-                                        Tolgee            Zinc Search
+                                        Tolgee            Bleve (embedded)
                                          (i18n)          (full-text)
                                                               │
                                                               ▼
@@ -207,7 +207,7 @@ mensa_online/
 │   ├── signatures/              # Firma e verifica payload
 │   ├── spatial/                 # Utilità geospaziali
 │   ├── zauth/                   # Client OIDC Zitadel
-│   └── zincsearch/              # Indicizzazione Zinc Search
+│   └── search/                  # Indicizzazione Bleve embedded
 │
 ├── area32/                      # Scraper e client API Area32 (identity legacy)
 ├── importers/                   # Utilità importazione dati
@@ -248,7 +248,7 @@ Tutti gli orari sono in **UTC**. Registrati via `app.Cron().MustAdd(...)` all'av
 | `0 6-20 * * *` | Update documents data da Area32 (ore lavorative) |
 | `30 0,3,6,9,12,15,18,21 * * *` | Update registry soci ogni 3 ore |
 | `0 3 * * *` | Force Zitadel sync |
-| `0 0,3 * * *` | Upload file a Zinc Search |
+| `0 4 * * *` | Search index reconciliation — `search-backfill` |
 | `0 */6 * * *` | Check Stripe accounts utenti |
 | `0 3 1 * *` | Retry mensile documenti senza riassunto |
 | `0 0 * * *` | Snapshot giornaliero anagrafica soci |
