@@ -58,7 +58,7 @@ func DoWithRetry(ctx context.Context, c *http.Client, req *http.Request, maxAtte
 			return resp, nil
 		}
 		if resp != nil {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 		}
 		if err != nil {
 			var nerr net.Error

@@ -19,7 +19,7 @@ func PrintfulWebhookHandler(e *core.RequestEvent) error {
 		e.App.Logger().Error("printful webhook: read body failed", "err", err)
 		return e.String(http.StatusOK, "OK")
 	}
-	defer e.Request.Body.Close()
+	defer func() { _ = e.Request.Body.Close() }()
 
 	if !verifyPrintfulSignature(e.Request.Header.Get("X-PF-Signature"), bodyBytes) {
 		e.App.Logger().Warn("printful webhook: invalid signature, dropping",
