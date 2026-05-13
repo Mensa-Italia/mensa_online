@@ -4,6 +4,7 @@ import (
 	"log"
 	"mensadb/importers"
 	"mensadb/main/api"
+	"mensadb/main/cmd/searchcmd"
 	"mensadb/main/crons"
 	"mensadb/main/hooks"
 	"mensadb/main/links"
@@ -14,8 +15,10 @@ import (
 	"mensadb/tolgee"
 	"mensadb/tools/cdnfiles"
 	"mensadb/tools/env"
+	"mensadb/tools/search"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/pocketbase/pocketbase"
@@ -33,9 +36,22 @@ func main() {
 	crons.CronTasks(app)
 
 	app.OnBootstrap().BindFunc(func(e *core.BootstrapEvent) error {
+		if err := e.Next(); err != nil {
+			return err
+		}
+		if err := search.Init(filepath.Join(e.App.DataDir(), "search_index")); err != nil {
+			log.Fatalf("search init failed: %v", err)
+		}
 		printful.Setup(env.GetPrintfulKey())
 		printful.SetupWebhook(env.GetPrintfulWebhookURL())
 		go importers.GetFullMailList()
+		return nil
+	})
+
+	app.OnTerminate().BindFunc(func(e *core.TerminateEvent) error {
+		if err := search.Shutdown(); err != nil {
+			log.Printf("search shutdown: %v", err)
+		}
 		return e.Next()
 	})
 
@@ -82,6 +98,8 @@ func main() {
 		Automigrate: isGoRun,
 		Dir:         "./migrations",
 	})
+
+	app.RootCmd.AddCommand(searchcmd.New(app))
 
 	if err := app.Start(); err != nil {
 		log.Fatal(err)

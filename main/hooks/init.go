@@ -28,6 +28,27 @@ func Load(app core.App) {
 
 	app.OnRecordAfterUpdateSuccess("stamp").BindFunc(StampUpdateImageAsync)
 
+	// search index — live updates
+	app.OnRecordAfterCreateSuccess("events").BindFunc(indexEventAsync)
+	app.OnRecordAfterUpdateSuccess("events").BindFunc(indexEventAsync)
+	app.OnRecordAfterDeleteSuccess("events").BindFunc(unindexAsync)
+
+	app.OnRecordAfterCreateSuccess("sigs").BindFunc(indexSigAsync)
+	app.OnRecordAfterUpdateSuccess("sigs").BindFunc(indexSigAsync)
+	app.OnRecordAfterDeleteSuccess("sigs").BindFunc(unindexAsync)
+
+	app.OnRecordAfterCreateSuccess("deals").BindFunc(indexDealAsync)
+	app.OnRecordAfterUpdateSuccess("deals").BindFunc(indexDealAsync)
+	app.OnRecordAfterDeleteSuccess("deals").BindFunc(unindexAsync)
+
+	app.OnRecordAfterCreateSuccess("documents").BindFunc(indexDocumentAsync)
+	app.OnRecordAfterUpdateSuccess("documents").BindFunc(indexDocumentAsync)
+	app.OnRecordAfterDeleteSuccess("documents").BindFunc(unindexAsync)
+
+	app.OnRecordAfterCreateSuccess("users").BindFunc(indexUserAsync)
+	app.OnRecordAfterUpdateSuccess("users").BindFunc(indexUserAsync)
+	app.OnRecordAfterDeleteSuccess("users").BindFunc(unindexAsync)
+
 }
 
 func StampUpdateImageAsync(e *core.RecordEvent) error {

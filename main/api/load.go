@@ -6,10 +6,12 @@ import (
 	"mensadb/main/api/cs"
 	"mensadb/main/api/payment"
 	"mensadb/main/api/position"
+	searchapi "mensadb/main/api/search"
 )
 
 func Load(e *router.RouterGroup[*core.RequestEvent]) {
 	position.Load(e.Group("/position"))
 	cs.Load(e.Group("/cs"))
 	payment.Load(e.Group("/payment"))
+	searchapi.Load(e.Group("/search"))
 }

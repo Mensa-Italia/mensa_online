@@ -26,8 +26,6 @@ type config struct {
 	PrintfulWebhookURL     string `env:"PRINTFUL_WEBHOOK_URL" envDefault:""`
 	PrintfulWebhookSecret  string `env:"PRINTFUL_WEBHOOK_SECRET" envDefault:""`
 	UnsplashKey            string `env:"UNSPLASH_KEY" envDefault:""`
-	ZincUsername           string `env:"ZINC_USERNAME" envDefault:""`
-	ZincPassword           string `env:"ZINC_PASSWORD" envDefault:""`
 	ZitadelPAT             string `env:"ZITADEL_PAT"`
 	ZitadelHOST            string `env:"ZITADEL_HOST"`
 	ZitadelOrganizationID  string `env:"ZITADEL_ORGANIZATION_ID"`
@@ -156,14 +154,6 @@ func GetImageRouterKey() string {
 
 func GetUnsplashKey() string {
 	return cfg.UnsplashKey
-}
-
-func GetZincUsername() string {
-	return cfg.ZincUsername
-}
-
-func GetZincPassword() string {
-	return cfg.ZincPassword
 }
 
 func GetZitadelPAT() string {

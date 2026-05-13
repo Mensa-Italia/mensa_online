@@ -1,11 +1,14 @@
 package crons
 
 import (
+	"context"
+
 	"mensadb/importers"
+	"mensadb/main/cmd/searchcmd"
+	"mensadb/main/crons/searchrec"
 	"mensadb/tolgee"
 	"mensadb/tools/dbtools"
 	"mensadb/tools/env"
-	"mensadb/tools/zincsearch"
 
 	"github.com/pocketbase/pocketbase/core"
 )
@@ -36,10 +39,6 @@ func CronTasks(app core.App) {
 
 	app.Cron().MustAdd("Force zitadel sync", "0 3 * * *", func() {
 		dbtools.UpdateZitadel(app)
-	})
-
-	app.Cron().MustAdd("Upload file to zinc", "0 0,3 * * *", func() {
-		zincsearch.UploadAllFiles(app)
 	})
 
 	app.Cron().MustAdd("CheckUserStripeAccount", "0 */6 * * *", func() {
@@ -84,5 +83,20 @@ func CronTasks(app core.App) {
 				app.Logger().Error("save record failed", "collection", newRecord.Collection().Name, "stamp", record.Id, "err", err)
 			}
 		}
+	})
+
+	app.Cron().MustAdd("Search index reconciliation", "0 4 * * *", func() {
+		searchrec.Run(app)
+	})
+
+	// Manual-only: schedule "Feb 31" never fires automatically. Trigger via the
+	// PocketBase admin panel "Run" button on first deploy and for disaster recovery.
+	app.Cron().MustAdd("Search index backfill (manual)", "0 0 31 2 *", func() {
+		app.Logger().Info("[CRON] Search index backfill started")
+		if err := searchcmd.Run(context.Background(), app, searchcmd.DefaultCollections, false); err != nil {
+			app.Logger().Error("[CRON] Search index backfill failed", "err", err)
+			return
+		}
+		app.Logger().Info("[CRON] Search index backfill completed")
 	})
 }
