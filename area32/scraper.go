@@ -9,7 +9,10 @@ import (
 	"mensadb/tools/aitools"
 	"mensadb/tools/env"
 	"mensadb/tools/spatial"
+	"net"
+	"net/http"
 	"net/http/cookiejar"
+	"net/url"
 	"slices"
 	"sort"
 	"strconv"
@@ -47,14 +50,53 @@ func (u *Area32User) IsExpired() bool {
 
 type ScraperApi struct {
 	client   *resty.Client
+	jar      *cookiejar.Jar
 	email    string
 	password string
 }
 
 func NewAPI() *ScraperApi {
 	cookieJar, _ := cookiejar.New(nil)
-	client := resty.New().SetTimeout(30 * time.Second).SetCookieJar(cookieJar).SetDoNotParseResponse(true)
-	return &ScraperApi{client: client}
+
+	// Dialer IPv4-only: il container in produzione non ha route IPv6 funzionante;
+	// con dual-stack happy-eyeballs il client Go si pianta sul tentativo v6 e
+	// scade il timeout di 30s, mentre curl con fallback v4 risponde in 150ms.
+	dialer := &net.Dialer{
+		Timeout:   10 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}
+	transport := &http.Transport{
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			return dialer.DialContext(ctx, "tcp4", addr)
+		},
+		ForceAttemptHTTP2:     true,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: 15 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+		IdleConnTimeout:       30 * time.Second,
+		MaxIdleConnsPerHost:   2,
+	}
+
+	client := resty.New().
+		SetTimeout(30 * time.Second).
+		SetCookieJar(cookieJar).
+		SetDoNotParseResponse(true).
+		SetTransport(transport).
+		// Header browser-like: cloud32 e` dietro Azure Front Door che applica
+		// regole WAF a client minimali.
+		SetHeader("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36").
+		SetHeader("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8").
+		SetHeader("Accept-Language", "it-IT,it;q=0.9,en;q=0.8")
+
+	// Stoppa il redirect-following: il POST di login risponde 302 e vogliamo
+	// vedere Set-Cookie / Location della risposta originale, non quella della
+	// pagina finale. http.ErrUseLastResponse e` il sentinel "stop ma nessun
+	// errore" di Go (vs. resty.NoRedirectPolicy che ritorna un errore generico).
+	client.GetClient().CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+
+	return &ScraperApi{client: client, jar: cookieJar}
 }
 
 func (api *ScraperApi) DoLoginAndRetrieveMain(email, password string) (*Area32User, error) {
@@ -87,6 +129,8 @@ func (api *ScraperApi) DoLoginAndRetrieveMain(email, password string) (*Area32Us
 		"_token":   token,
 	}
 	postResp, err := api.client.R().
+		SetHeader("Referer", "https://www.cloud32.it/Associazioni/utenti/login?codass=170734").
+		SetHeader("Origin", "https://www.cloud32.it").
 		SetFormData(formData).
 		Post("https://www.cloud32.it/Associazioni/utenti/login")
 	if err != nil {
@@ -94,9 +138,26 @@ func (api *ScraperApi) DoLoginAndRetrieveMain(email, password string) (*Area32Us
 		return nil, ErrUnableToConnect
 	}
 	postRaw, _ := io.ReadAll(postResp.RawBody())
-	log.Printf("area32 login: POST /login status=%d len=%d", postResp.StatusCode(), len(postRaw))
+	log.Printf("area32 login: POST /login status=%d len=%d location=%q",
+		postResp.StatusCode(), len(postRaw), postResp.Header().Get("Location"))
+	for _, sc := range postResp.Header().Values("Set-Cookie") {
+		name := sc
+		if i := strings.Index(sc, "="); i > 0 {
+			name = sc[:i]
+		}
+		log.Printf("area32 login: POST Set-Cookie: %s (full len=%d)", name, len(sc))
+	}
+	if u, err := url.Parse("https://www.cloud32.it"); err == nil {
+		jarCookies := api.jar.Cookies(u)
+		names := make([]string, 0, len(jarCookies))
+		for _, c := range jarCookies {
+			names = append(names, c.Name)
+		}
+		log.Printf("area32 login: jar after POST has %d cookies: %v", len(jarCookies), names)
+	}
 
 	resp, err = api.client.R().
+		SetHeader("Referer", "https://www.cloud32.it/Associazioni/utenti/login?codass=170734").
 		Get("https://www.cloud32.it/Associazioni/utenti/home")
 	if err != nil {
 		log.Println("area32 login: GET /home failed:", err)
