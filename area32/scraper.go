@@ -1,6 +1,7 @@
 package area32
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -45,7 +46,9 @@ func (u *Area32User) IsExpired() bool {
 }
 
 type ScraperApi struct {
-	client *resty.Client
+	client   *resty.Client
+	email    string
+	password string
 }
 
 func NewAPI() *ScraperApi {
@@ -55,13 +58,17 @@ func NewAPI() *ScraperApi {
 }
 
 func (api *ScraperApi) DoLoginAndRetrieveMain(email, password string) (*Area32User, error) {
+	api.email = email
+	api.password = password
 	resp, err := api.client.R().Get("https://www.cloud32.it/Associazioni/utenti/login?codass=170734")
 	if err != nil {
+		log.Println("area32 login: GET /login failed:", err)
 		return nil, ErrUnableToConnect
 	}
+	loginGetRaw, _ := io.ReadAll(resp.RawBody())
+	log.Printf("area32 login: GET /login status=%d len=%d", resp.StatusCode(), len(loginGetRaw))
 
-	doc, err := goquery.NewDocumentFromReader(resp.RawBody())
-
+	doc, err := goquery.NewDocumentFromReader(bytes.NewReader(loginGetRaw))
 	if err != nil {
 		return nil, err
 	}
@@ -72,26 +79,36 @@ func (api *ScraperApi) DoLoginAndRetrieveMain(email, password string) (*Area32Us
 			token, _ = s.Attr("value")
 		}
 	})
+	log.Printf("area32 login: csrf token present=%v len=%d", token != "", len(token))
 
 	formData := map[string]string{
 		"email":    email,
 		"password": password,
 		"_token":   token,
 	}
-	_, err = api.client.R().
+	postResp, err := api.client.R().
 		SetFormData(formData).
 		Post("https://www.cloud32.it/Associazioni/utenti/login")
 	if err != nil {
+		log.Println("area32 login: POST /login failed:", err)
 		return nil, ErrUnableToConnect
 	}
+	postRaw, _ := io.ReadAll(postResp.RawBody())
+	log.Printf("area32 login: POST /login status=%d len=%d", postResp.StatusCode(), len(postRaw))
 
 	resp, err = api.client.R().
 		Get("https://www.cloud32.it/Associazioni/utenti/home")
 	if err != nil {
+		log.Println("area32 login: GET /home failed:", err)
 		return nil, ErrUnableToConnect
 	}
+	homeRaw, _ := io.ReadAll(resp.RawBody())
+	log.Printf("area32 login: GET /home status=%d len=%d hasPwInput=%v hasTessera=%v",
+		resp.StatusCode(), len(homeRaw),
+		bytes.Contains(bytes.ToLower(homeRaw), []byte(`type="password"`)),
+		bytes.Contains(homeRaw, []byte("Tessera:")))
 
-	doc, err = goquery.NewDocumentFromReader(resp.RawBody())
+	doc, err = goquery.NewDocumentFromReader(bytes.NewReader(homeRaw))
 	if err != nil {
 		return nil, ErrUnableToConnect
 	}
@@ -99,6 +116,12 @@ func (api *ScraperApi) DoLoginAndRetrieveMain(email, password string) (*Area32Us
 	imageUrl := retrieveImageUrl(doc)
 	userId := retrieveID(doc)
 	if userId == "" {
+		// snippet leggibile per debug — non logga email/password
+		head := homeRaw
+		if len(head) > 400 {
+			head = head[:400]
+		}
+		log.Printf("area32 login: empty userId, home head 400 chars: %q", string(head))
 		return nil, ErrInvalidCredentials
 	}
 	expireDate := retrieveExpireDate(doc)
@@ -453,11 +476,11 @@ func (api *ScraperApi) GetRegSoci(page int, search string) ([]map[string]any, er
 		}
 
 		// Seconda passata: per ogni riga, scarica immagine + deep data in
-		// parallelo con un semaforo (max 5 richieste concorrenti per non
-		// sovraccaricare il server remoto). Errori non bloccanti: gli scarichi
-		// falliti restituiscono nil/map vuoto come prima.
+		// parallelo con un semaforo molto stretto (max 2 concorrenti). Limite
+		// piu` alto fa scattare l'anti-abuse di cloud32 che invalida la sessione
+		// e ritorna HTML di login alle pagine successive, troncando la paginazione.
 		g, ctx := errgroup.WithContext(context.Background())
-		sem := make(chan struct{}, 5)
+		sem := make(chan struct{}, 2)
 		fetched := make([]map[string]any, len(rows))
 
 		for idx, r := range rows {
@@ -505,15 +528,43 @@ func (api *ScraperApi) GetRegSoci(page int, search string) ([]map[string]any, er
 	makeRequest := func(name, surname string) {
 		url := "https://www.cloud32.it/Associazioni/utenti/regsocio?s_cognome=" + surname +
 			"&s_nome=" + name + "&s_citta=&s_provincia=&s_regione=&Ricerca=Ricerca&page=" + strconv.Itoa(page)
-		resp, err := api.client.R().Get(url)
-		if err != nil {
-			return
+
+		fetchAndParse := func() {
+			resp, err := api.client.R().Get(url)
+			if err != nil {
+				return
+			}
+			raw, err := io.ReadAll(resp.RawBody())
+			if err != nil {
+				return
+			}
+			// Cloud32 a volte risponde con la pagina di login quando la sessione
+			// scade (anti-abuse dopo molte richieste). Detect e relogin una volta.
+			if bytes.Contains(bytes.ToLower(raw), []byte(`type="password"`)) {
+				log.Println("area32: session expired mid-scrape, re-login")
+				if api.email == "" || api.password == "" {
+					return
+				}
+				if _, err := api.DoLoginAndRetrieveMain(api.email, api.password); err != nil {
+					log.Println("area32: relogin failed:", err)
+					return
+				}
+				resp, err = api.client.R().Get(url)
+				if err != nil {
+					return
+				}
+				raw, err = io.ReadAll(resp.RawBody())
+				if err != nil {
+					return
+				}
+			}
+			doc, err := goquery.NewDocumentFromReader(bytes.NewReader(raw))
+			if err != nil {
+				return
+			}
+			parseTable(doc)
 		}
-		doc, err := goquery.NewDocumentFromReader(resp.RawBody())
-		if err != nil {
-			return
-		}
-		parseTable(doc)
+		fetchAndParse()
 	}
 
 	makeRequest(nameToSearch, surnameToSearch)
