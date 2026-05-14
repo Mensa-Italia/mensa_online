@@ -10,6 +10,7 @@ func buildSearchRequest(q string, f Filters, limit int) *bleve.SearchRequest {
 	if q == "" {
 		primary = bleve.NewMatchAllQuery()
 	} else {
+		// Match esatto (analizzato con stemmer italiano): peso pieno.
 		titleQ := bleve.NewMatchQuery(q)
 		titleQ.SetField("title")
 		titleQ.SetBoost(3.0)
@@ -22,7 +23,23 @@ func buildSearchRequest(q string, f Filters, limit int) *bleve.SearchRequest {
 		tagsQ.SetField("tags")
 		tagsQ.SetBoost(1.5)
 
-		primary = bleve.NewDisjunctionQuery(titleQ, bodyQ, tagsQ)
+		// Match fuzzy (1 edit Levenshtein) per typo come "Montenari" -> "Montanari".
+		// Prefix 1: il primo char deve matchare esatto, riduce falsi positivi.
+		// Boost ridotti rispetto al match esatto: chi azzecca lo spelling
+		// resta sempre in cima.
+		titleFuzzy := bleve.NewMatchQuery(q)
+		titleFuzzy.SetField("title")
+		titleFuzzy.SetFuzziness(1)
+		titleFuzzy.SetPrefix(1)
+		titleFuzzy.SetBoost(1.5)
+
+		bodyFuzzy := bleve.NewMatchQuery(q)
+		bodyFuzzy.SetField("body")
+		bodyFuzzy.SetFuzziness(1)
+		bodyFuzzy.SetPrefix(1)
+		bodyFuzzy.SetBoost(0.5)
+
+		primary = bleve.NewDisjunctionQuery(titleQ, bodyQ, tagsQ, titleFuzzy, bodyFuzzy)
 	}
 
 	parts := []query.Query{primary}
