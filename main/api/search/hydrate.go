@@ -65,17 +65,24 @@ func hydrateRecord(typ string, rec *core.Record, score float64) Item {
 		item.Title = rec.GetString("title")
 		item.DeepLink = "mensa://org-chart/" + rec.Id
 	case "quid_issue":
-		// Numero di Quid (categoria WP). Deep link allo stesso URI usato dalla
-		// push del nuovo numero: l'app risolve mensa://quid/<category_id>.
+		// Numero di Quid. Due varianti distinte dal deep link:
+		//   - web (categorie WP con articoli): mensa://quid/<category_id>
+		//   - PDF (storico 1-12, scrappato da /archivio-quid/): mensa://quid-pdf/<id PB>
+		// L'app routa direttamente dal deep link.
 		item.Title = rec.GetString("name")
-		count := rec.GetInt("articles_count")
-		if count == 1 {
-			item.Subtitle = "1 articolo"
-		} else if count > 1 {
-			item.Subtitle = fmt.Sprintf("%d articoli", count)
-		}
 		item.Image = rec.GetString("image")
-		item.DeepLink = "mensa://quid/" + rec.GetString("category_id")
+		if pdf := rec.GetString("pdf_url"); pdf != "" {
+			item.Subtitle = "PDF"
+			item.DeepLink = "mensa://quid-pdf/" + rec.Id
+		} else {
+			count := rec.GetInt("articles_count")
+			if count == 1 {
+				item.Subtitle = "1 articolo"
+			} else if count > 1 {
+				item.Subtitle = fmt.Sprintf("%d articoli", count)
+			}
+			item.DeepLink = "mensa://quid/" + rec.GetString("category_id")
+		}
 	case "quid_article":
 		// Articolo Quid in cache da WordPress. Subtitle = numero ("Quid 16 - La Fine"),
 		// image = featured media. Deep link allo stile flat scelto in app.
