@@ -86,7 +86,13 @@ func BuildOrgRoleDoc(app core.App, rec *core.Record) search.Doc {
 			groupTitle = g.GetString("title")
 		}
 	}
-	userName := fetchUserName(app, rec.GetString("user"))
+	// org_chart_members.user adesso punta a members_registry.
+	memberName := ""
+	if mid := rec.GetString("user"); mid != "" {
+		if mrec, err := app.FindRecordById("members_registry", mid); err == nil {
+			memberName = mrec.GetString("name")
+		}
+	}
 
 	role := rec.GetString("role")
 	title := role
@@ -98,7 +104,7 @@ func BuildOrgRoleDoc(app core.App, rec *core.Record) search.Doc {
 		ID:         rec.Id,
 		Type:       "org_role",
 		Title:      title,
-		Body:       userName,
+		Body:       memberName,
 		Tags:       filterNonEmpty(groupTitle),
 		Region:     "",
 		Visibility: "members",
