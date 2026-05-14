@@ -23,7 +23,7 @@ func BuildEventDoc(app core.App, rec *core.Record) search.Doc {
 		Region:        posState,
 		Visibility:    "public",
 		RequiredPower: "",
-		UpdatedAt:     rec.GetDateTime("updated").Time(),
+		CreatedAt:     rec.GetDateTime("created").Time(),
 	}
 }
 
@@ -37,7 +37,7 @@ func BuildSigDoc(app core.App, rec *core.Record) search.Doc {
 		Tags:       tags,
 		Region:     "",
 		Visibility: "public",
-		UpdatedAt:  rec.GetDateTime("updated").Time(),
+		CreatedAt:  rec.GetDateTime("created").Time(),
 	}
 }
 
@@ -56,7 +56,7 @@ func BuildDealDoc(app core.App, rec *core.Record) search.Doc {
 		Tags:       tags,
 		Region:     posState,
 		Visibility: "members",
-		UpdatedAt:  rec.GetDateTime("updated").Time(),
+		CreatedAt:  rec.GetDateTime("created").Time(),
 	}
 }
 
@@ -73,7 +73,7 @@ func BuildDocumentDoc(app core.App, rec *core.Record) search.Doc {
 		Tags:       tags,
 		Region:     "",
 		Visibility: "members",
-		UpdatedAt:  rec.GetDateTime("updated").Time(),
+		CreatedAt:  rec.GetDateTime("created").Time(),
 	}
 }
 
@@ -102,7 +102,7 @@ func BuildOrgRoleDoc(app core.App, rec *core.Record) search.Doc {
 		Tags:       filterNonEmpty(groupTitle),
 		Region:     "",
 		Visibility: "members",
-		UpdatedAt:  rec.GetDateTime("updated").Time(),
+		CreatedAt:  rec.GetDateTime("created").Time(),
 	}
 }
 
@@ -115,7 +115,7 @@ func BuildUserDoc(app core.App, rec *core.Record) search.Doc {
 		Tags:       nil,
 		Region:     "",
 		Visibility: "members",
-		UpdatedAt:  rec.GetDateTime("updated").Time(),
+		CreatedAt:  rec.GetDateTime("created").Time(),
 	}
 }
 

@@ -4,14 +4,30 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/pocketbase/pocketbase/core"
 	"golang.org/x/sync/errgroup"
 	"mensadb/tools/dbtools"
 	"mensadb/tools/search"
 )
+
+// applyRecencyBoost scala lo score BM25 in base all'eta` del documento:
+//   score_eff = score_bm25 / (1 + age_years/2)
+// Eta` 0 = no penalita`, 2 anni = -50%, 5 anni = -71%. Tunable cambiando 2.
+func applyRecencyBoost(score float64, created, now time.Time) float64 {
+	if created.IsZero() {
+		return score
+	}
+	years := now.Sub(created).Hours() / (24 * 365.25)
+	if years < 0 {
+		years = 0
+	}
+	return score / (1 + years/2)
+}
 
 var allTypes = []string{"event", "sig", "deal", "document", "user", "org_role"}
 
@@ -160,20 +176,45 @@ func searchHandler(e *core.RequestEvent) error {
 			}
 
 			meta := vis[typ]
-			var items []Item
+
+			// Costruisci lista ordinata di {record, score_effettivo}.
+			// Per i documenti applica recency boost: score / (1 + age_years/2).
+			// Cosi` un documento del 2024 con BM25 modesto puo` battere uno
+			// del 2018 con BM25 alto, ma una match perfetta vecchia di 1 anno
+			// resta sopra una match scarsa appena pubblicata.
+			type scoredRec struct {
+				rec   *core.Record
+				score float64
+			}
+			ranked := make([]scoredRec, 0, len(typHits))
+			now := time.Now()
 			for _, h := range typHits {
 				rec, ok := recByID[h.ID]
 				if !ok {
 					continue
 				}
+				score := h.Score
+				if typ == "document" {
+					score = applyRecencyBoost(score, rec.GetDateTime("created").Time(), now)
+				}
+				ranked = append(ranked, scoredRec{rec: rec, score: score})
+			}
+			if typ == "document" {
+				sort.SliceStable(ranked, func(i, j int) bool {
+					return ranked[i].score > ranked[j].score
+				})
+			}
+
+			var items []Item
+			for _, sr := range ranked {
 				if !allow(authUserRec, meta.visibility, meta.requiredPower) {
 					continue
 				}
 				var item Item
 				if hydrateResults {
-					item = hydrateRecord(typ, rec, h.Score)
+					item = hydrateRecord(typ, sr.rec, sr.score)
 				} else {
-					item = minimalItem(rec.Id, h.Score)
+					item = minimalItem(sr.rec.Id, sr.score)
 				}
 				items = append(items, item)
 				if len(items) >= req.LimitPerType {

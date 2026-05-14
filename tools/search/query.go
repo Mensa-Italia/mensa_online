@@ -58,6 +58,6 @@ func buildSearchRequest(q string, f Filters, limit int) *bleve.SearchRequest {
 	req.Size = limit
 	req.From = 0
 	req.Fields = []string{"type"}
-	req.SortBy([]string{"-_score", "-updated_at"})
+	req.SortBy([]string{"-_score", "-created_at"})
 	return req
 }
