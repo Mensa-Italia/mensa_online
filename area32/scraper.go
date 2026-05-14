@@ -129,11 +129,22 @@ func NewAPI() *ScraperApi {
 		SetCookieJar(cookieJar).
 		SetDoNotParseResponse(true).
 		SetTransport(transport).
-		// Header browser-like: cloud32 e` dietro Azure Front Door che applica
-		// regole WAF a client minimali.
-		SetHeader("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36").
-		SetHeader("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8").
-		SetHeader("Accept-Language", "it-IT,it;q=0.9,en;q=0.8")
+		// Set di header che un Chrome 120 reale invierebbe. AFD scora la
+		// coerenza fra TLS fingerprint e header set: TLS Chrome senza
+		// Sec-Ch-Ua-*/Sec-Fetch-* viene catturato come fake-Chrome.
+		SetHeader("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36").
+		SetHeader("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7").
+		SetHeader("Accept-Language", "it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7").
+		SetHeader("Accept-Encoding", "gzip, deflate, br").
+		SetHeader("Connection", "keep-alive").
+		SetHeader("Upgrade-Insecure-Requests", "1").
+		SetHeader("Sec-Ch-Ua", `"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"`).
+		SetHeader("Sec-Ch-Ua-Mobile", "?0").
+		SetHeader("Sec-Ch-Ua-Platform", `"Linux"`).
+		SetHeader("Sec-Fetch-Dest", "document").
+		SetHeader("Sec-Fetch-Mode", "navigate").
+		SetHeader("Sec-Fetch-Site", "same-origin").
+		SetHeader("Sec-Fetch-User", "?1")
 
 	// Stoppa il redirect-following: il POST di login risponde 302 e vogliamo
 	// vedere Set-Cookie / Location della risposta originale, non quella della
