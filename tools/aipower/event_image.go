@@ -46,7 +46,7 @@ func _generateEventImageGenerationPrompt(prompt string) (string, error) {
 	}
 	result, err := client.Models.GenerateContent(
 		ctx,
-		"gemini-2.0-flash",
+		"gemini-3-flash-preview",
 		genai.Text(fmt.Sprintf("-----\n%s\n\n----\n\nUsing the previous data make a prompt to generate the best image that represents the event.\nUse a lot of details, be descriptive, use a lot of adjectives and nouns.\nUse the best words to describe the image you want to generate.", prompt)),
 		config,
 	)

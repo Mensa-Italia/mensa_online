@@ -293,7 +293,7 @@ func summarizeSection(client *genai.Client, text, label string) string {
 		ctx, cancel := context.WithTimeout(context.Background(), summarizeSectionTimeout)
 		result, err := client.Models.GenerateContent(
 			ctx,
-			"gemini-2.0-flash",
+			"gemini-3-flash-preview",
 			[]*genai.Content{{Role: genai.RoleUser, Parts: []*genai.Part{genai.NewPartFromText(prompt)}}},
 			nil,
 		)
