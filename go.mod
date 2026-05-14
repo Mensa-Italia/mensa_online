@@ -1,6 +1,6 @@
 module mensadb
 
-go 1.25.10
+go 1.25.9
 
 require (
 	firebase.google.com/go/v4 v4.18.0
@@ -25,7 +25,6 @@ require (
 	github.com/pdfcpu/pdfcpu v0.11.1
 	github.com/pocketbase/dbx v1.11.0
 	github.com/pocketbase/pocketbase v0.35.0
-	github.com/refraction-networking/utls v1.8.2
 	github.com/spf13/cobra v1.10.2
 	github.com/stripe/stripe-go/v81 v81.4.0
 	github.com/tidwall/gjson v1.18.0
@@ -53,7 +52,6 @@ require (
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.53.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.53.0 // indirect
 	github.com/RoaringBitmap/roaring/v2 v2.14.5 // indirect
-	github.com/andybalholm/brotli v1.0.6 // indirect
 	github.com/andybalholm/cascadia v1.3.3 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.4 // indirect
@@ -123,7 +121,6 @@ require (
 	github.com/hhrutter/tiff v1.0.2 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/json-iterator/go v0.0.0-20171115153421-f7279a603ede // indirect
-	github.com/klauspost/compress v1.17.4 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.19 // indirect
@@ -155,10 +152,10 @@ require (
 	go.opentelemetry.io/otel/sdk v1.43.0 // indirect
 	go.opentelemetry.io/otel/sdk/metric v1.43.0 // indirect
 	go.opentelemetry.io/otel/trace v1.43.0 // indirect
-	golang.org/x/crypto v0.50.0 // indirect
+	golang.org/x/crypto v0.49.0 // indirect
 	golang.org/x/exp v0.0.0-20251219203646-944ab1f22d93 // indirect
-	golang.org/x/image v0.39.0 // indirect
-	golang.org/x/net v0.53.0 // indirect
+	golang.org/x/image v0.38.0 // indirect
+	golang.org/x/net v0.51.0 // indirect
 	golang.org/x/oauth2 v0.34.0 // indirect
 	golang.org/x/sys v0.43.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
