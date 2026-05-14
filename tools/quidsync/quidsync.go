@@ -80,8 +80,9 @@ func FetchIssueCategories() ([]IssueCategory, error) {
 }
 
 // SyncAllIssues e` la versione full-history: scarica e upserta gli articoli
-// di tutti i numeri Quid noti. Usata dalla CLI quid-backfill al primo deploy
-// e in disaster recovery.
+// di tutti i numeri Quid noti (categorie WP) + i numeri storici disponibili
+// solo come PDF (1-12) scrappati da /archivio-quid/.
+// Usata dalla CLI quid-backfill al primo deploy e in disaster recovery.
 func SyncAllIssues(app core.App) (perIssue map[int]int, err error) {
 	cats, err := FetchIssueCategories()
 	if err != nil {
@@ -98,6 +99,15 @@ func SyncAllIssues(app core.App) (perIssue map[int]int, err error) {
 		perIssue[c.Number] = count
 		app.Logger().Info("[quidsync] issue sincronizzato", "issue", c.Number, "name", c.Name, "articles", count)
 	}
+
+	// Storico in PDF: numeri presenti solo su /archivio-quid/ (1-12 al momento).
+	pdfCount, err := SyncArchive(app)
+	if err != nil {
+		app.Logger().Error("[quidsync] sync archive PDF fallito", "err", err)
+	} else {
+		app.Logger().Info("[quidsync] archive PDF sincronizzato", "issues", pdfCount)
+	}
+
 	return perIssue, nil
 }
 
