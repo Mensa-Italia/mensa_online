@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"mensadb/tools/search"
 
+	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
 	"golang.org/x/sync/errgroup"
 )
@@ -18,8 +19,17 @@ func Run(app core.App) {
 		"sigs":              "sig",
 		"deals":             "deal",
 		"documents":         "document",
-		"users":             "user",
+		"members_registry":  "member",
 		"org_chart_members": "org_role",
+	}
+
+	// members_registry indicizza solo soci attivi: confronta solo quelli
+	// per evitare drift fittizio dovuto ai disattivati.
+	pbFilter := func(col string) dbx.Expression {
+		if col == "members_registry" {
+			return dbx.NewExp("is_active = true")
+		}
+		return nil
 	}
 
 	// Use errgroup to fan out count operations in parallel
@@ -38,7 +48,7 @@ func Run(app core.App) {
 
 		eg.Go(func() error {
 			// Count documents in PocketBase
-			pbCount, err := app.CountRecords(col, nil)
+			pbCount, err := app.CountRecords(col, pbFilter(col))
 			if err != nil {
 				app.Logger().Error(fmt.Sprintf("[CRON] Search index reconciliation failed for %s: PB count error", col), "err", err)
 				return nil // Continue with other types

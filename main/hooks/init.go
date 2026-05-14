@@ -45,9 +45,13 @@ func Load(app core.App) {
 	app.OnRecordAfterUpdateSuccess("documents").BindFunc(indexDocumentAsync)
 	app.OnRecordAfterDeleteSuccess("documents").BindFunc(unindexAsync)
 
-	app.OnRecordAfterCreateSuccess("users").BindFunc(indexUserAsync)
-	app.OnRecordAfterUpdateSuccess("users").BindFunc(indexUserAsync)
-	app.OnRecordAfterDeleteSuccess("users").BindFunc(unindexAsync)
+	// Soci indicizzati: members_registry (sync Area32), NON users.
+	// users e` la collection di auth PocketBase e contiene anche record
+	// "ombra" / non-soci. Inoltre l'hook su members_registry esclude i
+	// record con is_active=false dall'indice.
+	app.OnRecordAfterCreateSuccess("members_registry").BindFunc(indexMemberAsync)
+	app.OnRecordAfterUpdateSuccess("members_registry").BindFunc(indexMemberAsync)
+	app.OnRecordAfterDeleteSuccess("members_registry").BindFunc(unindexAsync)
 
 	// Org chart: indicizza ogni membro come "org_role" in Bleve.
 	app.OnRecordAfterCreateSuccess("org_chart_members").BindFunc(indexOrgRoleAsync)
