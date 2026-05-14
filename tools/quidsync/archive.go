@@ -22,7 +22,11 @@ const archiveURL = "https://quid.mensa.it/archivio-quid/"
 var (
 	titlePattern = regexp.MustCompile(`(?i)<strong>\s*Quid\s+(\d+)\s*:\s*([^<]+?)\s*</strong>`)
 	pdfPattern   = regexp.MustCompile(`(?i)https?://[^"'\s]*[Qq][Uu][Ii][Dd][-_](\d+)[^"'\s]*\.pdf`)
-	coverPattern = regexp.MustCompile(`(?i)https?://[^"'\s]*[Qq][Uu][Ii][Dd][-_](\d+)[^"'\s]*-300x[^"'\s]*\.(?:jpg|jpeg|png)`)
+	imagePattern = regexp.MustCompile(`(?i)https?://[^"'\s]*[Qq][Uu][Ii][Dd][-_](\d+)[^"'\s]*\.(?:jpg|jpeg|png)`)
+	// thumbnailSuffix matcha la convenzione WP per le miniature: "-WxH.ext"
+	// in fondo al nome file. Es: "Quid_10-il-viaggio-21x30.png" -> skip;
+	// "QUID_10-il-viaggio.png" -> tenere.
+	thumbnailSuffix = regexp.MustCompile(`(?i)-\d+x\d+\.(?:jpg|jpeg|png)$`)
 )
 
 type archiveEntry struct {
@@ -89,18 +93,33 @@ func fetchArchive() (map[int]*archiveEntry, error) {
 		}
 	}
 
-	for _, m := range coverPattern.FindAllStringSubmatch(body, -1) {
+	// Cerca cover image. Le URL WP includono sia il file originale
+	// (es. "QUID_10-il-viaggio.png") sia le miniature (es. "-21x30.png").
+	// Preferiamo l'originale: scarta le URL che terminano con "-WxH.ext".
+	// Se per qualche numero esiste solo una miniatura, la teniamo come
+	// fallback.
+	type coverCandidate struct {
+		url       string
+		thumbnail bool
+	}
+	covers := map[int]coverCandidate{}
+	for _, m := range imagePattern.FindAllStringSubmatch(body, -1) {
 		n, err := strconv.Atoi(m[1])
 		if err != nil {
 			continue
 		}
-		e, ok := entries[n]
-		if !ok {
+		if _, ok := entries[n]; !ok {
 			continue
 		}
-		if e.Cover == "" {
-			e.Cover = m[0]
+		url := m[0]
+		isThumb := thumbnailSuffix.MatchString(url)
+		curr, exists := covers[n]
+		if !exists || (curr.thumbnail && !isThumb) {
+			covers[n] = coverCandidate{url: url, thumbnail: isThumb}
 		}
+	}
+	for n, c := range covers {
+		entries[n].Cover = c.url
 	}
 
 	// Filtra: tengo solo i numeri con un PDF (sono quelli che WP REST non espone).
