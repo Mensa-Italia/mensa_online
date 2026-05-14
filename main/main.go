@@ -35,6 +35,11 @@ func main() {
 	app := pocketbase.New()
 	crons.CronTasks(app)
 
+	// OnBootstrap fire per qualsiasi subcommand (serve, search-backfill,
+	// migrate, ...). Tieni qui SOLO inizializzazioni leggere e idempotenti
+	// che servono anche ai comandi CLI (search.Init e` indispensabile per
+	// il backfill). Robe network-heavy come Printful / mail importer vanno
+	// in OnServe per non bloccare le invocazioni CLI.
 	app.OnBootstrap().BindFunc(func(e *core.BootstrapEvent) error {
 		if err := e.Next(); err != nil {
 			return err
@@ -42,9 +47,6 @@ func main() {
 		if err := search.Init(filepath.Join(e.App.DataDir(), "search_index")); err != nil {
 			log.Fatalf("search init failed: %v", err)
 		}
-		printful.Setup(env.GetPrintfulKey())
-		printful.SetupWebhook(env.GetPrintfulWebhookURL())
-		go importers.GetFullMailList()
 		return nil
 	})
 
@@ -56,6 +58,9 @@ func main() {
 	})
 
 	app.OnServe().BindFunc(func(e *core.ServeEvent) error {
+		printful.Setup(env.GetPrintfulKey())
+		printful.SetupWebhook(env.GetPrintfulWebhookURL())
+		go importers.GetFullMailList()
 		tolgee.Load(env.GetTolgeeKey(), e.App)
 		api.Load(e.Router.Group("/api"))
 		e.Router.GET("/ical/{hash}", RetrieveICAL)
