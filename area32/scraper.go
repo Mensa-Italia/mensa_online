@@ -3,16 +3,12 @@ package area32
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"mensadb/tools/aitools"
 	"mensadb/tools/env"
 	"mensadb/tools/spatial"
-	"net"
-	"net/http"
 	"net/http/cookiejar"
 	"net/url"
 	"slices"
@@ -27,7 +23,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
-	utls "github.com/refraction-networking/utls"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -60,100 +55,7 @@ type ScraperApi struct {
 
 func NewAPI() *ScraperApi {
 	cookieJar, _ := cookiejar.New(nil)
-
-	// Dialer IPv4-only: il container in produzione non ha route IPv6 funzionante;
-	// con dual-stack happy-eyeballs il client Go si pianta sul tentativo v6 e
-	// scade il timeout di 30s, mentre curl con fallback v4 risponde in 150ms.
-	dialer := &net.Dialer{
-		Timeout:   10 * time.Second,
-		KeepAlive: 30 * time.Second,
-	}
-	// DialTLS custom con uTLS per spoofare ClientHello Chrome. Cloud32 e`
-	// dietro Azure Front Door Bot Manager che combina TLS JA3 + IP reputation:
-	// Go stock da IP datacenter va sopra threshold ed emette solo cookie
-	// framework (no auth completa). Chrome ClientHello riporta il punteggio
-	// sotto threshold anche da datacenter.
-	//
-	// L'ALPN viene riscritto a solo http/1.1: lo stack net/http standard non
-	// puo` parlare HTTP/2 su una utls.UConn (incompatibile con il transport
-	// http2 di Go che richiede *tls.Conn).
-	dialTLS := func(ctx context.Context, network, addr string) (net.Conn, error) {
-		raw, err := dialer.DialContext(ctx, "tcp4", addr)
-		if err != nil {
-			return nil, err
-		}
-		host, _, err := net.SplitHostPort(addr)
-		if err != nil {
-			host = addr
-		}
-		spec, err := utls.UTLSIdToSpec(utls.HelloChrome_120)
-		if err != nil {
-			_ = raw.Close()
-			return nil, fmt.Errorf("utls spec: %w", err)
-		}
-		for _, ext := range spec.Extensions {
-			if alpn, ok := ext.(*utls.ALPNExtension); ok {
-				alpn.AlpnProtocols = []string{"http/1.1"}
-			}
-		}
-		uconn := utls.UClient(raw, &utls.Config{ServerName: host}, utls.HelloCustom)
-		if err := uconn.ApplyPreset(&spec); err != nil {
-			_ = raw.Close()
-			return nil, fmt.Errorf("utls apply: %w", err)
-		}
-		if err := uconn.HandshakeContext(ctx); err != nil {
-			_ = raw.Close()
-			return nil, fmt.Errorf("utls handshake: %w", err)
-		}
-		return uconn, nil
-	}
-
-	transport := &http.Transport{
-		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-			return dialer.DialContext(ctx, "tcp4", addr)
-		},
-		DialTLSContext: dialTLS,
-		// uTLS gestisce il TLS, ma teniamo HTTP/2 disattivato a livello
-		// alt-protocols (HelloChrome_Auto offre h2 via ALPN ma noi negoziamo
-		// solo http/1.1 nel Config sopra). Doppia sicurezza qui:
-		TLSNextProto:          map[string]func(string, *tls.Conn) http.RoundTripper{},
-		TLSHandshakeTimeout:   10 * time.Second,
-		ResponseHeaderTimeout: 15 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
-		IdleConnTimeout:       30 * time.Second,
-		MaxIdleConnsPerHost:   2,
-	}
-
-	client := resty.New().
-		SetTimeout(30 * time.Second).
-		SetCookieJar(cookieJar).
-		SetDoNotParseResponse(true).
-		SetTransport(transport).
-		// Set di header che un Chrome 120 reale invierebbe. AFD scora la
-		// coerenza fra TLS fingerprint e header set: TLS Chrome senza
-		// Sec-Ch-Ua-*/Sec-Fetch-* viene catturato come fake-Chrome.
-		SetHeader("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36").
-		SetHeader("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7").
-		SetHeader("Accept-Language", "it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7").
-		SetHeader("Accept-Encoding", "gzip, deflate, br").
-		SetHeader("Connection", "keep-alive").
-		SetHeader("Upgrade-Insecure-Requests", "1").
-		SetHeader("Sec-Ch-Ua", `"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"`).
-		SetHeader("Sec-Ch-Ua-Mobile", "?0").
-		SetHeader("Sec-Ch-Ua-Platform", `"Linux"`).
-		SetHeader("Sec-Fetch-Dest", "document").
-		SetHeader("Sec-Fetch-Mode", "navigate").
-		SetHeader("Sec-Fetch-Site", "same-origin").
-		SetHeader("Sec-Fetch-User", "?1")
-
-	// Stoppa il redirect-following: il POST di login risponde 302 e vogliamo
-	// vedere Set-Cookie / Location della risposta originale, non quella della
-	// pagina finale. http.ErrUseLastResponse e` il sentinel "stop ma nessun
-	// errore" di Go (vs. resty.NoRedirectPolicy che ritorna un errore generico).
-	client.GetClient().CheckRedirect = func(req *http.Request, via []*http.Request) error {
-		return http.ErrUseLastResponse
-	}
-
+	client := resty.New().SetTimeout(30 * time.Second).SetCookieJar(cookieJar).SetDoNotParseResponse(true)
 	return &ScraperApi{client: client, jar: cookieJar}
 }
 

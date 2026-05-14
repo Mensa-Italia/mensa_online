@@ -1,4 +1,4 @@
-FROM golang:alpine AS builder
+FROM golang:1.25.9-alpine AS builder
 
 RUN apk add --no-cache build-base
 
