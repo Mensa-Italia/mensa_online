@@ -53,13 +53,20 @@ func indexDocumentAsync(e *core.RecordEvent) error {
 	return e.Next()
 }
 
-func indexUserAsync(e *core.RecordEvent) error {
+func indexMemberAsync(e *core.RecordEvent) error {
 	rec := e.Record
 	app := e.App
 	go func() {
-		doc := BuildUserDoc(app, rec)
+		// Soci disattivi / scaduti: rimuovi dall'indice se presenti.
+		if !rec.GetBool("is_active") {
+			if err := search.Delete(rec.Id); err != nil {
+				app.Logger().Error("search index delete failed", "type", "member", "id", rec.Id, "err", err)
+			}
+			return
+		}
+		doc := BuildMemberDoc(app, rec)
 		if err := search.Upsert(doc); err != nil {
-			app.Logger().Error("search index upsert failed", "type", "user", "id", rec.Id, "err", err)
+			app.Logger().Error("search index upsert failed", "type", "member", "id", rec.Id, "err", err)
 		}
 	}()
 	return e.Next()

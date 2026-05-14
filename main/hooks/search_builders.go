@@ -106,14 +106,22 @@ func BuildOrgRoleDoc(app core.App, rec *core.Record) search.Doc {
 	}
 }
 
-func BuildUserDoc(app core.App, rec *core.Record) search.Doc {
+// BuildMemberDoc indicizza un socio dal members_registry (sync Area32).
+// I record con is_active=false non vanno chiamati qui (l'hook li Delete).
+func BuildMemberDoc(app core.App, rec *core.Record) search.Doc {
+	body := joinNonEmpty(" ",
+		rec.GetString("alias_mail"),
+		rec.GetString("original_mail"),
+		rec.GetString("city"),
+		rec.GetString("area"),
+	)
 	return search.Doc{
 		ID:         rec.Id,
-		Type:       "user",
+		Type:       "member",
 		Title:      rec.GetString("name"),
-		Body:       rec.GetString("username"),
-		Tags:       nil,
-		Region:     "",
+		Body:       body,
+		Tags:       filterNonEmpty(rec.GetString("area")),
+		Region:     rec.GetString("state"),
 		Visibility: "members",
 		CreatedAt:  rec.GetDateTime("created").Time(),
 	}

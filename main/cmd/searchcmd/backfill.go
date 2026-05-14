@@ -20,7 +20,18 @@ const batchSize = 500
 
 type builder func(core.App, *core.Record) search.Doc
 
-var DefaultCollections = []string{"events", "sigs", "deals", "documents", "users", "org_chart_members"}
+var DefaultCollections = []string{"events", "sigs", "deals", "documents", "members_registry", "org_chart_members"}
+
+// filterFor restituisce un filtro PB opzionale per ogni collection durante
+// il backfill. members_registry indicizza solo i soci attivi (is_active=true).
+func filterFor(collection string) string {
+	switch collection {
+	case "members_registry":
+		return "is_active=true"
+	default:
+		return ""
+	}
+}
 
 // Run performs the backfill. Callable from the cobra command or from a cron job.
 func Run(ctx context.Context, app core.App, collections []string, reset bool) error {
@@ -106,8 +117,8 @@ func resolveBuilder(collection string) builder {
 		return hooks.BuildDealDoc
 	case "documents":
 		return hooks.BuildDocumentDoc
-	case "users":
-		return hooks.BuildUserDoc
+	case "members_registry":
+		return hooks.BuildMemberDoc
 	case "org_chart_members":
 		return hooks.BuildOrgRoleDoc
 	default:
@@ -121,9 +132,10 @@ func backfillCollection(app core.App, collection string) (int, error) {
 		return 0, fmt.Errorf("no builder for collection %q", collection)
 	}
 
+	filter := filterFor(collection)
 	total := 0
 	for offset := 0; ; offset += batchSize {
-		records, err := app.FindRecordsByFilter(collection, "", "", batchSize, offset, nil)
+		records, err := app.FindRecordsByFilter(collection, filter, "", batchSize, offset, nil)
 		if err != nil {
 			return total, fmt.Errorf("fetch offset %d: %w", offset, err)
 		}

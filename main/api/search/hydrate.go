@@ -45,11 +45,20 @@ func hydrateRecord(typ string, rec *core.Record, score float64) Item {
 		item.Title = rec.GetString("name")
 		item.Subtitle = rec.GetString("category")
 		item.DeepLink = "mensa://documents/" + rec.Id
-	case "user":
+	case "member":
 		item.Title = rec.GetString("name")
-		item.Subtitle = rec.GetString("username")
-		item.Image = firstFileURL(rec, "avatar")
-		item.DeepLink = "mensa://users/" + rec.Id
+		// Subtitle: prima la regione/stato, poi la citta` se diversa
+		state := rec.GetString("state")
+		city := rec.GetString("city")
+		if state != "" && city != "" {
+			item.Subtitle = city + ", " + state
+		} else if state != "" {
+			item.Subtitle = state
+		} else {
+			item.Subtitle = city
+		}
+		item.Image = firstFileURL(rec, "image")
+		item.DeepLink = "mensa://members/" + rec.Id
 	case "org_role":
 		// rec e` un org_chart_members. Title = ruolo, Subtitle = nome socio,
 		// deep_link verso il gruppo della carica.

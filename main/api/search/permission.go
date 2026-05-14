@@ -14,7 +14,7 @@ var typeVisibility = map[string]struct {
 	"sig":      {"public", ""},
 	"deal":     {"members", ""},
 	"document": {"members", ""},
-	"user":     {"members", ""},
+	"member":   {"members", ""},
 	"org_role": {"members", ""},
 }
 
