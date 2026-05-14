@@ -72,6 +72,18 @@ func indexMemberAsync(e *core.RecordEvent) error {
 	return e.Next()
 }
 
+func indexQuidIssueAsync(e *core.RecordEvent) error {
+	rec := e.Record
+	app := e.App
+	go func() {
+		doc := BuildQuidIssueDoc(app, rec)
+		if err := search.Upsert(doc); err != nil {
+			app.Logger().Error("search index upsert failed", "type", "quid_issue", "id", rec.Id, "err", err)
+		}
+	}()
+	return e.Next()
+}
+
 func indexQuidArticleAsync(e *core.RecordEvent) error {
 	rec := e.Record
 	app := e.App
