@@ -85,7 +85,7 @@ func _generateBackgroundImageAI(prompt string) ([]byte, error) {
 
 	result, err := client.Models.GenerateImages(
 		ctx,
-		"models/imagen-4.0-generate-preview-06-06",
+		"models/imagen-4.0-generate-001",
 		promptToUse,
 		config,
 	)
