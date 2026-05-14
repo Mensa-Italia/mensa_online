@@ -11,7 +11,7 @@ type Doc struct {
 	Region        string    `json:"region"`
 	Visibility    string    `json:"visibility"`
 	RequiredPower string    `json:"required_power"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	CreatedAt     time.Time `json:"created_at"`
 }
 
 type Filters struct {

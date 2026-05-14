@@ -24,9 +24,9 @@ func TestUpsertAndQuery(t *testing.T) {
 
 	now := time.Now()
 	docs := []Doc{
-		{ID: "e1", Type: "event", Title: "Carbonara serata", Body: "Cena con carbonara", Region: "Lazio", UpdatedAt: now},
-		{ID: "d1", Type: "deal", Title: "Trattoria Carbonara", Body: "Sconto trattoria", Region: "Lazio", UpdatedAt: now},
-		{ID: "s1", Type: "sig", Title: "Fotografia", Body: "Gruppo di fotografia", Region: "Lazio", UpdatedAt: now},
+		{ID: "e1", Type: "event", Title: "Carbonara serata", Body: "Cena con carbonara", Region: "Lazio", CreatedAt: now},
+		{ID: "d1", Type: "deal", Title: "Trattoria Carbonara", Body: "Sconto trattoria", Region: "Lazio", CreatedAt: now},
+		{ID: "s1", Type: "sig", Title: "Fotografia", Body: "Gruppo di fotografia", Region: "Lazio", CreatedAt: now},
 	}
 	for _, d := range docs {
 		if err := Upsert(d); err != nil {
@@ -57,7 +57,7 @@ func TestUpsertAndQuery(t *testing.T) {
 func TestDelete(t *testing.T) {
 	defer setup(t)()
 
-	d := Doc{ID: "x1", Type: "event", Title: "Pizza party", Body: "festa", UpdatedAt: time.Now()}
+	d := Doc{ID: "x1", Type: "event", Title: "Pizza party", Body: "festa", CreatedAt: time.Now()}
 	if err := Upsert(d); err != nil {
 		t.Fatal(err)
 	}
@@ -77,8 +77,8 @@ func TestBoost(t *testing.T) {
 	defer setup(t)()
 
 	now := time.Now()
-	titleDoc := Doc{ID: "t1", Type: "event", Title: "Luna piena", Body: "serata generica", UpdatedAt: now}
-	bodyDoc := Doc{ID: "b1", Type: "event", Title: "Evento", Body: "osservazione della luna", UpdatedAt: now}
+	titleDoc := Doc{ID: "t1", Type: "event", Title: "Luna piena", Body: "serata generica", CreatedAt: now}
+	bodyDoc := Doc{ID: "b1", Type: "event", Title: "Evento", Body: "osservazione della luna", CreatedAt: now}
 	if err := Upsert(titleDoc); err != nil {
 		t.Fatal(err)
 	}
@@ -102,8 +102,8 @@ func TestFilterRegion(t *testing.T) {
 	defer setup(t)()
 
 	now := time.Now()
-	a := Doc{ID: "a", Type: "event", Title: "Concerto", Region: "Lazio", UpdatedAt: now}
-	b := Doc{ID: "b", Type: "event", Title: "Concerto", Region: "Lombardia", UpdatedAt: now}
+	a := Doc{ID: "a", Type: "event", Title: "Concerto", Region: "Lazio", CreatedAt: now}
+	b := Doc{ID: "b", Type: "event", Title: "Concerto", Region: "Lombardia", CreatedAt: now}
 	if err := Upsert(a); err != nil {
 		t.Fatal(err)
 	}
