@@ -62,6 +62,12 @@ func Load(app core.App) {
 	app.OnRecordAfterCreateSuccess("org_chart_groups").BindFunc(indexOrgGroupAsync)
 	app.OnRecordAfterUpdateSuccess("org_chart_groups").BindFunc(indexOrgGroupAsync)
 	app.OnRecordAfterDeleteSuccess("org_chart_groups").BindFunc(unindexAsync)
+
+	// quid_articles: cache locale degli articoli WordPress sincronizzati dal
+	// cron quidsync. Hook li riflette nell'indice Bleve.
+	app.OnRecordAfterCreateSuccess("quid_articles").BindFunc(indexQuidArticleAsync)
+	app.OnRecordAfterUpdateSuccess("quid_articles").BindFunc(indexQuidArticleAsync)
+	app.OnRecordAfterDeleteSuccess("quid_articles").BindFunc(unindexAsync)
 }
 
 func StampUpdateImageAsync(e *core.RecordEvent) error {

@@ -127,6 +127,29 @@ func BuildOrgRoleDoc(app core.App, rec *core.Record) search.Doc {
 	}
 }
 
+// BuildQuidArticleDoc indicizza un articolo Quid (cache da WordPress).
+// Visibility "public": Quid e` pubblicato online, niente restrizioni.
+func BuildQuidArticleDoc(app core.App, rec *core.Record) search.Doc {
+	body := joinNonEmpty(" ", rec.GetString("excerpt"), rec.GetString("body"))
+	tags := filterNonEmpty(rec.GetString("category_name"))
+
+	createdAt := rec.GetDateTime("published_at").Time()
+	if createdAt.IsZero() {
+		createdAt = rec.GetDateTime("created").Time()
+	}
+
+	return search.Doc{
+		ID:         rec.Id,
+		Type:       "quid_article",
+		Title:      rec.GetString("title"),
+		Body:       body,
+		Tags:       tags,
+		Region:     "",
+		Visibility: "public",
+		CreatedAt:  createdAt,
+	}
+}
+
 // BuildMemberDoc indicizza un socio dal members_registry (sync Area32).
 // I record con is_active=false non vanno chiamati qui (l'hook li Delete).
 func BuildMemberDoc(app core.App, rec *core.Record) search.Doc {

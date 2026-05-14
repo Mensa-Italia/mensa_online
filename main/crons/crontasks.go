@@ -5,6 +5,7 @@ import (
 
 	"mensadb/importers"
 	"mensadb/main/cmd/searchcmd"
+	"mensadb/main/crons/quidnotify"
 	"mensadb/main/crons/searchrec"
 	"mensadb/tolgee"
 	"mensadb/tools/dbtools"
@@ -87,6 +88,12 @@ func CronTasks(app core.App) {
 
 	app.Cron().MustAdd("Search index reconciliation", "0 4 * * *", func() {
 		searchrec.Run(app)
+	})
+
+	// Controlla quid.mensa.it ogni sera alle 18: se e` uscito un nuovo numero
+	// (categoria WP `quid-N-...` con almeno un post) manda push a tutti.
+	app.Cron().MustAdd("Quid new issue notify", "0 18 * * *", func() {
+		quidnotify.Run(app)
 	})
 
 	// Manual-only: schedule "Feb 31" never fires automatically. Trigger via the
