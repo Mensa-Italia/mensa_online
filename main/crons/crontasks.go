@@ -10,6 +10,7 @@ import (
 	"mensadb/tolgee"
 	"mensadb/tools/dbtools"
 	"mensadb/tools/env"
+	"mensadb/tools/quidsync"
 
 	"github.com/pocketbase/pocketbase/core"
 )
@@ -96,13 +97,27 @@ func CronTasks(app core.App) {
 		quidnotify.Run(app)
 	})
 
-	// Manual-only: schedule "Feb 31" never fires automatically. Trigger via the
-	// PocketBase admin panel "Run" button on first deploy and for disaster recovery.
+	// Manual-only: schedule "Feb 31" never fires automatically. Trigger via la
+	// PocketBase admin panel "Run" button al primo deploy e in disaster recovery.
+	// Backfilla TUTTE le sorgenti dell'indice di ricerca:
+	//   - collezioni PB (events/sigs/deals/documents/members/org_*)
+	//   - articoli Quid (sync da WordPress, popola quid_articles -> hook -> Bleve)
 	app.Cron().MustAdd("Search index backfill (manual)", "0 0 31 2 *", func() {
 		app.Logger().Info("[CRON] Search index backfill started")
 		if err := searchcmd.Run(context.Background(), app, searchcmd.DefaultCollections, false); err != nil {
 			app.Logger().Error("[CRON] Search index backfill failed", "err", err)
 			return
+		}
+		app.Logger().Info("[CRON] Quid full sync started")
+		perIssue, err := quidsync.SyncAllIssues(app)
+		if err != nil {
+			app.Logger().Error("[CRON] Quid full sync failed", "err", err)
+		} else {
+			total := 0
+			for _, n := range perIssue {
+				total += n
+			}
+			app.Logger().Info("[CRON] Quid full sync completed", "issues", len(perIssue), "articles", total)
 		}
 		app.Logger().Info("[CRON] Search index backfill completed")
 	})
