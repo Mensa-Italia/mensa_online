@@ -13,7 +13,7 @@ import (
 	"mensadb/tools/search"
 )
 
-var allTypes = []string{"event", "sig", "deal", "document", "user"}
+var allTypes = []string{"event", "sig", "deal", "document", "user", "org_role"}
 
 // collectionFor maps a search type to its PocketBase collection name.
 func collectionFor(typ string) string {
@@ -28,6 +28,8 @@ func collectionFor(typ string) string {
 		return "deals"
 	case "user":
 		return "users"
+	case "org_role":
+		return "org_chart_members"
 	default:
 		return typ
 	}
