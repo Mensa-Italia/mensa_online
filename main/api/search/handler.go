@@ -149,18 +149,29 @@ func searchHandler(e *core.RequestEvent) error {
 				return nil
 			}
 
+			// FindRecordsByIds non preserva l'ordine degli id passati: ritorna
+			// i record in ordine DB. Per mantenere l'ordinamento per score di
+			// Bleve, mappiamo id -> *Record e iteriamo su typHits.
+			recByID := make(map[string]*core.Record, len(recs))
+			for _, rec := range recs {
+				recByID[rec.Id] = rec
+			}
+
 			meta := vis[typ]
 			var items []Item
-			for _, rec := range recs {
+			for _, h := range typHits {
+				rec, ok := recByID[h.ID]
+				if !ok {
+					continue
+				}
 				if !allow(authUserRec, meta.visibility, meta.requiredPower) {
 					continue
 				}
-				sc := scoreMap[rec.Id]
 				var item Item
 				if hydrateResults {
-					item = hydrateRecord(typ, rec, sc)
+					item = hydrateRecord(typ, rec, h.Score)
 				} else {
-					item = minimalItem(rec.Id, sc)
+					item = minimalItem(rec.Id, h.Score)
 				}
 				items = append(items, item)
 				if len(items) >= req.LimitPerType {
