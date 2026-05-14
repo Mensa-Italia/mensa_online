@@ -77,6 +77,35 @@ func BuildDocumentDoc(app core.App, rec *core.Record) search.Doc {
 	}
 }
 
+func BuildOrgRoleDoc(app core.App, rec *core.Record) search.Doc {
+	// rec e` un org_chart_members. Risale a group + user per costruire un
+	// titolo leggibile e un body cercabile.
+	groupTitle := ""
+	if gid := rec.GetString("group"); gid != "" {
+		if g, err := app.FindRecordById("org_chart_groups", gid); err == nil {
+			groupTitle = g.GetString("title")
+		}
+	}
+	userName := fetchUserName(app, rec.GetString("user"))
+
+	role := rec.GetString("role")
+	title := role
+	if groupTitle != "" {
+		title = role + " — " + groupTitle
+	}
+
+	return search.Doc{
+		ID:         rec.Id,
+		Type:       "org_role",
+		Title:      title,
+		Body:       userName,
+		Tags:       filterNonEmpty(groupTitle),
+		Region:     "",
+		Visibility: "members",
+		UpdatedAt:  rec.GetDateTime("updated").Time(),
+	}
+}
+
 func BuildUserDoc(app core.App, rec *core.Record) search.Doc {
 	return search.Doc{
 		ID:         rec.Id,

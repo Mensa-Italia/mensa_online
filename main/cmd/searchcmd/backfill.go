@@ -20,7 +20,7 @@ const batchSize = 500
 
 type builder func(core.App, *core.Record) search.Doc
 
-var DefaultCollections = []string{"events", "sigs", "deals", "documents", "users"}
+var DefaultCollections = []string{"events", "sigs", "deals", "documents", "users", "org_chart_members"}
 
 // Run performs the backfill. Callable from the cobra command or from a cron job.
 func Run(ctx context.Context, app core.App, collections []string, reset bool) error {
@@ -108,6 +108,8 @@ func resolveBuilder(collection string) builder {
 		return hooks.BuildDocumentDoc
 	case "users":
 		return hooks.BuildUserDoc
+	case "org_chart_members":
+		return hooks.BuildOrgRoleDoc
 	default:
 		return nil
 	}

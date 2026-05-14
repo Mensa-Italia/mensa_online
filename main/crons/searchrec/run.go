@@ -14,11 +14,12 @@ import (
 func Run(app core.App) {
 	// Type mappings: collection name -> singular type for search index
 	types := map[string]string{
-		"events":     "event",
-		"sigs":       "sig",
-		"deals":      "deal",
-		"documents":  "document",
-		"users":      "user",
+		"events":            "event",
+		"sigs":              "sig",
+		"deals":             "deal",
+		"documents":         "document",
+		"users":             "user",
+		"org_chart_members": "org_role",
 	}
 
 	// Use errgroup to fan out count operations in parallel

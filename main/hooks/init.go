@@ -49,6 +49,10 @@ func Load(app core.App) {
 	app.OnRecordAfterUpdateSuccess("users").BindFunc(indexUserAsync)
 	app.OnRecordAfterDeleteSuccess("users").BindFunc(unindexAsync)
 
+	// Org chart: indicizza ogni membro come "org_role" in Bleve.
+	app.OnRecordAfterCreateSuccess("org_chart_members").BindFunc(indexOrgRoleAsync)
+	app.OnRecordAfterUpdateSuccess("org_chart_members").BindFunc(indexOrgRoleAsync)
+	app.OnRecordAfterDeleteSuccess("org_chart_members").BindFunc(unindexOrgRoleAsync)
 }
 
 func StampUpdateImageAsync(e *core.RecordEvent) error {
