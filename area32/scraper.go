@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"mensadb/tools/aitools"
@@ -26,6 +27,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
+	utls "github.com/refraction-networking/utls"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -66,20 +68,55 @@ func NewAPI() *ScraperApi {
 		Timeout:   10 * time.Second,
 		KeepAlive: 30 * time.Second,
 	}
+	// DialTLS custom con uTLS per spoofare ClientHello Chrome. Cloud32 e`
+	// dietro Azure Front Door Bot Manager che combina TLS JA3 + IP reputation:
+	// Go stock da IP datacenter va sopra threshold ed emette solo cookie
+	// framework (no auth completa). Chrome ClientHello riporta il punteggio
+	// sotto threshold anche da datacenter.
+	//
+	// L'ALPN viene riscritto a solo http/1.1: lo stack net/http standard non
+	// puo` parlare HTTP/2 su una utls.UConn (incompatibile con il transport
+	// http2 di Go che richiede *tls.Conn).
+	dialTLS := func(ctx context.Context, network, addr string) (net.Conn, error) {
+		raw, err := dialer.DialContext(ctx, "tcp4", addr)
+		if err != nil {
+			return nil, err
+		}
+		host, _, err := net.SplitHostPort(addr)
+		if err != nil {
+			host = addr
+		}
+		spec, err := utls.UTLSIdToSpec(utls.HelloChrome_120)
+		if err != nil {
+			_ = raw.Close()
+			return nil, fmt.Errorf("utls spec: %w", err)
+		}
+		for _, ext := range spec.Extensions {
+			if alpn, ok := ext.(*utls.ALPNExtension); ok {
+				alpn.AlpnProtocols = []string{"http/1.1"}
+			}
+		}
+		uconn := utls.UClient(raw, &utls.Config{ServerName: host}, utls.HelloCustom)
+		if err := uconn.ApplyPreset(&spec); err != nil {
+			_ = raw.Close()
+			return nil, fmt.Errorf("utls apply: %w", err)
+		}
+		if err := uconn.HandshakeContext(ctx); err != nil {
+			_ = raw.Close()
+			return nil, fmt.Errorf("utls handshake: %w", err)
+		}
+		return uconn, nil
+	}
+
 	transport := &http.Transport{
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 			return dialer.DialContext(ctx, "tcp4", addr)
 		},
-		// Forza HTTP/1.1: il bump di Go 1.25.9 -> 1.25.10 + x/net v0.53 ha
-		// cambiato l'handling delle SETTINGS HTTP/2 (CVE GO-2026-4918). AFD
-		// davanti a cloud32 fingerprinta il client h2 e classifica come bot,
-		// emettendo solo cookies framework e non quelli applicativi.
-		// HTTP/1.1 elude completamente il fingerprint h2.
-		TLSNextProto: map[string]func(string, *tls.Conn) http.RoundTripper{},
-		// Force HTTP/1.1 anche tramite ALPN nel ClientHello.
-		TLSClientConfig: &tls.Config{
-			NextProtos: []string{"http/1.1"},
-		},
+		DialTLSContext: dialTLS,
+		// uTLS gestisce il TLS, ma teniamo HTTP/2 disattivato a livello
+		// alt-protocols (HelloChrome_Auto offre h2 via ALPN ma noi negoziamo
+		// solo http/1.1 nel Config sopra). Doppia sicurezza qui:
+		TLSNextProto:          map[string]func(string, *tls.Conn) http.RoundTripper{},
 		TLSHandshakeTimeout:   10 * time.Second,
 		ResponseHeaderTimeout: 15 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
