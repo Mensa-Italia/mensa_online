@@ -30,3 +30,18 @@ func unindexOrgRoleAsync(e *core.RecordEvent) error {
 	}()
 	return e.Next()
 }
+
+// indexOrgGroupAsync indicizza il gruppo dell'organigramma come tipo
+// "org_group". Title = nome del gruppo. Permette di cercare "consiglio"
+// e tornare una singola tile sul gruppo invece delle N cariche dentro.
+func indexOrgGroupAsync(e *core.RecordEvent) error {
+	rec := e.Record
+	app := e.App
+	go func() {
+		doc := BuildOrgGroupDoc(app, rec)
+		if err := search.Upsert(doc); err != nil {
+			app.Logger().Error("search index upsert failed", "type", "org_group", "id", rec.Id, "err", err)
+		}
+	}()
+	return e.Next()
+}

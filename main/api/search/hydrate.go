@@ -59,6 +59,11 @@ func hydrateRecord(typ string, rec *core.Record, score float64) Item {
 		}
 		item.Image = firstFileURL(rec, "image")
 		item.DeepLink = "mensa://members/" + rec.Id
+	case "org_group":
+		// rec e` un org_chart_groups. Title = nome del gruppo, deep_link
+		// apre l'organigramma su quel gruppo.
+		item.Title = rec.GetString("title")
+		item.DeepLink = "mensa://org-chart/" + rec.Id
 	case "org_role":
 		// rec e` un org_chart_members. Title = ruolo, Subtitle = nome socio,
 		// deep_link verso il gruppo della carica.

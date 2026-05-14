@@ -77,6 +77,21 @@ func BuildDocumentDoc(app core.App, rec *core.Record) search.Doc {
 	}
 }
 
+// BuildOrgGroupDoc indicizza un gruppo dell'organigramma come tipo
+// "org_group". Body resta vuoto: il match avviene quasi solo sul title.
+func BuildOrgGroupDoc(app core.App, rec *core.Record) search.Doc {
+	return search.Doc{
+		ID:         rec.Id,
+		Type:       "org_group",
+		Title:      rec.GetString("title"),
+		Body:       "",
+		Tags:       nil,
+		Region:     "",
+		Visibility: "members",
+		CreatedAt:  rec.GetDateTime("created").Time(),
+	}
+}
+
 func BuildOrgRoleDoc(app core.App, rec *core.Record) search.Doc {
 	// rec e` un org_chart_members. Risale a group + user per costruire un
 	// titolo leggibile e un body cercabile.
