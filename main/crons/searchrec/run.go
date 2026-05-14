@@ -20,6 +20,7 @@ func Run(app core.App) {
 		"deals":             "deal",
 		"documents":         "document",
 		"members_registry":  "member",
+		"org_chart_groups":  "org_group",
 		"org_chart_members": "org_role",
 	}
 
