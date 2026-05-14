@@ -1,5 +1,11 @@
 module mensadb
 
+// NON bumpare oltre 1.25.9 senza verificare prima il login Area32 in
+// produzione: 1.25.10 cambia il fingerprint HTTP/2 client e Azure Front
+// Door davanti a cloud32.it classifica il binario come bot, restituendo
+// solo i cookie framework e bloccando l'autenticazione applicativa.
+// Idem per x/net oltre v0.51 e x/image oltre v0.38 (pin allineati).
+// Vedi Dockerfile per dettagli completi.
 go 1.25.9
 
 require (

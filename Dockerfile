@@ -1,3 +1,13 @@
+# IMPORTANTE: pin a 1.25.9 voluto. Il bump a 1.25.10 (CVE GO-2026-4918,
+# patch sull'handling di HTTP/2 SETTINGS_MAX_FRAME_SIZE) cambia il
+# ClientHello/HTTP fingerprint Go quel tanto che basta perche` il Bot
+# Manager di Azure Front Door davanti a cloud32.it ci classifichi come
+# automation: la POST di login risponde 302 ma omette i cookie
+# applicativi (id, codper, codass, date, logged), lasciando l'utente
+# non autenticato. Il sync soci e l'/api/cs/auth-with-area si bloccano.
+# Curl dal medesimo IP/server passa perche` ha fingerprint OpenSSL noto.
+# Prima di bumpare di nuovo: investigare il workaround TLS specifico
+# (cipher suite list, h2 SETTINGS values) e testare contro cloud32.
 FROM golang:1.25.9-alpine AS builder
 
 RUN apk add --no-cache build-base
