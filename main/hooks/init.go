@@ -68,6 +68,12 @@ func Load(app core.App) {
 	app.OnRecordAfterCreateSuccess("quid_articles").BindFunc(indexQuidArticleAsync)
 	app.OnRecordAfterUpdateSuccess("quid_articles").BindFunc(indexQuidArticleAsync)
 	app.OnRecordAfterDeleteSuccess("quid_articles").BindFunc(unindexAsync)
+
+	// quid_issues: cache locale dei numeri Quid (categorie WP). Indicizzati
+	// come risultato di search distinto dai singoli articoli.
+	app.OnRecordAfterCreateSuccess("quid_issues").BindFunc(indexQuidIssueAsync)
+	app.OnRecordAfterUpdateSuccess("quid_issues").BindFunc(indexQuidIssueAsync)
+	app.OnRecordAfterDeleteSuccess("quid_issues").BindFunc(unindexAsync)
 }
 
 func StampUpdateImageAsync(e *core.RecordEvent) error {

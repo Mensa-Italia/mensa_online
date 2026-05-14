@@ -89,7 +89,7 @@ func SyncAllIssues(app core.App) (perIssue map[int]int, err error) {
 	}
 	perIssue = make(map[int]int, len(cats))
 	for _, c := range cats {
-		count, err := SyncIssue(app, c.ID, c.Name)
+		count, err := SyncIssue(app, c)
 		if err != nil {
 			app.Logger().Error("[quidsync] sync issue fallito, continuo con i successivi",
 				"issue", c.Number, "id", c.ID, "err", err)
@@ -129,21 +129,24 @@ type wpPost struct {
 }
 
 // SyncIssue scarica tutti gli articoli del numero (categoria WP) indicato e
-// li upserta nella collection `quid_articles`. L'hook registrato in main/hooks
-// si occupa di riflettere ogni write nell'indice Bleve.
+// li upserta nella collection `quid_articles`. Dopo gli articoli, upserta
+// anche il record del numero stesso in `quid_issues` (con immagine presa dal
+// primo articolo trovato). L'hook registrato in main/hooks si occupa di
+// riflettere ogni write nell'indice Bleve.
 //
-// categoryName e` opzionale e viene salvato per arricchire l'idratazione e i
-// tag della search ("Quid 16 - La Fine"). Se vuoto, lo si recupera dalla
-// risposta WP non disponibile qui → meglio passarlo dal chiamante.
-func SyncIssue(app core.App, categoryID int, categoryName string) (int, error) {
-	collection, err := app.FindCollectionByNameOrId("quid_articles")
+// categoryName e numero servono per identificare il numero in modo leggibile
+// nei risultati di search.
+func SyncIssue(app core.App, cat IssueCategory) (int, error) {
+	articlesCol, err := app.FindCollectionByNameOrId("quid_articles")
 	if err != nil {
 		return 0, fmt.Errorf("find collection quid_articles: %w", err)
 	}
 
 	total := 0
+	var coverImage string
+	var firstPublishedAt time.Time
 	for page := 1; page <= 50; page++ {
-		posts, err := fetchPostsPage(categoryID, page)
+		posts, err := fetchPostsPage(cat.ID, page)
 		if err != nil {
 			return total, fmt.Errorf("fetch page %d: %w", page, err)
 		}
@@ -151,7 +154,15 @@ func SyncIssue(app core.App, categoryID int, categoryName string) (int, error) {
 			break
 		}
 		for _, p := range posts {
-			if err := upsertPost(app, collection, &p, categoryID, categoryName); err != nil {
+			if coverImage == "" {
+				coverImage = featuredImageURL(&p)
+			}
+			if t, err := time.Parse("2006-01-02T15:04:05", p.Date); err == nil {
+				if firstPublishedAt.IsZero() || t.Before(firstPublishedAt) {
+					firstPublishedAt = t
+				}
+			}
+			if err := upsertPost(app, articlesCol, &p, cat.ID, cat.Name); err != nil {
 				app.Logger().Error("[quidsync] upsert post fallito", "wp_id", p.ID, "err", err)
 				continue
 			}
@@ -161,7 +172,36 @@ func SyncIssue(app core.App, categoryID int, categoryName string) (int, error) {
 			break
 		}
 	}
+
+	if err := upsertIssue(app, cat, total, coverImage, firstPublishedAt); err != nil {
+		app.Logger().Error("[quidsync] upsert issue fallito", "category_id", cat.ID, "err", err)
+	}
+
 	return total, nil
+}
+
+func upsertIssue(app core.App, cat IssueCategory, articlesCount int, image string, publishedAt time.Time) error {
+	collection, err := app.FindCollectionByNameOrId("quid_issues")
+	if err != nil {
+		return fmt.Errorf("find collection quid_issues: %w", err)
+	}
+	categoryID := strconv.Itoa(cat.ID)
+	rec, err := app.FindFirstRecordByData(collection.Id, "category_id", categoryID)
+	if err != nil || rec == nil {
+		rec = core.NewRecord(collection)
+		rec.Set("category_id", categoryID)
+	}
+	rec.Set("number", cat.Number)
+	rec.Set("name", cat.Name)
+	rec.Set("slug", cat.Slug)
+	rec.Set("articles_count", articlesCount)
+	if image != "" {
+		rec.Set("image", image)
+	}
+	if !publishedAt.IsZero() {
+		rec.Set("published_at", publishedAt)
+	}
+	return app.Save(rec)
 }
 
 func fetchPostsPage(categoryID, page int) ([]wpPost, error) {

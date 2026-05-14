@@ -127,6 +127,26 @@ func BuildOrgRoleDoc(app core.App, rec *core.Record) search.Doc {
 	}
 }
 
+// BuildQuidIssueDoc indicizza un numero di Quid come risultato di search
+// distinto dai singoli articoli. Title = nome del numero (es. "Quid 16 - La
+// Fine"), body vuoto: il match avviene quasi solo sul titolo. Pubblico.
+func BuildQuidIssueDoc(app core.App, rec *core.Record) search.Doc {
+	createdAt := rec.GetDateTime("published_at").Time()
+	if createdAt.IsZero() {
+		createdAt = rec.GetDateTime("created").Time()
+	}
+	return search.Doc{
+		ID:         rec.Id,
+		Type:       "quid_issue",
+		Title:      rec.GetString("name"),
+		Body:       "",
+		Tags:       nil,
+		Region:     "",
+		Visibility: "public",
+		CreatedAt:  createdAt,
+	}
+}
+
 // BuildQuidArticleDoc indicizza un articolo Quid (cache da WordPress).
 // Visibility "public": Quid e` pubblicato online, niente restrizioni.
 func BuildQuidArticleDoc(app core.App, rec *core.Record) search.Doc {

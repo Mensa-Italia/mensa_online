@@ -42,7 +42,7 @@ func Run(app core.App) {
 	// Sync articoli del numero corrente: copre articoli aggiunti in ritardo
 	// e edit del contenuto. Lo storico (numeri vecchi) si gestisce con la CLI
 	// quid-backfill: si presume immutabile.
-	count, err := quidsync.SyncIssue(app, latest.ID, latest.Name)
+	count, err := quidsync.SyncIssue(app, *latest)
 	if err != nil {
 		app.Logger().Error("[CRON] quidnotify: sync issue corrente fallito",
 			"issue", latest.Number, "err", err)

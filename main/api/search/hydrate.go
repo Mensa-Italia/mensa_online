@@ -64,6 +64,18 @@ func hydrateRecord(typ string, rec *core.Record, score float64) Item {
 		// apre l'organigramma su quel gruppo.
 		item.Title = rec.GetString("title")
 		item.DeepLink = "mensa://org-chart/" + rec.Id
+	case "quid_issue":
+		// Numero di Quid (categoria WP). Deep link allo stesso URI usato dalla
+		// push del nuovo numero: l'app risolve mensa://quid/<category_id>.
+		item.Title = rec.GetString("name")
+		count := rec.GetInt("articles_count")
+		if count == 1 {
+			item.Subtitle = "1 articolo"
+		} else if count > 1 {
+			item.Subtitle = fmt.Sprintf("%d articoli", count)
+		}
+		item.Image = rec.GetString("image")
+		item.DeepLink = "mensa://quid/" + rec.GetString("category_id")
 	case "quid_article":
 		// Articolo Quid in cache da WordPress. Subtitle = numero ("Quid 16 - La Fine"),
 		// image = featured media. Deep link allo stile flat scelto in app.
