@@ -4,6 +4,7 @@ import (
 	"log"
 	"mensadb/importers"
 	"mensadb/main/api"
+	"mensadb/main/cmd/quidcmd"
 	"mensadb/main/cmd/searchcmd"
 	"mensadb/main/crons"
 	"mensadb/main/hooks"
@@ -105,6 +106,7 @@ func main() {
 	})
 
 	app.RootCmd.AddCommand(searchcmd.New(app))
+	app.RootCmd.AddCommand(quidcmd.New(app))
 
 	if err := app.Start(); err != nil {
 		log.Fatal(err)
