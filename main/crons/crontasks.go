@@ -10,6 +10,7 @@ import (
 	"mensadb/tolgee"
 	"mensadb/tools/dbtools"
 	"mensadb/tools/env"
+	"mensadb/tools/localofficesync"
 	"mensadb/tools/podcastsync"
 	"mensadb/tools/quidsync"
 
@@ -25,6 +26,11 @@ func CronTasks(app core.App) {
 		importers.GetFullMailList()
 		dbtools.RefreshUserStatesManagersPowers(app)
 		app.Logger().Info("[CRON] Updated the powers of all the users based on the segretari list")
+
+		// Subito dopo: scrappa /gruppi-locali-referenti/ per linkare/slincare
+		// segretari, co-segretari e assistenti al test ai rispettivi
+		// local_offices. Stesso identity key (cloud32 uid) dei members_registry.
+		localofficesync.Run(app)
 	})
 
 	app.Cron().MustAdd("Reload Tolgee Translations", "1 3 * * *", func() {
