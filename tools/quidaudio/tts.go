@@ -31,11 +31,12 @@ var ttsMu sync.Mutex
 // esposta dal SDK Go come tipo strutturato, quindi parsiamo dal testo.
 var retryDelayRE = regexp.MustCompile(`retry in (\d+(?:\.\d+)?)s`)
 
-// Synthesize chiama il modello TTS di Gemini con la voce e lo stile di
-// narrazione configurati e ritorna l'audio in PCM 16-bit signed LE, 24kHz,
+// Synthesize chiama il modello TTS di Gemini con la voce indicata + stile
+// di narrazione configurato. Ritorna l'audio in PCM 16-bit signed LE, 24kHz,
 // mono. Serializza le chiamate (lock globale) per non sforare la quota e
 // ritenta su 429 usando il retry_delay restituito da Gemini.
-func Synthesize(text string) ([]byte, error) {
+// Se voiceName e` vuoto, fallback su env GEMINI_TTS_VOICE.
+func Synthesize(text, voiceName string) ([]byte, error) {
 	client := getTTSClient()
 	if client == nil {
 		return nil, fmt.Errorf("gemini TTS client non disponibile")
@@ -43,6 +44,10 @@ func Synthesize(text string) ([]byte, error) {
 
 	ttsMu.Lock()
 	defer ttsMu.Unlock()
+
+	if voiceName == "" {
+		voiceName = env.GetGeminiTTSVoice()
+	}
 
 	// Lo style prompt e` parte del testo input: la documentazione Gemini TTS
 	// raccomanda di prependerlo seguito da due punti per far modulare la voce.
@@ -63,7 +68,7 @@ func Synthesize(text string) ([]byte, error) {
 			LanguageCode: "it-IT",
 			VoiceConfig: &genai.VoiceConfig{
 				PrebuiltVoiceConfig: &genai.PrebuiltVoiceConfig{
-					VoiceName: env.GetGeminiTTSVoice(),
+					VoiceName: voiceName,
 				},
 			},
 		},
