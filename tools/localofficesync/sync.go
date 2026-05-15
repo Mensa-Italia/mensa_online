@@ -79,8 +79,19 @@ func Run(app core.App) {
 		regionName := regionsByCode[r.code]
 		office := matchOffice(officesByRegion, regionName)
 		if office == nil {
-			app.Logger().Warn("[localofficesync] nessun local_office per regione", "region", regionName)
-			continue
+			// Auto-crea il local_office mancante. name = region: l'admin
+			// potra` rinominarlo in seguito senza rompere il match (la chiave
+			// di matching e` il campo region, non name).
+			created, err := createOffice(app, regionName)
+			if err != nil {
+				app.Logger().Error("[localofficesync] creazione local_office fallita",
+					"region", regionName, "err", err)
+				continue
+			}
+			app.Logger().Info("[localofficesync] creato local_office mancante",
+				"region", regionName, "id", created.Id)
+			officesByRegion[strings.ToLower(regionName)] = created
+			office = created
 		}
 		for _, p := range r.people {
 			// Verifica che la persona sia registrata come user (auth) — se
@@ -169,6 +180,20 @@ func matchOffice(byRegion map[string]*core.Record, regionName string) *core.Reco
 		}
 	}
 	return nil
+}
+
+func createOffice(app core.App, regionName string) (*core.Record, error) {
+	col, err := app.FindCollectionByNameOrId("local_offices")
+	if err != nil {
+		return nil, err
+	}
+	rec := core.NewRecord(col)
+	rec.Set("name", regionName)
+	rec.Set("region", regionName)
+	if err := app.Save(rec); err != nil {
+		return nil, err
+	}
+	return rec, nil
 }
 
 func upsertAdmin(app core.App, col *core.Collection, officeID, userID string, isOfficer bool) error {
