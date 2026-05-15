@@ -17,8 +17,10 @@ var typeVisibility = map[string]struct {
 	"member":    {"members", ""},
 	"org_group":  {"members", ""},
 	"org_role":   {"members", ""},
-	"quid_article": {"public", ""},
-	"quid_issue":   {"public", ""},
+	"quid_article":    {"public", ""},
+	"quid_issue":      {"public", ""},
+	"podcast":         {"public", ""},
+	"podcast_episode": {"public", ""},
 }
 
 func allow(authUser *core.Record, visibility, requiredPower string) bool {

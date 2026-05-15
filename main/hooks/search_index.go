@@ -74,6 +74,30 @@ func indexMemberAsync(e *core.RecordEvent) error {
 	return e.Next()
 }
 
+func indexPodcastAsync(e *core.RecordEvent) error {
+	rec := e.Record
+	app := e.App
+	go func() {
+		doc := BuildPodcastDoc(app, rec)
+		if err := search.Upsert(doc); err != nil {
+			app.Logger().Error("search index upsert failed", "type", "podcast", "id", rec.Id, "err", err)
+		}
+	}()
+	return e.Next()
+}
+
+func indexPodcastEpisodeAsync(e *core.RecordEvent) error {
+	rec := e.Record
+	app := e.App
+	go func() {
+		doc := BuildPodcastEpisodeDoc(app, rec)
+		if err := search.Upsert(doc); err != nil {
+			app.Logger().Error("search index upsert failed", "type", "podcast_episode", "id", rec.Id, "err", err)
+		}
+	}()
+	return e.Next()
+}
+
 func indexQuidIssueAsync(e *core.RecordEvent) error {
 	rec := e.Record
 	app := e.App

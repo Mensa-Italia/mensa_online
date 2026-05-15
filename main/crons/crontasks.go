@@ -10,6 +10,7 @@ import (
 	"mensadb/tolgee"
 	"mensadb/tools/dbtools"
 	"mensadb/tools/env"
+	"mensadb/tools/podcastsync"
 	"mensadb/tools/quidsync"
 
 	"github.com/pocketbase/pocketbase/core"
@@ -97,6 +98,22 @@ func CronTasks(app core.App) {
 		quidnotify.Run(app)
 	})
 
+	// Sync giornaliero dei podcast (yt-dlp): scarica audio dei nuovi episodi
+	// per ogni serie registrata. Lo svegliamo alle 5 di notte cosi` non
+	// concorre con i sync di mattina (documenti, registry).
+	app.Cron().MustAdd("Podcast sync", "0 5 * * *", func() {
+		perPodcast, err := podcastsync.SyncAll(app)
+		if err != nil {
+			app.Logger().Error("[CRON] Podcast sync fallito", "err", err)
+			return
+		}
+		added := 0
+		for _, n := range perPodcast {
+			added += n
+		}
+		app.Logger().Info("[CRON] Podcast sync ok", "podcasts", len(perPodcast), "new_episodes", added)
+	})
+
 	// Manual-only: schedule "Feb 31" never fires automatically. Trigger via la
 	// PocketBase admin panel "Run" button al primo deploy e in disaster recovery.
 	// Backfilla TUTTE le sorgenti dell'indice di ricerca:
@@ -118,6 +135,18 @@ func CronTasks(app core.App) {
 				total += n
 			}
 			app.Logger().Info("[CRON] Quid full sync completed", "issues", len(perIssue), "articles", total)
+		}
+		app.Logger().Info("[CRON] Podcast full sync started")
+		perPodcast, err := podcastsync.SyncAll(app)
+		if err != nil {
+			app.Logger().Error("[CRON] Podcast full sync failed", "err", err)
+		} else {
+			added := 0
+			for _, n := range perPodcast {
+				added += n
+			}
+			app.Logger().Info("[CRON] Podcast full sync completed",
+				"podcasts", len(perPodcast), "new_episodes", added)
 		}
 		app.Logger().Info("[CRON] Search index backfill completed")
 	})

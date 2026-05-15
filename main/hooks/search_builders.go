@@ -170,6 +170,45 @@ func BuildQuidArticleDoc(app core.App, rec *core.Record) search.Doc {
 	}
 }
 
+// BuildPodcastDoc indicizza una serie podcast (playlist YT). Public.
+func BuildPodcastDoc(app core.App, rec *core.Record) search.Doc {
+	return search.Doc{
+		ID:         rec.Id,
+		Type:       "podcast",
+		Title:      rec.GetString("title"),
+		Body:       rec.GetString("description"),
+		Tags:       nil,
+		Region:     "",
+		Visibility: "public",
+		CreatedAt:  rec.GetDateTime("created").Time(),
+	}
+}
+
+// BuildPodcastEpisodeDoc indicizza un singolo episodio.
+func BuildPodcastEpisodeDoc(app core.App, rec *core.Record) search.Doc {
+	// Tag con il titolo della serie per match tipo "Mensa Talks: X".
+	seriesTitle := ""
+	if pid := rec.GetString("podcast"); pid != "" {
+		if p, err := app.FindRecordById("podcasts", pid); err == nil {
+			seriesTitle = p.GetString("title")
+		}
+	}
+	createdAt := rec.GetDateTime("published_at").Time()
+	if createdAt.IsZero() {
+		createdAt = rec.GetDateTime("created").Time()
+	}
+	return search.Doc{
+		ID:         rec.Id,
+		Type:       "podcast_episode",
+		Title:      rec.GetString("title"),
+		Body:       rec.GetString("description"),
+		Tags:       filterNonEmpty(seriesTitle),
+		Region:     "",
+		Visibility: "public",
+		CreatedAt:  createdAt,
+	}
+}
+
 // BuildMemberDoc indicizza un socio dal members_registry (sync Area32).
 // I record con is_active=false non vanno chiamati qui (l'hook li Delete).
 func BuildMemberDoc(app core.App, rec *core.Record) search.Doc {
