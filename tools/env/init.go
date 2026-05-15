@@ -25,6 +25,7 @@ type config struct {
 	GeminiTTSVoiceFemale   string `env:"GEMINI_TTS_VOICE_FEMALE" envDefault:"Zephyr"`
 	GeminiTTSStylePrompt   string `env:"GEMINI_TTS_STYLE_PROMPT" envDefault:"Deep and warm tone ASMR, goosebumps"`
 	GeminiTTSDirectorNote  string `env:"GEMINI_TTS_DIRECTOR_NOTE" envDefault:"Warm, understanding, soft tone with gentle inflections. Pause naturally between paragraphs."`
+	GeminiTTSConcurrency   int    `env:"GEMINI_TTS_CONCURRENCY" envDefault:"2"`
 	ImageRouterKey         string `env:"IMAGE_ROUTER_KEY" envDefault:""`
 	GeminiResumePrompt     string `env:"GEMINI_RESUME_PROMPT" envDefault:"PARLI SOLO ITALIANO"`
 	TolgeeKey              string `env:"TOLGEE_KEY" envDefault:""`
@@ -153,6 +154,13 @@ func GetGeminiTTSStylePrompt() string {
 
 func GetGeminiTTSDirectorNote() string {
 	return cfg.GeminiTTSDirectorNote
+}
+
+func GetGeminiTTSConcurrency() int {
+	if cfg.GeminiTTSConcurrency < 1 {
+		return 1
+	}
+	return cfg.GeminiTTSConcurrency
 }
 
 func GetGeminiResumePrompt() string {
