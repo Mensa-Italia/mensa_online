@@ -49,16 +49,14 @@ func Synthesize(text, voiceName string) ([]byte, error) {
 		voiceName = env.GetGeminiTTSVoice()
 	}
 
-	// Gemini TTS legge ad alta voce qualsiasi cosa gli arrivi nel content,
-	// inclusi i prefissi di stile mal frasati. Per fargli interpretare lo
-	// stile come direttiva (non come testo da leggere) lo wrappiamo in un
-	// comando esplicito riconoscibile, separato dal contenuto da una riga
-	// vuota. Pattern documentato da Google ("Say in a [...] tone: TEXT").
-	style := env.GetGeminiTTSStylePrompt()
-	prompt := text
-	if style != "" {
-		prompt = "Leggi ad alta voce in italiano il testo seguente con questo stile di narrazione: " + style + ".\n\n" + text
-	}
+	// Formato strutturato richiesto da Gemini TTS: header markdown distinti
+	// per Audio Profile (descrizione voce), Director's note (stile narrazione)
+	// e Transcript (contenuto da leggere). Solo il contenuto sotto Transcript
+	// viene effettivamente letto; il resto modula la voce. Senza questa
+	// struttura il modello legge anche le direttive.
+	audioProfile := env.GetGeminiTTSStylePrompt()
+	directorNote := env.GetGeminiTTSDirectorNote()
+	prompt := buildTTSPrompt(audioProfile, directorNote, text)
 
 	contents := []*genai.Content{{
 		Role:  genai.RoleUser,
@@ -108,6 +106,28 @@ func Synthesize(text, voiceName string) ([]byte, error) {
 		time.Sleep(delay)
 	}
 	return nil, fmt.Errorf("TTS generate: quota esaurita dopo %d retry: %w", maxRetries429, lastErr)
+}
+
+// buildTTSPrompt costruisce il prompt strutturato che Gemini TTS riconosce:
+// sezioni "# Audio Profile", "# Director's note", "## Transcript:" con il
+// contenuto sotto l'ultima. Pattern preso dai sample ufficiali Google.
+func buildTTSPrompt(audioProfile, directorNote, transcript string) string {
+	var b strings.Builder
+	b.WriteString("Read the following transcript based on the audio profile and director's note.\n\n")
+	if audioProfile != "" {
+		b.WriteString("# Audio Profile\n")
+		b.WriteString(audioProfile)
+		b.WriteString("\n\n")
+	}
+	if directorNote != "" {
+		b.WriteString("# Director's note\n")
+		b.WriteString("Style: ")
+		b.WriteString(directorNote)
+		b.WriteString("\n\n")
+	}
+	b.WriteString("## Transcript:\n")
+	b.WriteString(transcript)
+	return b.String()
 }
 
 // extractRetryDelay esamina un errore Gemini per capire se e` un 429 e con
