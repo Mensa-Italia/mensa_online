@@ -19,6 +19,10 @@ type config struct {
 	Area32InternalEmail    string `env:"AREA32_INTERNAL_EMAIL"`
 	Area32InternalPassword string `env:"AREA32_INTERNAL_PASSWORD"`
 	GeminiKey              string `env:"GEMINI_KEY"`
+	GeminiTTSKey           string `env:"GEMINI_TTS_KEY" envDefault:""`
+	GeminiTTSModel         string `env:"GEMINI_TTS_MODEL" envDefault:"gemini-3.1-tts-preview"`
+	GeminiTTSVoice         string `env:"GEMINI_TTS_VOICE" envDefault:"Charon"`
+	GeminiTTSStylePrompt   string `env:"GEMINI_TTS_STYLE_PROMPT" envDefault:"Deep and warm tone ASMR, goosebumps"`
 	ImageRouterKey         string `env:"IMAGE_ROUTER_KEY" envDefault:""`
 	GeminiResumePrompt     string `env:"GEMINI_RESUME_PROMPT" envDefault:"PARLI SOLO ITALIANO"`
 	TolgeeKey              string `env:"TOLGEE_KEY" envDefault:""`
@@ -126,6 +130,22 @@ func GetArea32InternalPassword() string {
 
 func GetGeminiKey() string {
 	return cfg.GeminiKey
+}
+
+// GetGeminiTTSKey ritorna la API key dedicata al TTS, con fallback alla
+// GeminiKey condivisa se non e` impostata. Permette di isolare costi e
+// rate limit del TTS dal resto delle chiamate Gemini.
+func GetGeminiTTSKey() string {
+	if cfg.GeminiTTSKey != "" {
+		return cfg.GeminiTTSKey
+	}
+	return cfg.GeminiKey
+}
+
+func GetGeminiTTSModel() string  { return cfg.GeminiTTSModel }
+func GetGeminiTTSVoice() string  { return cfg.GeminiTTSVoice }
+func GetGeminiTTSStylePrompt() string {
+	return cfg.GeminiTTSStylePrompt
 }
 
 func GetGeminiResumePrompt() string {

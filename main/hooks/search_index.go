@@ -2,6 +2,8 @@ package hooks
 
 import (
 	"github.com/pocketbase/pocketbase/core"
+
+	"mensadb/tools/quidaudio"
 	"mensadb/tools/search"
 )
 
@@ -91,6 +93,11 @@ func indexQuidArticleAsync(e *core.RecordEvent) error {
 		doc := BuildQuidArticleDoc(app, rec)
 		if err := search.Upsert(doc); err != nil {
 			app.Logger().Error("search index upsert failed", "type", "quid_article", "id", rec.Id, "err", err)
+		}
+	}()
+	go func() {
+		if err := quidaudio.Generate(app, rec); err != nil {
+			app.Logger().Error("[quidaudio] generate fallito", "article", rec.Id, "err", err)
 		}
 	}()
 	return e.Next()
