@@ -104,20 +104,23 @@ func Generate(app core.App, article *core.Record) error {
 	return nil
 }
 
-// saveErrorMarker registra un record con duration_seconds = -1 e content_hash
-// vuoto cosi` da:
-//   1. rendere visibile l'errore dal pannello PB (filtro duration_seconds < 0)
-//   2. lasciare campo libero al prossimo retry (hash mismatch → si rigenera)
+// saveErrorMarker registra un record con duration_seconds = -1 e mette il
+// messaggio d'errore (troncato) dentro content_hash. Effetti:
+//   1. il record e` filtrato fuori dalle API pubbliche (listRule duration > 0)
+//      ma resta visibile all'admin per ispezione
+//   2. il messaggio d'errore e` leggibile a colpo d'occhio nel pannello
+//   3. al prossimo retry, il content_hash (testo errore) non matchera` la
+//      sha256 fresca → l'articolo viene rigenerato automaticamente
 //
-// Ritorna l'errore originale (wrappato) cosi` il chiamante puo` loggarlo;
-// non si propaga oltre nella catena di goroutine.
+// Ritorna l'errore originale cosi` il chiamante puo` loggarlo; non si propaga
+// oltre nella catena di goroutine.
 func saveErrorMarker(app core.App, audioCol *core.Collection, existing *core.Record, article *core.Record, origErr error) error {
 	rec := existing
 	if rec == nil {
 		rec = core.NewRecord(audioCol)
 		rec.Set("article", article.Id)
 	}
-	rec.Set("content_hash", "")
+	rec.Set("content_hash", truncate(origErr.Error(), 500))
 	rec.Set("voice", "")
 	rec.Set("audio", nil)
 	rec.Set("duration_seconds", -1)
@@ -127,4 +130,11 @@ func saveErrorMarker(app core.App, audioCol *core.Collection, existing *core.Rec
 			"article", article.Id, "save_err", err, "orig_err", origErr)
 	}
 	return origErr
+}
+
+func truncate(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	return s[:max]
 }
