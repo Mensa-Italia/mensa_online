@@ -49,12 +49,15 @@ func Synthesize(text, voiceName string) ([]byte, error) {
 		voiceName = env.GetGeminiTTSVoice()
 	}
 
-	// Lo style prompt e` parte del testo input: la documentazione Gemini TTS
-	// raccomanda di prependerlo seguito da due punti per far modulare la voce.
+	// Gemini TTS legge ad alta voce qualsiasi cosa gli arrivi nel content,
+	// inclusi i prefissi di stile mal frasati. Per fargli interpretare lo
+	// stile come direttiva (non come testo da leggere) lo wrappiamo in un
+	// comando esplicito riconoscibile, separato dal contenuto da una riga
+	// vuota. Pattern documentato da Google ("Say in a [...] tone: TEXT").
 	style := env.GetGeminiTTSStylePrompt()
 	prompt := text
 	if style != "" {
-		prompt = style + ":\n" + text
+		prompt = "Leggi ad alta voce in italiano il testo seguente con questo stile di narrazione: " + style + ".\n\n" + text
 	}
 
 	contents := []*genai.Content{{
