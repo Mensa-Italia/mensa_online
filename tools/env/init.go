@@ -20,7 +20,7 @@ type config struct {
 	Area32InternalPassword string `env:"AREA32_INTERNAL_PASSWORD"`
 	GeminiKey              string `env:"GEMINI_KEY"`
 	GeminiTTSKey           string `env:"GEMINI_TTS_KEY" envDefault:""`
-	GeminiTTSModel         string `env:"GEMINI_TTS_MODEL" envDefault:"gemini-3.1-tts-preview"`
+	GeminiTTSModel         string `env:"GEMINI_TTS_MODEL" envDefault:"gemini-3.1-flash-tts-preview"`
 	GeminiTTSVoice         string `env:"GEMINI_TTS_VOICE" envDefault:"Charon"`
 	GeminiTTSStylePrompt   string `env:"GEMINI_TTS_STYLE_PROMPT" envDefault:"Deep and warm tone ASMR, goosebumps"`
 	ImageRouterKey         string `env:"IMAGE_ROUTER_KEY" envDefault:""`

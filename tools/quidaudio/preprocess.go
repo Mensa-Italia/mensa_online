@@ -11,7 +11,9 @@ import (
 	"mensadb/tools/aitools"
 )
 
-const preprocessTimeout = 60 * time.Second
+// 120s perche` articoli lunghi + thinking di gemini-3-flash sforavano i 60s
+// e ritornavano 504 DEADLINE_EXCEEDED.
+const preprocessTimeout = 120 * time.Second
 
 // preprocessPrompt e' il system instruction per il modello text che decide
 // se un articolo si presta a un audiolibro e ne produce la versione "pulita"
