@@ -16,7 +16,10 @@ import (
 )
 
 const (
-	synthesizeTimeout = 180 * time.Second
+	// Timeout end-to-end per l'intero stream TTS. Gli articoli lunghi possono
+	// produrre audio di 8-12 minuti che richiede tempo proporzionale; 600s
+	// copre il caso peggiore con margine.
+	synthesizeTimeout = 600 * time.Second
 	maxRetries429     = 4
 	defaultBackoff    = 10 * time.Second
 )
@@ -78,19 +81,11 @@ func Synthesize(text, voiceName string) ([]byte, error) {
 	var lastErr error
 	for attempt := 0; attempt < maxRetries429; attempt++ {
 		ctx, cancel := context.WithTimeout(context.Background(), synthesizeTimeout)
-		resp, err := client.Models.GenerateContent(ctx, env.GetGeminiTTSModel(), contents, config)
+		audio, err := streamSynthesize(ctx, client, contents, config)
 		cancel()
 
 		if err == nil {
-			if len(resp.Candidates) == 0 || resp.Candidates[0].Content == nil {
-				return nil, fmt.Errorf("TTS: risposta vuota")
-			}
-			for _, part := range resp.Candidates[0].Content.Parts {
-				if part.InlineData != nil && len(part.InlineData.Data) > 0 {
-					return part.InlineData.Data, nil
-				}
-			}
-			return nil, fmt.Errorf("TTS: nessun part audio nella risposta")
+			return audio, nil
 		}
 
 		lastErr = err
@@ -106,6 +101,35 @@ func Synthesize(text, voiceName string) ([]byte, error) {
 		time.Sleep(delay)
 	}
 	return nil, fmt.Errorf("TTS generate: quota esaurita dopo %d retry: %w", maxRetries429, lastErr)
+}
+
+// streamSynthesize itera la sequenza di chunk PCM restituiti da Gemini TTS
+// in streaming e li concatena. Lo streaming evita i 504 DEADLINE_EXCEEDED
+// che colpivano gli articoli lunghi sul non-streaming endpoint.
+func streamSynthesize(ctx context.Context, client *genai.Client, contents []*genai.Content, config *genai.GenerateContentConfig) ([]byte, error) {
+	var buf []byte
+	var streamErr error
+	for resp, err := range client.Models.GenerateContentStream(ctx, env.GetGeminiTTSModel(), contents, config) {
+		if err != nil {
+			streamErr = err
+			break
+		}
+		if resp == nil || len(resp.Candidates) == 0 || resp.Candidates[0].Content == nil {
+			continue
+		}
+		for _, part := range resp.Candidates[0].Content.Parts {
+			if part.InlineData != nil && len(part.InlineData.Data) > 0 {
+				buf = append(buf, part.InlineData.Data...)
+			}
+		}
+	}
+	if streamErr != nil {
+		return nil, streamErr
+	}
+	if len(buf) == 0 {
+		return nil, fmt.Errorf("TTS: stream vuoto")
+	}
+	return buf, nil
 }
 
 // buildTTSPrompt costruisce il prompt strutturato che Gemini TTS riconosce:
