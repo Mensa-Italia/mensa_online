@@ -20,14 +20,32 @@ const (
 	// produrre audio di 8-12 minuti che richiede tempo proporzionale; 600s
 	// copre il caso peggiore con margine.
 	synthesizeTimeout = 600 * time.Second
-	maxRetries429     = 4
-	defaultBackoff    = 10 * time.Second
 )
 
-// ttsMu serializza le chiamate TTS: la quota Gemini TTS e` 10k token/min
-// e la backfill in parallelo le sforava regolarmente. Una sola chiamata
-// alla volta + retry sul 429 mantiene tutto sotto soglia con zero perdita.
-var ttsMu sync.Mutex
+// retryBackoffs definisce i delay tra tentativi su errori transient
+// (429 senza retry-delay esplicito, 504, timeout, ecc.).
+// Pattern esponenziale: 2 / 4 / 8 / 16 minuti. Dopo 4 tentativi il
+// chiamante salva il marker duration_seconds = -1.
+var retryBackoffs = []time.Duration{
+	2 * time.Minute,
+	4 * time.Minute,
+	8 * time.Minute,
+	16 * time.Minute,
+}
+
+// ttsSem limita le chiamate TTS concorrenti. Dimensione configurata da
+// GEMINI_TTS_CONCURRENCY (default 2). Inizializzato lazy al primo uso.
+var (
+	ttsSemOnce sync.Once
+	ttsSem     chan struct{}
+)
+
+func getSemaphore() chan struct{} {
+	ttsSemOnce.Do(func() {
+		ttsSem = make(chan struct{}, env.GetGeminiTTSConcurrency())
+	})
+	return ttsSem
+}
 
 // retryDelayRE estrae il "Please retry in 7.354591223s." dal messaggio di
 // errore Gemini 429. La struttura del json error con RetryInfo non viene
@@ -36,17 +54,19 @@ var retryDelayRE = regexp.MustCompile(`retry in (\d+(?:\.\d+)?)s`)
 
 // Synthesize chiama il modello TTS di Gemini con la voce indicata + stile
 // di narrazione configurato. Ritorna l'audio in PCM 16-bit signed LE, 24kHz,
-// mono. Serializza le chiamate (lock globale) per non sforare la quota e
-// ritenta su 429 usando il retry_delay restituito da Gemini.
+// mono.
+//
+// Concorrenza limitata dal semaphore (env GEMINI_TTS_CONCURRENCY, default 2)
+// per non sforare la quota. Errori transient (429, 504, timeout) ritentati
+// con backoff esponenziale 2/4/8/16 min: per i 429 con retry-delay esplicito
+// usa quello suggerito da Gemini se piu` corto.
+//
 // Se voiceName e` vuoto, fallback su env GEMINI_TTS_VOICE.
 func Synthesize(text, voiceName string) ([]byte, error) {
 	client := getTTSClient()
 	if client == nil {
 		return nil, fmt.Errorf("gemini TTS client non disponibile")
 	}
-
-	ttsMu.Lock()
-	defer ttsMu.Unlock()
 
 	if voiceName == "" {
 		voiceName = env.GetGeminiTTSVoice()
@@ -79,28 +99,59 @@ func Synthesize(text, voiceName string) ([]byte, error) {
 	}
 
 	var lastErr error
-	for attempt := 0; attempt < maxRetries429; attempt++ {
+	sem := getSemaphore()
+	for attempt := 0; attempt <= len(retryBackoffs); attempt++ {
+		// Acquisisci slot semaphore solo per la chiamata API, lascialo libero
+		// durante l'attesa del backoff cosi` altri goroutine possono procedere.
+		sem <- struct{}{}
 		ctx, cancel := context.WithTimeout(context.Background(), synthesizeTimeout)
 		audio, err := streamSynthesize(ctx, client, contents, config)
 		cancel()
+		<-sem
 
 		if err == nil {
 			return audio, nil
 		}
 
 		lastErr = err
-		delay, isQuota := extractRetryDelay(err)
-		if !isQuota {
-			// errore non-quota: niente retry
+		if !isTransient(err) {
 			return nil, fmt.Errorf("TTS generate: %w", err)
 		}
-		if delay == 0 {
-			delay = defaultBackoff * time.Duration(1<<attempt)
+		if attempt == len(retryBackoffs) {
+			break
 		}
-		log.Printf("[quidaudio] 429 quota, retry in %s (tentativo %d/%d)", delay, attempt+1, maxRetries429)
+
+		// Per i 429 Gemini suggerisce un retry-delay esplicito (di solito
+		// pochi secondi). Se piu` corto del nostro backoff, usiamo il suo
+		// — siamo gentili con la API.
+		delay := retryBackoffs[attempt]
+		if hinted, ok := extractRetryDelay(err); ok && hinted > 0 && hinted < delay {
+			delay = hinted
+		}
+		log.Printf("[quidaudio] errore transient, retry in %s (tentativo %d/%d): %v",
+			delay, attempt+1, len(retryBackoffs), err)
 		time.Sleep(delay)
 	}
-	return nil, fmt.Errorf("TTS generate: quota esaurita dopo %d retry: %w", maxRetries429, lastErr)
+	return nil, fmt.Errorf("TTS generate: %d retry esauriti: %w", len(retryBackoffs), lastErr)
+}
+
+// isTransient identifica gli errori per cui ha senso ritentare.
+// 429 quota, 504 deadline, context timeout, errori di rete.
+func isTransient(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "RESOURCE_EXHAUSTED") ||
+		strings.Contains(msg, "Error 429") ||
+		strings.Contains(msg, "quota") ||
+		strings.Contains(msg, "DEADLINE_EXCEEDED") ||
+		strings.Contains(msg, "Error 504") ||
+		strings.Contains(msg, "Error 503") ||
+		strings.Contains(msg, "UNAVAILABLE") ||
+		strings.Contains(msg, "context deadline exceeded") ||
+		strings.Contains(msg, "EOF") ||
+		strings.Contains(msg, "connection reset")
 }
 
 // streamSynthesize itera la sequenza di chunk PCM restituiti da Gemini TTS
@@ -154,23 +205,19 @@ func buildTTSPrompt(audioProfile, directorNote, transcript string) string {
 	return b.String()
 }
 
-// extractRetryDelay esamina un errore Gemini per capire se e` un 429 e con
-// quale delay riprovare. Ritorna (delay, true) se e` quota; (0, false)
-// altrimenti.
+// extractRetryDelay esamina un errore Gemini per estrarre l'eventuale
+// "Please retry in X.Xs" suggerito sulle 429. Ritorna (delay, true) se
+// trovato; (0, false) altrimenti.
 func extractRetryDelay(err error) (time.Duration, bool) {
 	if err == nil {
 		return 0, false
 	}
-	msg := err.Error()
-	if !(strings.Contains(msg, "RESOURCE_EXHAUSTED") || strings.Contains(msg, "Error 429") || strings.Contains(msg, "quota")) {
-		return 0, false
-	}
-	if m := retryDelayRE.FindStringSubmatch(msg); m != nil {
+	if m := retryDelayRE.FindStringSubmatch(err.Error()); m != nil {
 		if seconds, perr := strconv.ParseFloat(m[1], 64); perr == nil {
 			// piccolo cuscinetto: +1s per assorbire jitter / clock skew
-			return time.Duration((seconds+1)*float64(time.Second)), true
+			return time.Duration((seconds+1) * float64(time.Second)), true
 		}
 	}
-	return 0, true
+	return 0, false
 }
 
