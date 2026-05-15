@@ -45,13 +45,21 @@ func Generate(app core.App, article *core.Record) error {
 		return fmt.Errorf("preprocess: %w", err)
 	}
 
+	// Selezione voce in base al gender dell'autore (decidi nel preprocess):
+	// femminile -> GEMINI_TTS_VOICE_FEMALE (default Zephyr)
+	// maschile o ignoto -> GEMINI_TTS_VOICE (default Charon)
+	voice := env.GetGeminiTTSVoice()
+	if pre.AuthorGender == "female" {
+		voice = env.GetGeminiTTSVoiceFemale()
+	}
+
 	rec := existing
 	if rec == nil {
 		rec = core.NewRecord(audioCol)
 		rec.Set("article", article.Id)
 	}
 	rec.Set("content_hash", hashStr)
-	rec.Set("voice", env.GetGeminiTTSVoice())
+	rec.Set("voice", voice)
 
 	if !pre.Suitable || pre.CleanedText == "" {
 		// Marker: niente audio per questo articolo, non riproveremo a meno
@@ -63,7 +71,7 @@ func Generate(app core.App, article *core.Record) error {
 		return app.Save(rec)
 	}
 
-	pcm, err := Synthesize(pre.CleanedText)
+	pcm, err := Synthesize(pre.CleanedText, voice)
 	if err != nil {
 		return fmt.Errorf("synthesize: %w", err)
 	}

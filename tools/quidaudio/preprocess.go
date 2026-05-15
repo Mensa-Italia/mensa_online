@@ -38,13 +38,21 @@ Se suitable = true, restituisci "cleaned_text" con:
    - paragrafi separati da una riga vuota
    - nessuna alterazione del contenuto: ne' riassumere ne' aggiungere
 
-Se suitable = false, "cleaned_text" puo' essere vuoto. In ogni caso valorizza "reason" con una frase di spiegazione.`
+Identifica anche il genere dell'autore principale del pezzo. Usa firma in calce,
+biografia, nome proprio, eventuali pronomi auto-riferiti nel testo. Valori
+ammessi:
+   - "female" se l'autrice e' chiaramente donna (nome proprio femminile o accordi al femminile)
+   - "male" se l'autore e' chiaramente uomo o se non riesci a determinarlo con sicurezza (default)
+
+Se suitable = false, "cleaned_text" puo' essere vuoto e "author_gender" lo lasci a "male".
+In ogni caso valorizza "reason" con una frase di spiegazione.`
 
 // Preprocessed e' l'output del pre-processore TTS.
 type Preprocessed struct {
-	Suitable    bool   `json:"suitable"`
-	Reason      string `json:"reason"`
-	CleanedText string `json:"cleaned_text"`
+	Suitable     bool   `json:"suitable"`
+	Reason       string `json:"reason"`
+	CleanedText  string `json:"cleaned_text"`
+	AuthorGender string `json:"author_gender"` // "male" | "female", default "male"
 }
 
 // Preprocess invia titolo + body al modello text di Gemini per decidere se
@@ -74,11 +82,15 @@ func Preprocess(title, body string) (*Preprocessed, error) {
 		ResponseMIMEType:  "application/json",
 		ResponseSchema: &genai.Schema{
 			Type:     genai.TypeObject,
-			Required: []string{"suitable", "reason"},
+			Required: []string{"suitable", "reason", "author_gender"},
 			Properties: map[string]*genai.Schema{
 				"suitable":     {Type: genai.TypeBoolean},
 				"reason":       {Type: genai.TypeString},
 				"cleaned_text": {Type: genai.TypeString},
+				"author_gender": {
+					Type: genai.TypeString,
+					Enum: []string{"male", "female"},
+				},
 			},
 		},
 	}
@@ -88,10 +100,15 @@ func Preprocess(title, body string) (*Preprocessed, error) {
 		return nil, fmt.Errorf("gemini generate: %w", err)
 	}
 	parsed := gjson.Parse(resp.Text())
+	gender := parsed.Get("author_gender").String()
+	if gender != "female" {
+		gender = "male" // default + sanitizza valori inattesi
+	}
 	out := &Preprocessed{
-		Suitable:    parsed.Get("suitable").Bool(),
-		Reason:      parsed.Get("reason").String(),
-		CleanedText: parsed.Get("cleaned_text").String(),
+		Suitable:     parsed.Get("suitable").Bool(),
+		Reason:       parsed.Get("reason").String(),
+		CleanedText:  parsed.Get("cleaned_text").String(),
+		AuthorGender: gender,
 	}
 	return out, nil
 }
