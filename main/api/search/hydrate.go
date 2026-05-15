@@ -90,6 +90,26 @@ func hydrateRecord(typ string, rec *core.Record, score float64) Item {
 		item.Subtitle = rec.GetString("category_name")
 		item.Image = rec.GetString("image")
 		item.DeepLink = "mensa://quid-article/" + rec.GetString("wp_id")
+	case "podcast":
+		item.Title = rec.GetString("title")
+		count := rec.GetInt("episodes_count")
+		if count == 1 {
+			item.Subtitle = "1 episodio"
+		} else if count > 1 {
+			item.Subtitle = fmt.Sprintf("%d episodi", count)
+		}
+		item.Image = firstFileURL(rec, "image")
+		item.DeepLink = "mensa://podcast/" + rec.Id
+	case "podcast_episode":
+		item.Title = rec.GetString("title")
+		// Subtitle: durata leggibile.
+		if d := rec.GetInt("duration_seconds"); d > 0 {
+			m := d / 60
+			s := d % 60
+			item.Subtitle = fmt.Sprintf("%d:%02d", m, s)
+		}
+		item.Image = firstFileURL(rec, "image")
+		item.DeepLink = "mensa://podcast-episode/" + rec.Id
 	case "org_role":
 		// rec e` un org_chart_members. Title = ruolo, Subtitle = nome socio,
 		// deep_link verso il gruppo della carica.

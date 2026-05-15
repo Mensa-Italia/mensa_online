@@ -74,6 +74,18 @@ func Load(app core.App) {
 	app.OnRecordAfterCreateSuccess("quid_issues").BindFunc(indexQuidIssueAsync)
 	app.OnRecordAfterUpdateSuccess("quid_issues").BindFunc(indexQuidIssueAsync)
 	app.OnRecordAfterDeleteSuccess("quid_issues").BindFunc(unindexAsync)
+
+	// podcasts: quando l'admin crea una serie, hook async popola metadata
+	// + scarica tutti gli episodi via yt-dlp.
+	app.OnRecordAfterCreateSuccess("podcasts").BindFunc(PodcastAfterCreateAsync)
+	app.OnRecordAfterCreateSuccess("podcasts").BindFunc(indexPodcastAsync)
+	app.OnRecordAfterUpdateSuccess("podcasts").BindFunc(indexPodcastAsync)
+	app.OnRecordAfterDeleteSuccess("podcasts").BindFunc(unindexAsync)
+
+	// podcast_episodes: scritti dal sync, indicizzati live.
+	app.OnRecordAfterCreateSuccess("podcast_episodes").BindFunc(indexPodcastEpisodeAsync)
+	app.OnRecordAfterUpdateSuccess("podcast_episodes").BindFunc(indexPodcastEpisodeAsync)
+	app.OnRecordAfterDeleteSuccess("podcast_episodes").BindFunc(unindexAsync)
 }
 
 func StampUpdateImageAsync(e *core.RecordEvent) error {

@@ -31,7 +31,7 @@ RUN go build -trimpath -ldflags="-s -w" -o /out/main ./main
 
 FROM alpine:latest AS deploy
 
-RUN apk --no-cache add tzdata ghostscript ca-certificates su-exec ffmpeg && \
+RUN apk --no-cache add tzdata ghostscript ca-certificates su-exec ffmpeg yt-dlp && \
     adduser -D -u 10001 app && \
     mkdir -p /pb/main /pb_public && \
     chown -R app:app /pb /pb_public
