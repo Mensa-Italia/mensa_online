@@ -79,7 +79,12 @@ func UpdateZitadel(app core.App) {
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			zauth.CreateUser(name, alias, orig, md)
+			zitadelSub := zauth.CreateUser(name, alias, orig, md)
+			if zitadelSub != "" {
+				// Popola eagerly il mapping user_zitadel_auth cosi` il primo
+				// accesso MCP di questo utente non deve fare userinfo round-trip.
+				UpsertUserZitadelAuth(app, zitadelSub, recID, alias)
+			}
 		}(record.Id, record.GetString("name"), record.GetString("alias_mail"), record.GetString("original_mail"), metadata)
 	}
 

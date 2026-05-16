@@ -14,6 +14,8 @@ import (
 
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
+
+	"mensadb/tools/dbtools"
 )
 
 // pbServerAddr e` l'indirizzo TCP su cui PocketBase ascolta (es. "0.0.0.0:8090").
@@ -125,7 +127,7 @@ func resolveUserFromClaimsCtx(ctx context.Context, app core.App, c *Claims, bear
 	if email != "" {
 		tried = append(tried, "users.email(claims)")
 		if rec := tryUserByEmail(email); rec != nil {
-			persistMapping(app, c.Subject, rec.Id, email)
+			dbtools.UpsertUserZitadelAuth(app, c.Subject, rec.Id, email)
 			return rec, nil
 		}
 	}
@@ -141,7 +143,7 @@ func resolveUserFromClaimsCtx(ctx context.Context, app core.App, c *Claims, bear
 		} else if ui.Email != "" {
 			email = ui.Email
 			if rec := tryUserByEmail(email); rec != nil {
-				persistMapping(app, c.Subject, rec.Id, email)
+				dbtools.UpsertUserZitadelAuth(app, c.Subject, rec.Id, email)
 				return rec, nil
 			}
 		}
@@ -151,7 +153,7 @@ func resolveUserFromClaimsCtx(ctx context.Context, app core.App, c *Claims, bear
 	if c.Subject != "" {
 		tried = append(tried, "users.id")
 		if rec, err := app.FindRecordById("users", c.Subject); err == nil && rec != nil {
-			persistMapping(app, c.Subject, rec.Id, email)
+			dbtools.UpsertUserZitadelAuth(app, c.Subject, rec.Id, email)
 			return rec, nil
 		}
 	}
@@ -160,7 +162,7 @@ func resolveUserFromClaimsCtx(ctx context.Context, app core.App, c *Claims, bear
 	if email != "" {
 		tried = append(tried, "members_registry")
 		if rec := tryUserByMembersRegistry(email); rec != nil {
-			persistMapping(app, c.Subject, rec.Id, email)
+			dbtools.UpsertUserZitadelAuth(app, c.Subject, rec.Id, email)
 			return rec, nil
 		}
 	}
@@ -238,34 +240,6 @@ func lookupCachedUser(app core.App, sub string) (*core.Record, bool) {
 	return u, true
 }
 
-// persistMapping upserta (zitadel_sub, user, email) in user_zitadel_auth.
-// Idempotente: in caso di conflict (unique sui sub) aggiorna il record
-// esistente. Errori loggati ma non propagati: la risoluzione e` gia` andata
-// a buon fine e il chiamante non deve fallire per un problema di cache.
-func persistMapping(app core.App, sub, userID, email string) {
-	if sub == "" || userID == "" {
-		return
-	}
-	col, err := app.FindCollectionByNameOrId("user_zitadel_auth")
-	if err != nil {
-		app.Logger().Warn("[mcp] user_zitadel_auth collection mancante", "err", err)
-		return
-	}
-	existing, _ := app.FindFirstRecordByFilter(col,
-		"zitadel_sub = {:s}", dbx.Params{"s": sub})
-	rec := existing
-	if rec == nil {
-		rec = core.NewRecord(col)
-		rec.Set("zitadel_sub", sub)
-	}
-	rec.Set("user", userID)
-	if email != "" {
-		rec.Set("email", email)
-	}
-	if err := app.Save(rec); err != nil {
-		app.Logger().Warn("[mcp] persist user_zitadel_auth fallito", "sub", sub, "err", err)
-	}
-}
 
 
 // pbCall esegue una request HTTP verso PocketBase (loopback) impersonando
