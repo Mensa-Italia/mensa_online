@@ -56,18 +56,27 @@ func normalizeLoopback(addr string) string {
 }
 
 // resolveUserFromClaims trova il record `users` corrispondente all'utente
-// Zitadel autenticato. Tenta nell'ordine:
+// Zitadel autenticato. Tenta nell'ordine (la prima strategia che funziona
+// vince):
 //
-//   1. claims.Email su users.email (canonico: i nostri utenti si registrano
-//      con la stessa email che hanno su Zitadel)
-//   2. claims.Subject come users.id (per setup federati che propagano l'id)
+//   1. claims.Email su users.email — canonico
+//   2. claims.Subject come users.id — federazione SSO con id propagato
+//   3. claims.Subject come users.zitadel_id — campo di mapping esplicito
+//      (se esiste sulla collection users)
+//   4. claims.Email come members_registry.alias_mail → recupera l'id
+//      del socio, prova quello come users.id (i due collection condividono
+//      l'id se l'utente si e` registrato sull'app)
 //
-// Ritorna errore se nessun match: il chiamante restituisce 401/unauthorized.
+// Su errore include tutti i tentativi nel messaggio per facilitare il debug.
 func resolveUserFromClaims(app core.App, c *Claims) (*core.Record, error) {
 	if c == nil {
-		return nil, fmt.Errorf("no claims in context")
+		return nil, fmt.Errorf("no MCP claims in request context")
 	}
+
+	tried := []string{}
+
 	if c.Email != "" {
+		tried = append(tried, "users.email")
 		recs, err := app.FindRecordsByFilter("users",
 			"email = {:e}", "", 1, 0, dbx.Params{"e": c.Email},
 		)
@@ -75,12 +84,48 @@ func resolveUserFromClaims(app core.App, c *Claims) (*core.Record, error) {
 			return recs[0], nil
 		}
 	}
+
 	if c.Subject != "" {
+		tried = append(tried, "users.id")
 		if rec, err := app.FindRecordById("users", c.Subject); err == nil && rec != nil {
 			return rec, nil
 		}
 	}
-	return nil, fmt.Errorf("user not found (email=%q sub=%q)", c.Email, c.Subject)
+
+	if c.Email != "" {
+		// alias_mail e` la mail @mensa.it ufficiale; quando l'utente fa
+		// login Zitadel SSO con la mail @mensa.it lo troviamo qui.
+		tried = append(tried, "members_registry.alias_mail")
+		recs, err := app.FindRecordsByFilter("members_registry",
+			"alias_mail = {:e}", "", 1, 0, dbx.Params{"e": c.Email},
+		)
+		if err == nil && len(recs) > 0 {
+			memberID := recs[0].Id
+			if u, err := app.FindRecordById("users", memberID); err == nil && u != nil {
+				return u, nil
+			}
+		}
+		// fallback su original_mail (la mail dichiarata su Area32)
+		tried = append(tried, "members_registry.original_mail")
+		recs, err = app.FindRecordsByFilter("members_registry",
+			"original_mail = {:e}", "", 1, 0, dbx.Params{"e": c.Email},
+		)
+		if err == nil && len(recs) > 0 {
+			memberID := recs[0].Id
+			if u, err := app.FindRecordById("users", memberID); err == nil && u != nil {
+				return u, nil
+			}
+		}
+	}
+
+	app.Logger().Warn("[mcp] user resolution failed",
+		"email", c.Email, "subject", c.Subject, "tried", strings.Join(tried, ","))
+	return nil, fmt.Errorf("MCP user non risolvibile: il token Zitadel "+
+		"(email=%q, sub=%q) non corrisponde a nessun account utente nel "+
+		"sistema. Probabili cause: (a) Zitadel non ha rilasciato lo scope "+
+		"'email', (b) l'utente non si e` mai loggato nell'app Mensa Italia, "+
+		"(c) email @mensa.it diversa da quella registrata in app. Tentati: %s",
+		c.Email, c.Subject, strings.Join(tried, ", "))
 }
 
 // pbCall esegue una request HTTP verso PocketBase (loopback) impersonando

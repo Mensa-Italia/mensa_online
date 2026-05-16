@@ -129,7 +129,11 @@ func makeSearchHandler(app core.App, only *searchableType) server.ToolHandlerFun
 
 		// Idrata via pbCollectionGet per ogni hit: cosi` le viewRule della
 		// collection vengono applicate dall'utente MCP autenticato. Se PB
-		// ritorna 404 (non autorizzato a vedere) si scarta silenziosamente.
+		// ritorna 4xx per quel singolo record (rule non soddisfatta) si
+		// scarta silenziosamente. Un errore di RISOLUZIONE UTENTE invece
+		// (resolveUserFromClaims fallisce) e` fatale e va segnalato subito
+		// con messaggio leggibile — altrimenti il chiamante riceve "0
+		// risultati" senza capire la causa.
 		out := make([]searchHit, 0, len(hits))
 		for _, h := range hits {
 			t := typeByKey(h.Type)
@@ -137,7 +141,14 @@ func makeSearchHandler(app core.App, only *searchableType) server.ToolHandlerFun
 				continue
 			}
 			status, body, err := pbCollectionGet(ctx, app, claims, t.Collection, h.ID, nil)
-			if err != nil || status != 200 {
+			if err != nil {
+				// Errore di auth/resolution: propaga al chiamante.
+				if strings.HasPrefix(err.Error(), "auth:") || strings.HasPrefix(err.Error(), "MCP user") {
+					return nil, err
+				}
+				continue
+			}
+			if status != 200 {
 				continue
 			}
 			label := extractLabel(h.Type, body)
