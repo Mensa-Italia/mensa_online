@@ -26,9 +26,14 @@ type config struct {
 	GeminiTTSStylePrompt   string `env:"GEMINI_TTS_STYLE_PROMPT" envDefault:"Deep and warm tone ASMR, goosebumps"`
 	GeminiTTSDirectorNote  string `env:"GEMINI_TTS_DIRECTOR_NOTE" envDefault:"Warm, understanding, soft tone with gentle inflections. Pause naturally between paragraphs."`
 	GeminiTTSConcurrency   int    `env:"GEMINI_TTS_CONCURRENCY" envDefault:"2"`
-	GeminiTranscribeKey         string `env:"GEMINI_TRANSCRIBE_KEY" envDefault:""`
-	GeminiTranscribeModel       string `env:"GEMINI_TRANSCRIBE_MODEL" envDefault:"gemini-3-flash-preview"`
-	GeminiTranscribeConcurrency int    `env:"GEMINI_TRANSCRIBE_CONCURRENCY" envDefault:"2"`
+	// Google Cloud Speech-to-Text v2 (per transcribe podcast in chirp_2).
+	GoogleSTTCredentialsJSON string `env:"GOOGLE_STT_CREDENTIALS_JSON" envDefault:""`
+	GoogleSTTProject         string `env:"GOOGLE_STT_PROJECT" envDefault:""`
+	GoogleSTTLocation        string `env:"GOOGLE_STT_LOCATION" envDefault:"eu"`
+	GoogleSTTEndpoint        string `env:"GOOGLE_STT_ENDPOINT" envDefault:""`
+	GoogleSTTModel           string `env:"GOOGLE_STT_MODEL" envDefault:"chirp_2"`
+	GoogleSTTLanguage        string `env:"GOOGLE_STT_LANGUAGE" envDefault:"it-IT"`
+	GoogleSTTConcurrency     int    `env:"GOOGLE_STT_CONCURRENCY" envDefault:"4"`
 	ImageRouterKey         string `env:"IMAGE_ROUTER_KEY" envDefault:""`
 	GeminiResumePrompt     string `env:"GEMINI_RESUME_PROMPT" envDefault:"PARLI SOLO ITALIANO"`
 	TolgeeKey              string `env:"TOLGEE_KEY" envDefault:""`
@@ -166,23 +171,19 @@ func GetGeminiTTSConcurrency() int {
 	return cfg.GeminiTTSConcurrency
 }
 
-// GetGeminiTranscribeKey: API key dedicata alla trascrizione audio. Fallback
-// su GeminiKey (chiave condivisa) se vuota, cosi` si possono isolare costi e
-// rate limit su un progetto Gemini diverso quando serve.
-func GetGeminiTranscribeKey() string {
-	if cfg.GeminiTranscribeKey != "" {
-		return cfg.GeminiTranscribeKey
-	}
-	return cfg.GeminiKey
-}
-
-func GetGeminiTranscribeModel() string { return cfg.GeminiTranscribeModel }
-
-func GetGeminiTranscribeConcurrency() int {
-	if cfg.GeminiTranscribeConcurrency < 1 {
+// Google Cloud Speech-to-Text v2 (chirp_2) — credentials e tuning per il
+// podcast transcribe.
+func GetGoogleSTTCredentialsJSON() string { return cfg.GoogleSTTCredentialsJSON }
+func GetGoogleSTTProject() string         { return cfg.GoogleSTTProject }
+func GetGoogleSTTLocation() string        { return cfg.GoogleSTTLocation }
+func GetGoogleSTTEndpoint() string        { return cfg.GoogleSTTEndpoint }
+func GetGoogleSTTModel() string           { return cfg.GoogleSTTModel }
+func GetGoogleSTTLanguage() string        { return cfg.GoogleSTTLanguage }
+func GetGoogleSTTConcurrency() int {
+	if cfg.GoogleSTTConcurrency < 1 {
 		return 1
 	}
-	return cfg.GeminiTranscribeConcurrency
+	return cfg.GoogleSTTConcurrency
 }
 
 func GetGeminiResumePrompt() string {

@@ -76,7 +76,7 @@ func Generate(app core.App, episode *core.Record) error {
 		rec.Set("episode", episode.Id)
 	}
 	rec.Set("content_hash", hashStr)
-	rec.Set("model", env.GetGeminiTranscribeModel())
+	rec.Set("model", env.GetGoogleSTTModel())
 	rec.Set("language", res.Language)
 
 	if !res.Suitable || res.Transcript == "" {
@@ -145,7 +145,7 @@ func saveErrorMarker(app core.App, col *core.Collection, episode *core.Record, o
 	rec.Set("duration_seconds", -1)
 	rec.Set("transcript", "")
 	rec.Set("segments", nil)
-	rec.Set("model", env.GetGeminiTranscribeModel())
+	rec.Set("model", env.GetGoogleSTTModel())
 	if err := app.Save(rec); err != nil {
 		app.Logger().Error("[podcasttranscribe] save marker errore fallito",
 			"episode", episode.Id, "save_err", err, "orig_err", origErr)
