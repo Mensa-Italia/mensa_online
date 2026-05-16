@@ -18,7 +18,7 @@ type Item struct {
 	DeepLink string  `json:"deep_link,omitempty"`
 }
 
-func hydrateRecord(typ string, rec *core.Record, score float64) Item {
+func hydrateRecord(app core.App, typ string, rec *core.Record, score float64) Item {
 	item := Item{
 		ID:    rec.Id,
 		Score: score,
@@ -83,6 +83,25 @@ func hydrateRecord(typ string, rec *core.Record, score float64) Item {
 			}
 			item.DeepLink = "mensa://quid/" + rec.GetString("category_id")
 		}
+	case "linktree_link":
+		// Link del linktree di un gruppo locale. Title = titolo del link,
+		// subtitle = nome del gruppo, image = avatar del gruppo, deep_link
+		// porta direttamente al linktree del gruppo via slug.
+		item.Title = rec.GetString("title")
+		officeName := ""
+		slug := ""
+		if oid := rec.GetString("local_office"); oid != "" {
+			if o, err := app.FindRecordById("local_offices", oid); err == nil {
+				officeName = o.GetString("name")
+				slug = o.GetString("slug")
+				if !o.GetDateTime("created").Time().IsZero() {
+					item.Image = firstFileURL(o, "image")
+				}
+			}
+		}
+		item.Subtitle = officeName
+		_ = slug // slug presente per estensione futura, non usato in deep link per ora
+		item.DeepLink = "mensa://local-office/" + slug
 	case "quid_article":
 		// Articolo Quid in cache da WordPress. Subtitle = numero ("Quid 16 - La Fine"),
 		// image = featured media. Deep link allo stile flat scelto in app.

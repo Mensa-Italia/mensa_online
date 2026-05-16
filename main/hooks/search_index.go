@@ -98,6 +98,28 @@ func indexPodcastEpisodeAsync(e *core.RecordEvent) error {
 	return e.Next()
 }
 
+// indexLinktreeLinkAsync indicizza/deindicizza un link del linktree di un
+// gruppo locale. Le sezioni (kind="section") e i link disattivati
+// (active=false) vengono rimossi dall'indice: l'utente finale non se ne fa
+// nulla, e per i link reattivati ripopoleremo al successivo update.
+func indexLinktreeLinkAsync(e *core.RecordEvent) error {
+	rec := e.Record
+	app := e.App
+	go func() {
+		if rec.GetString("kind") != "link" || !rec.GetBool("active") {
+			if err := search.Delete(rec.Id); err != nil {
+				app.Logger().Error("search index delete failed", "type", "linktree_link", "id", rec.Id, "err", err)
+			}
+			return
+		}
+		doc := BuildLinktreeLinkDoc(app, rec)
+		if err := search.Upsert(doc); err != nil {
+			app.Logger().Error("search index upsert failed", "type", "linktree_link", "id", rec.Id, "err", err)
+		}
+	}()
+	return e.Next()
+}
+
 func indexQuidIssueAsync(e *core.RecordEvent) error {
 	rec := e.Record
 	app := e.App

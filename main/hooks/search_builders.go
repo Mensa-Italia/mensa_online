@@ -127,6 +127,37 @@ func BuildOrgRoleDoc(app core.App, rec *core.Record) search.Doc {
 	}
 }
 
+// BuildLinktreeLinkDoc indicizza un singolo link del linktree di un gruppo
+// locale come tipo "linktree_link". Solo i record kind="link" e active=true
+// vanno chiamati qui (il filtro lo fa il caller / hook). Pubblico, non
+// member-only: i linktree dei gruppi sono per definizione pagine pubbliche.
+//
+// Body include il nome del local_office e la regione per dare contesto:
+// cercando "instagram lombardia" deve uscire il link Instagram della Lombardia.
+func BuildLinktreeLinkDoc(app core.App, rec *core.Record) search.Doc {
+	officeName := ""
+	region := ""
+	if oid := rec.GetString("local_office"); oid != "" {
+		if o, err := app.FindRecordById("local_offices", oid); err == nil {
+			officeName = o.GetString("name")
+			region = o.GetString("region")
+		}
+	}
+	body := joinNonEmpty(" ", rec.GetString("url"), officeName, region)
+	tags := filterNonEmpty(region, officeName)
+
+	return search.Doc{
+		ID:         rec.Id,
+		Type:       "linktree_link",
+		Title:      rec.GetString("title"),
+		Body:       body,
+		Tags:       tags,
+		Region:     region,
+		Visibility: "public",
+		CreatedAt:  rec.GetDateTime("created").Time(),
+	}
+}
+
 // BuildQuidIssueDoc indicizza un numero di Quid come risultato di search
 // distinto dai singoli articoli. Title = nome del numero (es. "Quid 16 - La
 // Fine"), body vuoto: il match avviene quasi solo sul titolo. Pubblico.
