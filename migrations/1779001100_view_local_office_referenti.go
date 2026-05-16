@@ -20,6 +20,10 @@ import (
 func init() {
 	m.Register(func(app core.App) error {
 		col := core.NewViewCollection("view_local_office_referenti")
+		// Il validator di PocketBase per le view non digerisce CASE WHEN +
+		// UNION ALL: per ogni ruolo emettiamo un literal hardcoded e il
+		// branch "cosegretario" si distingue da "segretario" via filtro
+		// is_the_officer. Tre SELECT con identiche colonne.
 		col.ViewQuery = `SELECT
   loa.id AS id,
   lo.id AS local_office,
@@ -29,15 +33,29 @@ func init() {
   mr.name AS name,
   mr.image AS image,
   mr.alias_mail AS email,
-  CASE WHEN loa.is_the_officer THEN 'segretario' ELSE 'cosegretario' END AS role
+  'segretario' AS role
 FROM local_offices_admins loa
 JOIN local_offices lo ON lo.id = loa.local_office
 JOIN users u ON u.id = loa.user
 LEFT JOIN members_registry mr ON mr.id = u.id
-WHERE mr.is_active IS NULL OR mr.is_active = 1
-
+WHERE loa.is_the_officer = 1 AND (mr.is_active IS NULL OR mr.is_active = 1)
 UNION ALL
-
+SELECT
+  loa.id AS id,
+  lo.id AS local_office,
+  lo.name AS local_office_name,
+  lo.region AS region,
+  u.id AS user,
+  mr.name AS name,
+  mr.image AS image,
+  mr.alias_mail AS email,
+  'cosegretario' AS role
+FROM local_offices_admins loa
+JOIN local_offices lo ON lo.id = loa.local_office
+JOIN users u ON u.id = loa.user
+LEFT JOIN members_registry mr ON mr.id = u.id
+WHERE (loa.is_the_officer = 0 OR loa.is_the_officer IS NULL) AND (mr.is_active IS NULL OR mr.is_active = 1)
+UNION ALL
 SELECT
   lota.id AS id,
   lo.id AS local_office,
