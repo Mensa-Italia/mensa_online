@@ -1,6 +1,7 @@
 package podcastsync
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -157,6 +158,20 @@ func SyncEpisodes(app core.App, podcast *core.Record) error {
 				"podcast", podcast.Id, "video", entry.ID, "err", err)
 			continue
 		}
+
+		// Trascrizione gratuita: yt-dlp ha scaricato i sottotitoli auto-
+		// generati da YouTube come VTT con timestamp nativi. Parse + salva
+		// il record podcast_episodes_transcript inline. Hook ri-indicizza
+		// l'episodio in Bleve includendo il transcript nel body.
+		if dl.SubtitlePath != "" {
+			if err := saveTranscriptFromVTT(app, rec.Id, dl.SubtitlePath); err != nil {
+				app.Logger().Warn("[podcastsync] parse VTT fallito, episodio senza transcript",
+					"video", entry.ID, "err", err)
+			}
+		} else {
+			app.Logger().Info("[podcastsync] nessun sottotitolo YouTube disponibile",
+				"video", entry.ID)
+		}
 		added++
 	}
 
@@ -223,6 +238,45 @@ func SyncAll(app core.App) (perPodcast map[string]int, err error) {
 		perPodcast[p.Id] = after - before
 	}
 	return perPodcast, nil
+}
+
+// saveTranscriptFromVTT parsa il file VTT scaricato da yt-dlp e crea/aggiorna
+// la riga in podcast_episodes_transcript. Upserts per episode (1:1).
+func saveTranscriptFromVTT(app core.App, episodeID, vttPath string) error {
+	parsed, err := ParseVTT(vttPath)
+	if err != nil {
+		return err
+	}
+	col, err := app.FindCollectionByNameOrId("podcast_episodes_transcript")
+	if err != nil {
+		return err
+	}
+	rec, _ := app.FindFirstRecordByData(col.Id, "episode", episodeID)
+	if rec == nil {
+		rec = core.NewRecord(col)
+		rec.Set("episode", episodeID)
+	}
+	if parsed.Transcript == "" || len(parsed.Segments) == 0 {
+		// VTT presente ma vuoto: marker "non adatto" per non riprovare.
+		rec.Set("transcript", "")
+		rec.Set("segments", nil)
+		rec.Set("duration_seconds", 0)
+		rec.Set("model", "youtube-auto-subs")
+		rec.Set("language", "it-IT")
+		rec.Set("content_hash", "vtt_empty")
+		return app.Save(rec)
+	}
+	segJSON, err := json.Marshal(parsed.Segments)
+	if err != nil {
+		return fmt.Errorf("marshal segments: %w", err)
+	}
+	rec.Set("transcript", parsed.Transcript)
+	rec.Set("segments", string(segJSON))
+	rec.Set("duration_seconds", parsed.DurationSeconds)
+	rec.Set("model", "youtube-auto-subs")
+	rec.Set("language", "it-IT")
+	rec.Set("content_hash", "youtube_vtt") // marker: sorgente sub YT
+	return app.Save(rec)
 }
 
 // fileFromPath crea un *filesystem.File da un path locale, leggendo il

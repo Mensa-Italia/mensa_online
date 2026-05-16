@@ -108,18 +108,17 @@ func Load(app core.App) {
 	app.OnRecordAfterUpdateSuccess("podcasts").BindFunc(indexPodcastAsync)
 	app.OnRecordAfterDeleteSuccess("podcasts").BindFunc(unindexAsync)
 
-	// podcast_episodes: scritti dal sync, indicizzati live + trascritti
-	// asincronamente con Gemini (il transcript entra nel doc Bleve per la
-	// ricerca full-text dentro al parlato).
+	// podcast_episodes: scritti dal sync, indicizzati live. La trascrizione
+	// arriva GRATIS da YouTube auto-subs (vedi tools/podcastsync.ParseVTT)
+	// e viene salvata sincronicamente dentro a SyncEpisodes prima del
+	// ritorno; il record podcast_episodes_transcript scatena poi
+	// reindexParentEpisode per arricchire il body Bleve.
 	app.OnRecordAfterCreateSuccess("podcast_episodes").BindFunc(indexPodcastEpisodeAsync)
 	app.OnRecordAfterUpdateSuccess("podcast_episodes").BindFunc(indexPodcastEpisodeAsync)
 	app.OnRecordAfterDeleteSuccess("podcast_episodes").BindFunc(unindexAsync)
-	app.OnRecordAfterCreateSuccess("podcast_episodes").BindFunc(PodcastEpisodeAfterWriteAsync)
-	app.OnRecordAfterUpdateSuccess("podcast_episodes").BindFunc(PodcastEpisodeAfterWriteAsync)
 
-	// podcast_episodes_transcript: quando viene salvato (sia per nuova
-	// trascrizione che per update), re-indicizza l'episodio padre cosi`
-	// il transcript entra nel body Bleve.
+	// podcast_episodes_transcript: quando viene salvato (VTT parser
+	// inline o eventuale futuro path STT) re-indicizza l'episodio padre.
 	app.OnRecordAfterCreateSuccess("podcast_episodes_transcript").BindFunc(reindexParentEpisode)
 	app.OnRecordAfterUpdateSuccess("podcast_episodes_transcript").BindFunc(reindexParentEpisode)
 }

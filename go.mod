@@ -9,7 +9,6 @@ module mensadb
 go 1.25.9
 
 require (
-	cloud.google.com/go/speech v1.35.0
 	firebase.google.com/go/v4 v4.18.0
 	github.com/MicahParks/keyfunc v1.9.0
 	github.com/PuerkitoBio/goquery v1.10.2
