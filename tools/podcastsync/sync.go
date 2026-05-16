@@ -159,18 +159,20 @@ func SyncEpisodes(app core.App, podcast *core.Record) error {
 			continue
 		}
 
-		// Trascrizione gratuita: yt-dlp ha scaricato i sottotitoli auto-
-		// generati da YouTube come VTT con timestamp nativi. Parse + salva
-		// il record podcast_episodes_transcript inline. Hook ri-indicizza
-		// l'episodio in Bleve includendo il transcript nel body.
+		// Trascrizione: prima via i sottotitoli auto YouTube (gratis,
+		// inline). Se YouTube non ne ha, fallback async su whisper.cpp
+		// locale (serializzato uno alla volta, non blocca il sync).
 		if dl.SubtitlePath != "" {
 			if err := saveTranscriptFromVTT(app, rec.Id, dl.SubtitlePath); err != nil {
 				app.Logger().Warn("[podcastsync] parse VTT fallito, episodio senza transcript",
 					"video", entry.ID, "err", err)
 			}
 		} else {
-			app.Logger().Info("[podcastsync] nessun sottotitolo YouTube disponibile",
+			app.Logger().Info("[podcastsync] nessun sottotitolo YouTube, fallback whisper async",
 				"video", entry.ID)
+			// Copia l'audio in un path stabile (il tmpRoot viene cancellato
+			// alla fine di SyncEpisodes, ma la goroutine vive piu` a lungo).
+			queueWhisperFallback(app, rec.Id, dl.AudioPath)
 		}
 		added++
 	}
