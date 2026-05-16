@@ -1,6 +1,7 @@
 package localofficesync
 
 import (
+	"sort"
 	"strings"
 	"sync"
 
@@ -12,6 +13,13 @@ import (
 // l'email @mensa.it dalla scheda socio. cloud32 e` lento ma stabile; 4 in
 // parallelo bilancia throughput e gentilezza.
 const fetchAliasConcurrency = 4
+
+// regionResult e` l'esito dello scraping di una singola regione.
+type regionResult struct {
+	code   string
+	people []PersonRef
+	err    error
+}
 
 // Run scrappa /gruppi-locali-referenti/ per ogni regione e riconcilia le
 // tabelle local_offices_admins (segretari + co-segretari) e
@@ -54,11 +62,6 @@ func Run(app core.App) {
 
 	// Scrape in parallelo: le 20 regioni sono indipendenti, ognuna e` una
 	// chiamata HTTP. mensaitalia.it regge tranquillamente, riduciamo wallclock.
-	type regionResult struct {
-		code   string
-		people []PersonRef
-		err    error
-	}
 	var wg sync.WaitGroup
 	results := make([]regionResult, 0, 20)
 	var mu sync.Mutex
@@ -75,13 +78,31 @@ func Run(app core.App) {
 	}
 	wg.Wait()
 
+	// Risolvi gli alias @mensa.it per TUTTE le regioni prima di iniziare il
+	// processing: ci servono per calcolare l'identita` di ciascuna regione
+	// (set di referenti) e detectare le fusioni di gruppi locali con stesso
+	// staff.
+	for i := range results {
+		if results[i].err == nil {
+			results[i].people = resolveAliases(results[i].people)
+		}
+	}
+
+	// Mappa codice squadra → nome effettivo del gruppo locale, fondendo
+	// regioni con lo stesso identico set di referenti (es. "Friuli Venezia
+	// Giulia e Veneto" quando due regioni condividono segreteria).
+	codeToName := mergeRegionsByStaff(results)
+
 	totalLinked := 0
 	for _, r := range results {
 		if r.err != nil {
 			app.Logger().Error("[localofficesync] fetch regione fallito", "squadra", r.code, "err", r.err)
 			continue
 		}
-		regionName := regionsByCode[r.code]
+		regionName := codeToName[r.code]
+		if regionName == "" {
+			regionName = regionsByCode[r.code]
+		}
 		office := matchOffice(officesByRegion, regionName)
 		if office == nil {
 			// Auto-crea il local_office mancante. name = region: l'admin
@@ -98,12 +119,8 @@ func Run(app core.App) {
 			officesByRegion[strings.ToLower(regionName)] = created
 			office = created
 		}
-		// Risolvi alias @mensa.it per ogni persona (chiamata cloud32 in
-		// parallelo, semaforo stretto), poi cerca il members_registry per
-		// alias_mail e infine il users record corrispondente.
-		people := resolveAliases(r.people)
 
-		for _, p := range people {
+		for _, p := range r.people {
 			if p.MensaAlias == "" {
 				continue
 			}
@@ -298,6 +315,80 @@ func upsertAssistant(app core.App, col *core.Collection, officeID, userID string
 	rec.Set("local_office", officeID)
 	rec.Set("user", userID)
 	return app.Save(rec)
+}
+
+// mergeRegionsByStaff analizza i risultati dello scraping e raggruppa le
+// regioni che hanno esattamente lo stesso set di referenti (stesse persone
+// con stessi ruoli). Per ogni gruppo di dimensione > 1 produce un nome
+// combinato del tipo "Region1 e Region2" (e per N>2, "Region1 e Region2 e
+// Region3"), assicurando lo stesso ordinamento alfabetico.
+//
+// Ritorna una mappa code (01..20) → nome effettivo del gruppo locale da
+// usare per matching/creazione del relativo local_office.
+//
+// Le regioni con scrape fallito o senza referenti restano col loro nome
+// originale (non vengono mai fuse).
+func mergeRegionsByStaff(results []regionResult) map[string]string {
+	out := make(map[string]string, len(results))
+	identity := make(map[string]string, len(results)) // code -> hash
+	groups := make(map[string][]string)               // hash -> []code
+
+	for _, r := range results {
+		if r.err != nil {
+			out[r.code] = regionsByCode[r.code]
+			continue
+		}
+		h := computeStaffIdentity(r.people)
+		if h == "" {
+			// regione vuota o senza alias risolti: tieni il nome originale,
+			// non mergiamo a caso.
+			out[r.code] = regionsByCode[r.code]
+			continue
+		}
+		identity[r.code] = h
+		groups[h] = append(groups[h], r.code)
+	}
+
+	for hash, codes := range groups {
+		if len(codes) == 1 {
+			out[codes[0]] = regionsByCode[codes[0]]
+			continue
+		}
+		// Fusione: nome combinato in ordine alfabetico stabile.
+		names := make([]string, 0, len(codes))
+		for _, c := range codes {
+			names = append(names, regionsByCode[c])
+		}
+		sort.Strings(names)
+		merged := strings.Join(names, " e ")
+		for _, c := range codes {
+			out[c] = merged
+		}
+		_ = hash
+	}
+	return out
+}
+
+// computeStaffIdentity calcola un hash deterministico del set di referenti
+// di una regione: chiave = sorted({alias|role}). Cosi` due regioni con
+// gli stessi N segretari + assistenti producono lo stesso hash.
+func computeStaffIdentity(people []PersonRef) string {
+	if len(people) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(people))
+	for _, p := range people {
+		alias := strings.ToLower(strings.TrimSpace(p.MensaAlias))
+		if alias == "" {
+			continue
+		}
+		keys = append(keys, alias+"|"+p.Role)
+	}
+	if len(keys) == 0 {
+		return ""
+	}
+	sort.Strings(keys)
+	return strings.Join(keys, ";")
 }
 
 // reconcile elimina dalla tabella i record (local_office, user) che non
