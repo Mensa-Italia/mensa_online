@@ -103,11 +103,35 @@ func Run(app core.App) {
 		if regionName == "" {
 			regionName = regionsByCode[r.code]
 		}
+
+		// Step 1: cerca un office gia` rinominato col nome merged.
 		office := matchOffice(officesByRegion, regionName)
+
+		// Step 2: se merged-name non esiste ma esiste un office matchato
+		// sul nome originale di QUESTA regione, rinominalo al merged.
+		// Cosi` consolidiamo offici creati pre-merge senza dover cancellare
+		// manualmente (es. "Piemonte" diventa "Piemonte e Valle d'Aosta").
+		if office == nil && regionName != regionsByCode[r.code] {
+			if legacy := matchOffice(officesByRegion, regionsByCode[r.code]); legacy != nil {
+				legacy.Set("name", regionName)
+				legacy.Set("region", regionName)
+				if err := app.Save(legacy); err == nil {
+					app.Logger().Info("[localofficesync] consolidato local_office esistente",
+						"from", regionsByCode[r.code], "to", regionName, "id", legacy.Id)
+					// aggiorna in-memory index
+					delete(officesByRegion, strings.ToLower(regionsByCode[r.code]))
+					officesByRegion[strings.ToLower(regionName)] = legacy
+					office = legacy
+				} else {
+					app.Logger().Error("[localofficesync] consolidamento fallito",
+						"id", legacy.Id, "err", err)
+				}
+			}
+		}
+
 		if office == nil {
 			// Auto-crea il local_office mancante. name = region: l'admin
-			// potra` rinominarlo in seguito senza rompere il match (la chiave
-			// di matching e` il campo region, non name).
+			// potra` rinominarlo in seguito senza rompere il match.
 			created, err := createOffice(app, regionName)
 			if err != nil {
 				app.Logger().Error("[localofficesync] creazione local_office fallita",
@@ -157,11 +181,66 @@ func Run(app core.App) {
 	removedAdmins := reconcile(app, adminsCol, seenAdmins)
 	removedAssistants := reconcile(app, assistantsCol, seenAssistants)
 
+	// Cleanup: rimuovi local_office residui con nome di regione ora "assorbita"
+	// in un cluster merged e senza nessun referente. Es: dopo aver consolidato
+	// "Piemonte" -> "Piemonte e Valle d'Aosta", l'office "Valle d'Aosta" rimane
+	// con 0 admins/0 assistants → orfano, da eliminare.
+	absorbedRegions := map[string]struct{}{}
+	for code, name := range codeToName {
+		original := regionsByCode[code]
+		if name != original {
+			absorbedRegions[strings.ToLower(original)] = struct{}{}
+		}
+	}
+	removedOffices := cleanupOrphanOffices(app, absorbedRegions)
+
 	app.Logger().Info("[localofficesync] done",
 		"linked", totalLinked,
 		"removed_admins", removedAdmins,
 		"removed_assistants", removedAssistants,
+		"removed_offices", removedOffices,
 	)
+}
+
+// cleanupOrphanOffices cancella i local_office con region/name che matchano
+// uno degli `absorbed` (regioni che sono state fuse in un nome merged) E
+// che non hanno admins ne` test_assistants attivi.
+func cleanupOrphanOffices(app core.App, absorbed map[string]struct{}) int {
+	if len(absorbed) == 0 {
+		return 0
+	}
+	offices, err := app.FindAllRecords("local_offices")
+	if err != nil {
+		app.Logger().Error("[localofficesync] cleanup FindAll offices fallito", "err", err)
+		return 0
+	}
+	removed := 0
+	for _, o := range offices {
+		region := strings.ToLower(strings.TrimSpace(o.GetString("region")))
+		if _, ok := absorbed[region]; !ok {
+			continue
+		}
+		// Verifica orfano: nessun admin, nessun assistant.
+		admins, _ := app.FindRecordsByFilter("local_offices_admins",
+			"local_office = '"+o.Id+"'", "", 1, 0, nil)
+		if len(admins) > 0 {
+			continue
+		}
+		assistants, _ := app.FindRecordsByFilter("local_offices_test_assistants",
+			"local_office = '"+o.Id+"'", "", 1, 0, nil)
+		if len(assistants) > 0 {
+			continue
+		}
+		if err := app.Delete(o); err != nil {
+			app.Logger().Error("[localofficesync] cleanup delete office fallito",
+				"id", o.Id, "region", region, "err", err)
+			continue
+		}
+		app.Logger().Info("[localofficesync] eliminato local_office orfano (assorbito da merge)",
+			"id", o.Id, "region", region)
+		removed++
+	}
+	return removed
 }
 
 func loadOfficesByRegion(app core.App) (map[string]*core.Record, error) {
@@ -317,44 +396,53 @@ func upsertAssistant(app core.App, col *core.Collection, officeID, userID string
 	return app.Save(rec)
 }
 
-// mergeRegionsByStaff analizza i risultati dello scraping e raggruppa le
-// regioni che hanno esattamente lo stesso set di referenti (stesse persone
-// con stessi ruoli). Per ogni gruppo di dimensione > 1 produce un nome
-// combinato del tipo "Region1 e Region2" (e per N>2, "Region1 e Region2 e
-// Region3"), assicurando lo stesso ordinamento alfabetico.
+// mergeRegionsByStaff raggruppa le regioni in base a un'unica chiave: il
+// SocioCode del segretario. Stesso segretario → stesso gruppo locale.
 //
-// Ritorna una mappa code (01..20) → nome effettivo del gruppo locale da
-// usare per matching/creazione del relativo local_office.
+// Robusto, deterministico, non dipende dalla seconda fetch cloud32 (gli alias
+// @mensa.it possono mancare se la scheda socio fa timeout). Non dipende neanche
+// dall'ordinamento degli assistenti sulla pagina (che la condividono o no).
 //
-// Le regioni con scrape fallito o senza referenti restano col loro nome
-// originale (non vengono mai fuse).
+// Ritorna una mappa code → nome effettivo del gruppo locale. Per le regioni
+// con segretario condiviso, il nome diventa "Region1 e Region2" in ordine
+// alfabetico stabile.
+//
+// Regioni senza segretario rilevato (errore di scrape, pagina vuota) restano
+// col loro nome originale.
 func mergeRegionsByStaff(results []regionResult) map[string]string {
-	out := make(map[string]string, len(results))
-	identity := make(map[string]string, len(results)) // code -> hash
-	groups := make(map[string][]string)               // hash -> []code
-
+	// 1. Per ogni regione individua il SocioCode del segretario (s_ruolo=001).
+	segByCode := make(map[string]string, len(results)) // code -> segretario socio
 	for _, r := range results {
 		if r.err != nil {
-			out[r.code] = regionsByCode[r.code]
 			continue
 		}
-		h := computeStaffIdentity(r.people)
-		if h == "" {
-			// regione vuota o senza alias risolti: tieni il nome originale,
-			// non mergiamo a caso.
-			out[r.code] = regionsByCode[r.code]
-			continue
+		for _, p := range r.people {
+			if p.Role == "segretario" {
+				segByCode[r.code] = p.SocioCode
+				break
+			}
 		}
-		identity[r.code] = h
-		groups[h] = append(groups[h], r.code)
 	}
 
-	for hash, codes := range groups {
-		if len(codes) == 1 {
-			out[codes[0]] = regionsByCode[codes[0]]
+	// 2. Raggruppa per segretario condiviso.
+	groups := make(map[string][]string) // segretarioSocio -> []code
+	for code, seg := range segByCode {
+		if seg == "" {
 			continue
 		}
-		// Fusione: nome combinato in ordine alfabetico stabile.
+		groups[seg] = append(groups[seg], code)
+	}
+
+	// 3. Per ogni gruppo crea il nome finale (singolo o "X e Y").
+	out := make(map[string]string, len(results))
+	for _, r := range results {
+		out[r.code] = regionsByCode[r.code] // default: nome originale
+	}
+	for _, codes := range groups {
+		if len(codes) == 1 {
+			continue // singleton: nome originale gia` valorizzato
+		}
+		sort.Strings(codes)
 		names := make([]string, 0, len(codes))
 		for _, c := range codes {
 			names = append(names, regionsByCode[c])
@@ -364,31 +452,8 @@ func mergeRegionsByStaff(results []regionResult) map[string]string {
 		for _, c := range codes {
 			out[c] = merged
 		}
-		_ = hash
 	}
 	return out
-}
-
-// computeStaffIdentity calcola un hash deterministico del set di referenti
-// di una regione: chiave = sorted({alias|role}). Cosi` due regioni con
-// gli stessi N segretari + assistenti producono lo stesso hash.
-func computeStaffIdentity(people []PersonRef) string {
-	if len(people) == 0 {
-		return ""
-	}
-	keys := make([]string, 0, len(people))
-	for _, p := range people {
-		alias := strings.ToLower(strings.TrimSpace(p.MensaAlias))
-		if alias == "" {
-			continue
-		}
-		keys = append(keys, alias+"|"+p.Role)
-	}
-	if len(keys) == 0 {
-		return ""
-	}
-	sort.Strings(keys)
-	return strings.Join(keys, ";")
 }
 
 // reconcile elimina dalla tabella i record (local_office, user) che non
