@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"time"
 )
 
@@ -79,6 +81,10 @@ type EpisodeDownload struct {
 	AudioPath       string // path locale al file mp3 scaricato
 	ThumbnailPath   string // path locale alla thumbnail jpg/webp
 	ThumbnailURL    string // URL diretto della thumbnail (se yt-dlp non l'ha scritta su disco)
+	// SubtitlePath: path locale al file .vtt con sottotitoli italiani
+	// (manual subs > auto-generated). Stringa vuota se YouTube non ne
+	// espone, fallback alla trascrizione locale.
+	SubtitlePath string
 }
 
 // VideoInfo wraps yt-dlp's per-video --print-json output.
@@ -104,6 +110,12 @@ func DownloadEpisode(videoID, outDir string) (*EpisodeDownload, error) {
 		"-x", "--audio-format", "mp3", "--audio-quality", "0",
 		"--write-thumbnail",
 		"--convert-thumbnails", "jpg",
+		// Sottotitoli: scarica quelli manuali italiani se ci sono,
+		// altrimenti quelli auto-generati. Sempre in formato VTT con
+		// timestamp nativi.
+		"--write-subs", "--write-auto-subs",
+		"--sub-langs", "it,it-IT,it-orig,it.*",
+		"--sub-format", "vtt",
 		"--no-warnings",
 		"--print-json",
 		"-o", outTpl,
@@ -142,7 +154,31 @@ func DownloadEpisode(videoID, outDir string) (*EpisodeDownload, error) {
 		AudioPath:       outDir + "/" + info.ID + ".mp3",
 		ThumbnailPath:   outDir + "/" + info.ID + ".jpg",
 		ThumbnailURL:    info.Thumbnail,
+		SubtitlePath:    pickSubtitlePath(outDir, info.ID),
 	}, nil
+}
+
+// pickSubtitlePath cerca un file .vtt italiano salvato da yt-dlp.
+// yt-dlp salva file con suffissi tipo `<id>.it.vtt`, `<id>.it-IT.vtt`,
+// `<id>.it-orig.vtt` (sub originali) o `<id>.it.<lang>.vtt` (auto).
+// Preferenza: manuali italiani > auto-generati italiani > qualsiasi italiano.
+func pickSubtitlePath(outDir, videoID string) string {
+	candidates := []string{
+		outDir + "/" + videoID + ".it.vtt",
+		outDir + "/" + videoID + ".it-IT.vtt",
+		outDir + "/" + videoID + ".it-orig.vtt",
+	}
+	for _, p := range candidates {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	// Glob fallback per varianti che non abbiamo previsto.
+	matches, _ := filepath.Glob(outDir + "/" + videoID + ".it*.vtt")
+	if len(matches) > 0 {
+		return matches[0]
+	}
+	return ""
 }
 
 // ParseUploadDate trasforma "YYYYMMDD" di yt-dlp in time.Time.
