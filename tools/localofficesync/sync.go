@@ -8,6 +8,11 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 )
 
+// fetchAliasConcurrency limita le chiamate concorrenti a cloud32 per estrarre
+// l'email @mensa.it dalla scheda socio. cloud32 e` lento ma stabile; 4 in
+// parallelo bilancia throughput e gentilezza.
+const fetchAliasConcurrency = 4
+
 // Run scrappa /gruppi-locali-referenti/ per ogni regione e riconcilia le
 // tabelle local_offices_admins (segretari + co-segretari) e
 // local_offices_test_assistants (assistenti al test).
@@ -93,27 +98,36 @@ func Run(app core.App) {
 			officesByRegion[strings.ToLower(regionName)] = created
 			office = created
 		}
-		for _, p := range r.people {
-			// Verifica che la persona sia registrata come user (auth) — se
-			// non lo e`, non possiamo linkare (FK su _pb_users_auth_).
-			if _, err := app.FindRecordById("users", p.UserID); err != nil {
+		// Risolvi alias @mensa.it per ogni persona (chiamata cloud32 in
+		// parallelo, semaforo stretto), poi cerca il members_registry per
+		// alias_mail e infine il users record corrispondente.
+		people := resolveAliases(r.people)
+
+		for _, p := range people {
+			if p.MensaAlias == "" {
 				continue
 			}
-			key := office.Id + "|" + p.UserID
+			userID := findUserByAlias(app, p.MensaAlias)
+			if userID == "" {
+				app.Logger().Warn("[localofficesync] nessun match alias_mail",
+					"alias", p.MensaAlias, "region", regionName)
+				continue
+			}
+			key := office.Id + "|" + userID
 			switch p.Role {
 			case "segretario", "cosegretario":
 				isOfficer := p.Role == "segretario"
-				if err := upsertAdmin(app, adminsCol, office.Id, p.UserID, isOfficer); err != nil {
+				if err := upsertAdmin(app, adminsCol, office.Id, userID, isOfficer); err != nil {
 					app.Logger().Error("[localofficesync] upsert admin fallito",
-						"office", office.Id, "user", p.UserID, "err", err)
+						"office", office.Id, "user", userID, "err", err)
 					continue
 				}
 				seenAdmins[key] = struct{}{}
 				totalLinked++
 			case "assistente":
-				if err := upsertAssistant(app, assistantsCol, office.Id, p.UserID); err != nil {
+				if err := upsertAssistant(app, assistantsCol, office.Id, userID); err != nil {
 					app.Logger().Error("[localofficesync] upsert assistente fallito",
-						"office", office.Id, "user", p.UserID, "err", err)
+						"office", office.Id, "user", userID, "err", err)
 					continue
 				}
 				seenAssistants[key] = struct{}{}
@@ -180,6 +194,63 @@ func matchOffice(byRegion map[string]*core.Record, regionName string) *core.Reco
 		}
 	}
 	return nil
+}
+
+// resolveAliases fetcha la scheda cloud32 di ogni persona in parallelo per
+// estrarre l'email @mensa.it. Ritorna la stessa slice con MensaAlias
+// valorizzato (o vuoto se non trovata).
+func resolveAliases(people []PersonRef) []PersonRef {
+	if len(people) == 0 {
+		return people
+	}
+	out := make([]PersonRef, len(people))
+	copy(out, people)
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, fetchAliasConcurrency)
+	for i := range out {
+		i := i
+		wg.Add(1)
+		sem <- struct{}{}
+		go func() {
+			defer wg.Done()
+			defer func() { <-sem }()
+			alias, _ := FetchAlias(out[i].SocioCode, out[i].RoleCode, out[i].SquadraCode)
+			out[i].MensaAlias = alias
+		}()
+	}
+	wg.Wait()
+	return out
+}
+
+// findUserByAlias cerca prima in members_registry per alias_mail (e in
+// fallback original_mail), poi risolve il users record con lo stesso id.
+// Ritorna "" se non trova nulla.
+func findUserByAlias(app core.App, alias string) string {
+	lower := strings.ToLower(strings.TrimSpace(alias))
+	if lower == "" {
+		return ""
+	}
+	// Primario: alias_mail (l'indirizzo @mensa.it ufficiale)
+	rec, err := app.FindFirstRecordByFilter("members_registry",
+		"alias_mail = {:m}",
+		dbx.Params{"m": lower},
+	)
+	if err != nil || rec == nil {
+		// Fallback: original_mail, in caso la mail @mensa.it sia stata
+		// usata in fase di registrazione come indirizzo principale.
+		rec, err = app.FindFirstRecordByFilter("members_registry",
+			"original_mail = {:m}",
+			dbx.Params{"m": lower},
+		)
+		if err != nil || rec == nil {
+			return ""
+		}
+	}
+	// Verifica che esista un users record con lo stesso id (registrato in app).
+	if _, err := app.FindRecordById("users", rec.Id); err != nil {
+		return ""
+	}
+	return rec.Id
 }
 
 func createOffice(app core.App, regionName string) (*core.Record, error) {
