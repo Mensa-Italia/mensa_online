@@ -29,15 +29,30 @@ ARG CGO_CFLAGS="-D_LARGEFILE64_SOURCE"
 RUN go build -trimpath -ldflags="-s -w" -o /out/main ./main
 
 
+# Build whisper.cpp (CPU only, AVX2 optimized) come fallback per la
+# trascrizione podcast quando YouTube non espone i sottotitoli.
+FROM alpine:latest AS whisper-builder
+RUN apk --no-cache add build-base cmake git
+WORKDIR /tmp
+RUN git clone --depth 1 https://github.com/ggerganov/whisper.cpp /tmp/whisper.cpp
+WORKDIR /tmp/whisper.cpp
+RUN cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF \
+    && cmake --build build --config Release -j $(nproc) \
+    && strip build/bin/whisper-cli
+
+
 FROM alpine:latest AS deploy
 
-RUN apk --no-cache add tzdata ghostscript ca-certificates su-exec ffmpeg yt-dlp && \
+RUN apk --no-cache add tzdata ghostscript ca-certificates su-exec ffmpeg yt-dlp libstdc++ libgomp && \
     adduser -D -u 10001 app && \
     mkdir -p /pb/main /pb_public && \
     chown -R app:app /pb /pb_public
 
 COPY --from=builder --chown=app:app /out/main /pb/main/main
 COPY --from=builder --chown=app:app /src/pb_public/ /pb_public/
+# whisper.cpp binary per il fallback STT podcast (lazy model download
+# nel volume pb_data al primo uso).
+COPY --from=whisper-builder /tmp/whisper.cpp/build/bin/whisper-cli /usr/local/bin/whisper-cli
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
