@@ -103,14 +103,17 @@ func FindUserByMembershipID(membershipID string) (*user.User, bool) {
 	return nil, false
 }
 
-func CreateUser(name string, aliasMail string, originalMail string, rawMetadata map[string]string) {
+// CreateUser fa upsert dell'utente Zitadel. Ritorna l'id Zitadel (sub) sia
+// nel caso "esisteva gia`" sia nel caso "creato ora", o "" su errore.
+// La stringa di ritorno e` utile al chiamante per popolare user_zitadel_auth.
+func CreateUser(name string, aliasMail string, originalMail string, rawMetadata map[string]string) string {
 	if strings.TrimSpace(aliasMail) == "" {
-		return
+		return ""
 	}
 	userId, exists := UserExists(aliasMail)
 	if exists {
 		UpdateUser(userId, name, aliasMail, originalMail, rawMetadata)
-		return
+		return userId
 	}
 
 	// Filtro metadati: include solo quelli con valore non vuot
@@ -133,7 +136,7 @@ func CreateUser(name string, aliasMail string, originalMail string, rawMetadata 
 		gender = user.Gender_GENDER_MALE
 	}
 
-	_, err := apiClient.UserServiceV2().CreateUser(ctx, &user.CreateUserRequest{
+	resp, err := apiClient.UserServiceV2().CreateUser(ctx, &user.CreateUserRequest{
 		OrganizationId: env.GetZitadelOrganizationID(),
 		Username:       aws.String(aliasMail),
 		UserType: &user.CreateUserRequest_Human_{
@@ -158,8 +161,12 @@ func CreateUser(name string, aliasMail string, originalMail string, rawMetadata 
 	})
 	if err != nil {
 		slog.Error("failed to create user", "error", err)
-		return
+		return ""
 	}
+	if resp != nil && resp.Id != "" {
+		return resp.Id
+	}
+	return ""
 }
 
 func UpdateUser(userID string, name string, aliasMail string, originalMail string, rawMetadata map[string]string) {
