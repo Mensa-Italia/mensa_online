@@ -115,6 +115,7 @@ func Run(app core.App) {
 			if legacy := matchOffice(officesByRegion, regionsByCode[r.code]); legacy != nil {
 				legacy.Set("name", regionName)
 				legacy.Set("region", regionName)
+				legacy.Set("slug", slugifyRegion(regionName))
 				if err := app.Save(legacy); err == nil {
 					app.Logger().Info("[localofficesync] consolidato local_office esistente",
 						"from", regionsByCode[r.code], "to", regionName, "id", legacy.Id)
@@ -348,6 +349,39 @@ func findMemberByAlias(app core.App, alias string) string {
 	return rec.Id
 }
 
+// slugifyRegion normalizza un nome regione in handle URL-safe:
+// "Val d'Aosta" -> "val-daosta", "Emilia Romagna" -> "emilia-romagna",
+// "Piemonte e Valle d'Aosta" -> "piemonte-e-valle-daosta".
+func slugifyRegion(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	repl := strings.NewReplacer(
+		"à", "a", "á", "a", "â", "a", "ä", "a",
+		"è", "e", "é", "e", "ê", "e", "ë", "e",
+		"ì", "i", "í", "i", "î", "i", "ï", "i",
+		"ò", "o", "ó", "o", "ô", "o", "ö", "o",
+		"ù", "u", "ú", "u", "û", "u", "ü", "u",
+		"'", "", "`", "",
+	)
+	s = repl.Replace(s)
+	out := make([]byte, 0, len(s))
+	prevDash := true
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case c >= 'a' && c <= 'z', c >= '0' && c <= '9':
+			out = append(out, c)
+			prevDash = false
+		case c == ' ' || c == '-' || c == '_':
+			if !prevDash {
+				out = append(out, '-')
+				prevDash = true
+			}
+		}
+	}
+	res := strings.Trim(string(out), "-")
+	return res
+}
+
 func createOffice(app core.App, regionName string) (*core.Record, error) {
 	col, err := app.FindCollectionByNameOrId("local_offices")
 	if err != nil {
@@ -356,6 +390,7 @@ func createOffice(app core.App, regionName string) (*core.Record, error) {
 	rec := core.NewRecord(col)
 	rec.Set("name", regionName)
 	rec.Set("region", regionName)
+	rec.Set("slug", slugifyRegion(regionName))
 	if err := app.Save(rec); err != nil {
 		return nil, err
 	}
