@@ -107,27 +107,27 @@ func Run(app core.App) {
 			if p.MensaAlias == "" {
 				continue
 			}
-			userID := findUserByAlias(app, p.MensaAlias)
-			if userID == "" {
+			memberID := findMemberByAlias(app, p.MensaAlias)
+			if memberID == "" {
 				app.Logger().Warn("[localofficesync] nessun match alias_mail",
 					"alias", p.MensaAlias, "region", regionName)
 				continue
 			}
-			key := office.Id + "|" + userID
+			key := office.Id + "|" + memberID
 			switch p.Role {
 			case "segretario", "cosegretario":
 				isOfficer := p.Role == "segretario"
-				if err := upsertAdmin(app, adminsCol, office.Id, userID, isOfficer); err != nil {
+				if err := upsertAdmin(app, adminsCol, office.Id, memberID, isOfficer); err != nil {
 					app.Logger().Error("[localofficesync] upsert admin fallito",
-						"office", office.Id, "user", userID, "err", err)
+						"office", office.Id, "member", memberID, "err", err)
 					continue
 				}
 				seenAdmins[key] = struct{}{}
 				totalLinked++
 			case "assistente":
-				if err := upsertAssistant(app, assistantsCol, office.Id, userID); err != nil {
+				if err := upsertAssistant(app, assistantsCol, office.Id, memberID); err != nil {
 					app.Logger().Error("[localofficesync] upsert assistente fallito",
-						"office", office.Id, "user", userID, "err", err)
+						"office", office.Id, "member", memberID, "err", err)
 					continue
 				}
 				seenAssistants[key] = struct{}{}
@@ -222,22 +222,25 @@ func resolveAliases(people []PersonRef) []PersonRef {
 	return out
 }
 
-// findUserByAlias cerca prima in members_registry per alias_mail (e in
-// fallback original_mail), poi risolve il users record con lo stesso id.
-// Ritorna "" se non trova nulla.
-func findUserByAlias(app core.App, alias string) string {
+// findMemberByAlias cerca in members_registry per alias_mail (con fallback
+// su original_mail). Ritorna l'id del socio o "" se non trovato.
+//
+// Volutamente non richiede l'esistenza di un users record: dopo lo swap di
+// FK in 1779001900, local_offices_admins.user / test_assistants.user
+// puntano a members_registry, quindi possiamo linkare anche referenti che
+// non hanno mai installato l'app.
+func findMemberByAlias(app core.App, alias string) string {
 	lower := strings.ToLower(strings.TrimSpace(alias))
 	if lower == "" {
 		return ""
 	}
-	// Primario: alias_mail (l'indirizzo @mensa.it ufficiale)
+	// Primario: alias_mail (l'indirizzo @mensa.it ufficiale).
 	rec, err := app.FindFirstRecordByFilter("members_registry",
 		"alias_mail = {:m}",
 		dbx.Params{"m": lower},
 	)
 	if err != nil || rec == nil {
-		// Fallback: original_mail, in caso la mail @mensa.it sia stata
-		// usata in fase di registrazione come indirizzo principale.
+		// Fallback: original_mail.
 		rec, err = app.FindFirstRecordByFilter("members_registry",
 			"original_mail = {:m}",
 			dbx.Params{"m": lower},
@@ -245,10 +248,6 @@ func findUserByAlias(app core.App, alias string) string {
 		if err != nil || rec == nil {
 			return ""
 		}
-	}
-	// Verifica che esista un users record con lo stesso id (registrato in app).
-	if _, err := app.FindRecordById("users", rec.Id); err != nil {
-		return ""
 	}
 	return rec.Id
 }
