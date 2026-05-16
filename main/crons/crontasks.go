@@ -5,6 +5,7 @@ import (
 
 	"mensadb/importers"
 	"mensadb/main/cmd/searchcmd"
+	"mensadb/main/crons/eventslobackfill"
 	"mensadb/main/crons/quidnotify"
 	"mensadb/main/crons/searchrec"
 	"mensadb/tolgee"
@@ -118,6 +119,12 @@ func CronTasks(app core.App) {
 			added += n
 		}
 		app.Logger().Info("[CRON] Podcast sync ok", "podcasts", len(perPodcast), "new_episodes", added)
+	})
+
+	// Manual-only: assegna local_office agli eventi storici basandosi
+	// sull'owner. Lanciabile dal pannello PB con il bottone Run.
+	app.Cron().MustAdd("Events local_office backfill (manual)", "0 0 31 2 *", func() {
+		eventslobackfill.Run(app)
 	})
 
 	// Manual-only: schedule "Feb 31" never fires automatically. Trigger via la

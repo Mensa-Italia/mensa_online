@@ -18,6 +18,10 @@ func Load(app core.App) {
 	app.OnRecordCreate("ex_keys").BindFunc(OnKeyCreated)
 	app.OnRecordAfterCreateSuccess("calendar_link").BindFunc(CalendarSetHash)
 
+	// Auto-assegnazione local_office in base all'owner. Gira PRIMA del save
+	// cosi` il campo viene committato insieme al resto della create.
+	app.OnRecordCreate("events").BindFunc(EventsAssignLocalOffice)
+
 	// Notify users when an event is created
 	app.OnRecordAfterCreateSuccess("events").BindFunc(EventsNotifyUsersAsync)
 	app.OnRecordAfterUpdateSuccess("events").BindFunc(EventsUpdateNotifyUsersAsync)
