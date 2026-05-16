@@ -118,13 +118,18 @@ func SyncEpisodes(app core.App, podcast *core.Record) error {
 			continue
 		}
 
-		// Taglia silenzio in testa e in coda. In caso di errore lasciamo
-		// il file originale: meglio un episodio con silenzio che nessuno.
-		if newDur, err := TrimSilence(dl.AudioPath); err != nil {
+		// Taglia silenzio in testa e in coda. Capture l'offset per
+		// riallineare i timestamp VTT (che si riferiscono all'audio
+		// originale di YouTube, non a quello trimmato).
+		var startOffset float64
+		if trimRes, err := TrimSilence(dl.AudioPath); err != nil {
 			app.Logger().Warn("[podcastsync] trim silenzio fallito, uso originale",
 				"video", entry.ID, "err", err)
-		} else if newDur > 0 {
-			dl.DurationSeconds = newDur
+		} else {
+			if trimRes.NewDurationSeconds > 0 {
+				dl.DurationSeconds = trimRes.NewDurationSeconds
+			}
+			startOffset = trimRes.StartOffsetSeconds
 		}
 
 		rec := core.NewRecord(epCol)
@@ -162,8 +167,10 @@ func SyncEpisodes(app core.App, podcast *core.Record) error {
 		// Trascrizione: prima via i sottotitoli auto YouTube (gratis,
 		// inline). Se YouTube non ne ha, fallback async su whisper.cpp
 		// locale (serializzato uno alla volta, non blocca il sync).
+		// I timestamp VTT vengono shiftati di -startOffset per riallinearli
+		// all'audio gia` trimmato (silenzio iniziale rimosso da TrimSilence).
 		if dl.SubtitlePath != "" {
-			if err := saveTranscriptFromVTT(app, rec.Id, dl.SubtitlePath); err != nil {
+			if err := saveTranscriptFromVTT(app, rec.Id, dl.SubtitlePath, startOffset); err != nil {
 				app.Logger().Warn("[podcastsync] parse VTT fallito, episodio senza transcript",
 					"video", entry.ID, "err", err)
 			}
@@ -244,10 +251,20 @@ func SyncAll(app core.App) (perPodcast map[string]int, err error) {
 
 // saveTranscriptFromVTT parsa il file VTT scaricato da yt-dlp e crea/aggiorna
 // la riga in podcast_episodes_transcript. Upserts per episode (1:1).
-func saveTranscriptFromVTT(app core.App, episodeID, vttPath string) error {
+//
+// startOffsetSeconds: quanti secondi rimossi all'inizio dell'audio (silenzio
+// iniziale). Tutti i timestamp dei segments vengono shiftati di -offset
+// cosi` puntano alla posizione corretta nell'audio trimmato.
+func saveTranscriptFromVTT(app core.App, episodeID, vttPath string, startOffsetSeconds float64) error {
 	parsed, err := ParseVTT(vttPath)
 	if err != nil {
 		return err
+	}
+	if startOffsetSeconds > 0 {
+		parsed.Segments = shiftSegments(parsed.Segments, startOffsetSeconds)
+		if n := len(parsed.Segments); n > 0 {
+			parsed.DurationSeconds = int(parsed.Segments[n-1].EndSeconds)
+		}
 	}
 	col, err := app.FindCollectionByNameOrId("podcast_episodes_transcript")
 	if err != nil {

@@ -130,6 +130,33 @@ func vttTimeToSeconds(h, m, s, ms string) float64 {
 	return float64(hi*3600+mi*60+si) + float64(msi)/1000.0
 }
 
+// shiftSegments scala tutti i timestamp di -offsetSeconds e scarta i
+// segments che cadono interamente prima dello start (es. se la VTT contiene
+// un intro che e` stato tagliato dal silenzio). I segments che cadono
+// parzialmente prima vengono troncati a 0.
+func shiftSegments(segs []VTTSegment, offsetSeconds float64) []VTTSegment {
+	if offsetSeconds <= 0 || len(segs) == 0 {
+		return segs
+	}
+	out := make([]VTTSegment, 0, len(segs))
+	for _, s := range segs {
+		newStart := s.StartSeconds - offsetSeconds
+		newEnd := s.EndSeconds - offsetSeconds
+		if newEnd <= 0 {
+			continue // segmento intero pre-offset (musica intro, intro silenzio)
+		}
+		if newStart < 0 {
+			newStart = 0
+		}
+		out = append(out, VTTSegment{
+			StartSeconds: newStart,
+			EndSeconds:   newEnd,
+			Text:         s.Text,
+		})
+	}
+	return out
+}
+
 func cleanText(s string) string {
 	s = vttTagRE.ReplaceAllString(s, "")
 	s = strings.ReplaceAll(s, "&nbsp;", " ")
