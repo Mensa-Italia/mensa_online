@@ -326,15 +326,25 @@ func BuildPodcastDoc(app core.App, rec *core.Record) search.Doc {
 	}
 }
 
-// BuildPodcastEpisodeDoc indicizza un singolo episodio.
+// BuildPodcastEpisodeDoc indicizza un singolo episodio. Body include
+// description + transcript Gemini (se disponibile in podcast_episodes_transcript
+// con duration_seconds > 0): cosi` cercare "intelligenza artificiale" trova
+// l'episodio dove ne parlano per 20 minuti anche se il titolo non lo cita.
 func BuildPodcastEpisodeDoc(app core.App, rec *core.Record) search.Doc {
-	// Tag con il titolo della serie per match tipo "Mensa Talks: X".
 	seriesTitle := ""
 	if pid := rec.GetString("podcast"); pid != "" {
 		if p, err := app.FindRecordById("podcasts", pid); err == nil {
 			seriesTitle = p.GetString("title")
 		}
 	}
+
+	transcript := ""
+	if tr, err := app.FindFirstRecordByData("podcast_episodes_transcript", "episode", rec.Id); err == nil && tr != nil {
+		if tr.GetInt("duration_seconds") > 0 {
+			transcript = tr.GetString("transcript")
+		}
+	}
+
 	createdAt := rec.GetDateTime("published_at").Time()
 	if createdAt.IsZero() {
 		createdAt = rec.GetDateTime("created").Time()
@@ -343,7 +353,7 @@ func BuildPodcastEpisodeDoc(app core.App, rec *core.Record) search.Doc {
 		ID:         rec.Id,
 		Type:       "podcast_episode",
 		Title:      rec.GetString("title"),
-		Body:       rec.GetString("description"),
+		Body:       joinNonEmpty(" ", rec.GetString("description"), transcript),
 		Tags:       filterNonEmpty(seriesTitle),
 		Region:     "",
 		Visibility: "public",

@@ -108,10 +108,20 @@ func Load(app core.App) {
 	app.OnRecordAfterUpdateSuccess("podcasts").BindFunc(indexPodcastAsync)
 	app.OnRecordAfterDeleteSuccess("podcasts").BindFunc(unindexAsync)
 
-	// podcast_episodes: scritti dal sync, indicizzati live.
+	// podcast_episodes: scritti dal sync, indicizzati live + trascritti
+	// asincronamente con Gemini (il transcript entra nel doc Bleve per la
+	// ricerca full-text dentro al parlato).
 	app.OnRecordAfterCreateSuccess("podcast_episodes").BindFunc(indexPodcastEpisodeAsync)
 	app.OnRecordAfterUpdateSuccess("podcast_episodes").BindFunc(indexPodcastEpisodeAsync)
 	app.OnRecordAfterDeleteSuccess("podcast_episodes").BindFunc(unindexAsync)
+	app.OnRecordAfterCreateSuccess("podcast_episodes").BindFunc(PodcastEpisodeAfterWriteAsync)
+	app.OnRecordAfterUpdateSuccess("podcast_episodes").BindFunc(PodcastEpisodeAfterWriteAsync)
+
+	// podcast_episodes_transcript: quando viene salvato (sia per nuova
+	// trascrizione che per update), re-indicizza l'episodio padre cosi`
+	// il transcript entra nel body Bleve.
+	app.OnRecordAfterCreateSuccess("podcast_episodes_transcript").BindFunc(reindexParentEpisode)
+	app.OnRecordAfterUpdateSuccess("podcast_episodes_transcript").BindFunc(reindexParentEpisode)
 }
 
 func StampUpdateImageAsync(e *core.RecordEvent) error {

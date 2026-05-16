@@ -185,6 +185,30 @@ func indexQuidArticleAsync(e *core.RecordEvent) error {
 	return e.Next()
 }
 
+// reindexParentEpisode: handler per podcast_episodes_transcript che, dopo
+// ogni write della trascrizione, re-indicizza l'episodio padre cosi` il
+// nuovo body (description + transcript) entra subito in Bleve.
+func reindexParentEpisode(e *core.RecordEvent) error {
+	rec := e.Record
+	app := e.App
+	go func() {
+		episodeID := rec.GetString("episode")
+		if episodeID == "" {
+			return
+		}
+		ep, err := app.FindRecordById("podcast_episodes", episodeID)
+		if err != nil || ep == nil {
+			return
+		}
+		doc := BuildPodcastEpisodeDoc(app, ep)
+		if err := search.Upsert(doc); err != nil {
+			app.Logger().Error("search index reindex podcast_episode failed",
+				"id", ep.Id, "err", err)
+		}
+	}()
+	return e.Next()
+}
+
 func unindexAsync(e *core.RecordEvent) error {
 	id := e.Record.Id
 	app := e.App
