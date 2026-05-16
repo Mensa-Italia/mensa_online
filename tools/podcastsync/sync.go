@@ -117,6 +117,15 @@ func SyncEpisodes(app core.App, podcast *core.Record) error {
 			continue
 		}
 
+		// Taglia silenzio in testa e in coda. In caso di errore lasciamo
+		// il file originale: meglio un episodio con silenzio che nessuno.
+		if newDur, err := TrimSilence(dl.AudioPath); err != nil {
+			app.Logger().Warn("[podcastsync] trim silenzio fallito, uso originale",
+				"video", entry.ID, "err", err)
+		} else if newDur > 0 {
+			dl.DurationSeconds = newDur
+		}
+
 		rec := core.NewRecord(epCol)
 		rec.Set("podcast", podcast.Id)
 		rec.Set("youtube_video_id", dl.VideoID)
