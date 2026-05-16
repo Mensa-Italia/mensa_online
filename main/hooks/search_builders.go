@@ -28,14 +28,23 @@ func BuildEventDoc(app core.App, rec *core.Record) search.Doc {
 }
 
 func BuildSigDoc(app core.App, rec *core.Record) search.Doc {
-	tags := filterNonEmpty(rec.GetString("group_type"))
+	region := ""
+	officeName := ""
+	if oid := rec.GetString("local_office"); oid != "" {
+		if o, err := app.FindRecordById("local_offices", oid); err == nil {
+			region = o.GetString("region")
+			officeName = o.GetString("name")
+		}
+	}
+	body := joinNonEmpty(" ", rec.GetString("description"), officeName, region)
+	tags := filterNonEmpty(rec.GetString("group_type"), region)
 	return search.Doc{
 		ID:         rec.Id,
 		Type:       "sig",
 		Title:      rec.GetString("name"),
-		Body:       rec.GetString("description"),
+		Body:       body,
 		Tags:       tags,
-		Region:     "",
+		Region:     region,
 		Visibility: "public",
 		CreatedAt:  rec.GetDateTime("created").Time(),
 	}
