@@ -5,26 +5,22 @@ import (
 	m "github.com/pocketbase/pocketbase/migrations"
 )
 
-// View pubblica che aggrega referenti dei gruppi locali (segretari +
-// co-segretari + assistenti al test) in una singola tabella read-only.
-// Evita di esporre rule complicate sulle tabelle interne e da` al client
-// un endpoint unico /api/collections/view_local_office_referenti/records
-// senza autenticazione.
+// Due view pubbliche separate per i referenti dei gruppi locali. Il
+// validator di PocketBase per le view non accetta UNION ALL, quindi
+// abbiamo dovuto spezzare per sorgente.
 //
-// Una riga per (local_office, user, ruolo). Sorgenti:
-//   - local_offices_admins -> segretario/cosegretario (is_the_officer)
-//   - local_offices_test_assistants -> assistente
+//   - view_local_office_admins:     segretari + cosegretari (con flag is_the_officer)
+//   - view_local_office_assistants: assistenti al test
 //
-// I dati anagrafici (nome, immagine, email @mensa.it) vengono da
-// members_registry quando disponibile.
+// Stessa struttura colonne (id, local_office, local_office_name, region,
+// user, name, image, email). Lettura pubblica (no auth). Il client fa due
+// query e concatena.
 func init() {
 	m.Register(func(app core.App) error {
-		col := core.NewViewCollection("view_local_office_referenti")
-		// Il validator di PocketBase per le view non digerisce CASE WHEN +
-		// UNION ALL: per ogni ruolo emettiamo un literal hardcoded e il
-		// branch "cosegretario" si distingue da "segretario" via filtro
-		// is_the_officer. Tre SELECT con identiche colonne.
-		col.ViewQuery = `SELECT
+		empty := ""
+
+		admins := core.NewViewCollection("view_local_office_admins")
+		admins.ViewQuery = `SELECT
   loa.id AS id,
   lo.id AS local_office,
   lo.name AS local_office_name,
@@ -33,30 +29,20 @@ func init() {
   mr.name AS name,
   mr.image AS image,
   mr.alias_mail AS email,
-  'segretario' AS role
+  loa.is_the_officer AS is_the_officer
 FROM local_offices_admins loa
 JOIN local_offices lo ON lo.id = loa.local_office
 JOIN users u ON u.id = loa.user
 LEFT JOIN members_registry mr ON mr.id = u.id
-WHERE loa.is_the_officer = 1 AND (mr.is_active IS NULL OR mr.is_active = 1)
-UNION ALL
-SELECT
-  loa.id AS id,
-  lo.id AS local_office,
-  lo.name AS local_office_name,
-  lo.region AS region,
-  u.id AS user,
-  mr.name AS name,
-  mr.image AS image,
-  mr.alias_mail AS email,
-  'cosegretario' AS role
-FROM local_offices_admins loa
-JOIN local_offices lo ON lo.id = loa.local_office
-JOIN users u ON u.id = loa.user
-LEFT JOIN members_registry mr ON mr.id = u.id
-WHERE (loa.is_the_officer = 0 OR loa.is_the_officer IS NULL) AND (mr.is_active IS NULL OR mr.is_active = 1)
-UNION ALL
-SELECT
+WHERE mr.is_active IS NULL OR mr.is_active = 1`
+		admins.ListRule = &empty
+		admins.ViewRule = &empty
+		if err := app.Save(admins); err != nil {
+			return err
+		}
+
+		assistants := core.NewViewCollection("view_local_office_assistants")
+		assistants.ViewQuery = `SELECT
   lota.id AS id,
   lo.id AS local_office,
   lo.name AS local_office_name,
@@ -64,23 +50,23 @@ SELECT
   u.id AS user,
   mr.name AS name,
   mr.image AS image,
-  mr.alias_mail AS email,
-  'assistente' AS role
+  mr.alias_mail AS email
 FROM local_offices_test_assistants lota
 JOIN local_offices lo ON lo.id = lota.local_office
 JOIN users u ON u.id = lota.user
 LEFT JOIN members_registry mr ON mr.id = u.id
 WHERE mr.is_active IS NULL OR mr.is_active = 1`
-
-		empty := ""
-		col.ListRule = &empty
-		col.ViewRule = &empty
-		return app.Save(col)
+		assistants.ListRule = &empty
+		assistants.ViewRule = &empty
+		return app.Save(assistants)
 	}, func(app core.App) error {
-		col, err := app.FindCollectionByNameOrId("view_local_office_referenti")
-		if err != nil {
-			return nil
+		for _, name := range []string{"view_local_office_admins", "view_local_office_assistants"} {
+			if col, err := app.FindCollectionByNameOrId(name); err == nil {
+				if err := app.Delete(col); err != nil {
+					return err
+				}
+			}
 		}
-		return app.Delete(col)
+		return nil
 	})
 }
