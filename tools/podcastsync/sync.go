@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/pocketbase/pocketbase/core"
@@ -91,8 +92,17 @@ func SyncEpisodes(app core.App, podcast *core.Record) error {
 	defer func() { _ = os.RemoveAll(tmpRoot) }()
 
 	added := 0
+	skippedShorts := 0
 	for _, entry := range meta.Entries {
 		if entry.ID == "" {
+			continue
+		}
+		if isYouTubeShort(entry) {
+			// I shorts non sono "puntate" del podcast: tipicamente sono clip
+			// promozionali o trailer brevi. Skip senza scaricare.
+			app.Logger().Info("[podcastsync] skip shorts",
+				"podcast", podcast.Id, "video", entry.ID, "title", entry.Title, "duration_s", entry.Duration)
+			skippedShorts++
 			continue
 		}
 		existing, _ := app.FindFirstRecordByData(epCol.Id, "youtube_video_id", entry.ID)
@@ -157,8 +167,28 @@ func SyncEpisodes(app core.App, podcast *core.Record) error {
 	}
 
 	app.Logger().Info("[podcastsync] sync completato",
-		"podcast", podcast.Id, "added", added, "playlist_total", len(meta.Entries))
+		"podcast", podcast.Id,
+		"added", added,
+		"shorts_skipped", skippedShorts,
+		"playlist_total", len(meta.Entries))
 	return nil
+}
+
+// isYouTubeShort decide se un video va trattato come "short" e quindi
+// escluso dal sync podcast. Euristica:
+//   - titolo o descrizione contengono "#shorts" / "#short" (case insensitive)
+//   - durata strettamente positiva e <= 60s (i shorts hanno durata <=60s)
+// Il flat-playlist di yt-dlp non espone description per ogni entry, quindi
+// in pratica controlliamo titolo + durata.
+func isYouTubeShort(entry PlaylistEntry) bool {
+	t := strings.ToLower(entry.Title)
+	if strings.Contains(t, "#shorts") || strings.Contains(t, "#short") {
+		return true
+	}
+	if entry.Duration > 0 && entry.Duration <= 60 {
+		return true
+	}
+	return false
 }
 
 // SyncAll itera su tutte le serie podcast registrate e fa il sync episodi.
