@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -12,72 +13,83 @@ import (
 	"mensadb/tools/search"
 )
 
-// searchResultItem e` la rappresentazione minimale di un hit per l'output
-// MCP. Niente score Bleve grezzo: e` un dato interno di ranking che
-// confonderebbe il modello chiamante. L'ordine della slice riflette gia` il
-// ranking.
-type searchResultItem struct {
-	ID       string `json:"id"`
-	Type     string `json:"type"`
-	Title    string `json:"title,omitempty"`
-	Subtitle string `json:"subtitle,omitempty"`
-	URL      string `json:"url,omitempty"`
+// searchHit e` un risultato compatto per il modello chiamante: id + type
+// + label leggibile. Per i dettagli si chiama get_<type>(id).
+type searchHit struct {
+	ID    string `json:"id"`
+	Type  string `json:"type"`
+	Label string `json:"label,omitempty"`
 }
 
-// supportedSearchTypes elenca i tipi indicizzati attualmente. Tenuto in sync
-// con main/api/search/handler.go::allTypes.
-var supportedSearchTypes = []string{
-	"event", "sig", "deal", "document", "member",
-	"org_group", "org_role",
-	"quid_issue", "quid_article",
-	"podcast", "podcast_episode",
-	"linktree_link",
+func registerSearchTools(s *server.MCPServer, app core.App) {
+	// Global
+	registerSearch(s, app, nil)
+	// Per-type
+	for i := range allTypes {
+		t := &allTypes[i]
+		registerSearch(s, app, t)
+	}
 }
 
-func registerSearchTool(s *server.MCPServer, app core.App) {
-	s.AddTool(
-		mcp.NewTool("search",
-			mcp.WithDescription(
-				"Full-text search across Mensa Italia content: events, "+
-					"groups (sigs / local / chat), deals, documents, members, "+
-					"organigramma (groups + roles), Quid magazine (issues + "+
-					"articles), podcasts (series + episodes), local-office "+
-					"linktree links. Italian-aware analyzer with stemming, "+
-					"plus fuzzy matching (1 Levenshtein edit) to catch "+
-					"typos. Use the `types` filter to narrow to specific "+
-					"kinds, `region` to scope to an Italian region "+
-					"(e.g. \"Lombardia\").",
-			),
-			mcp.WithString("q",
-				mcp.Required(),
-				mcp.Description("Query string. Italian queries work best. Max 256 chars."),
-			),
-			mcp.WithString("types",
-				mcp.Description(
-					"Optional comma-separated list of types to restrict the search to. "+
-						"Allowed: "+strings.Join(supportedSearchTypes, ", ")+
-						". If empty, all types are searched.",
-				),
-			),
-			mcp.WithString("region",
-				mcp.Description(
-					"Optional Italian region name (e.g. \"Lombardia\") to restrict the "+
-						"search to records tagged with that region.",
-				),
-			),
-			mcp.WithNumber("limit_per_type",
-				mcp.Description("Max results per type. Default 5, max 25."),
-			),
-			mcp.WithReadOnlyHintAnnotation(true),
-			mcp.WithIdempotentHintAnnotation(true),
-			mcp.WithOpenWorldHintAnnotation(true),
-		),
-		makeSearchTool(app),
+func registerSearch(s *server.MCPServer, app core.App, only *searchableType) {
+	var (
+		toolName    string
+		description string
 	)
+	if only == nil {
+		keys := make([]string, 0, len(allTypes))
+		for _, t := range allTypes {
+			keys = append(keys, t.Key)
+		}
+		toolName = "search"
+		description = "Bleve full-text search GLOBAL su tutti i tipi indicizzati: " +
+			strings.Join(keys, ", ") + ". " +
+			"Analyzer italiano (stemming) + fuzzy 1-edit per typo. " +
+			"Usa `types` per restringere a uno o piu` tipi, `region` per " +
+			"scope regionale (es. \"Lombardia\"). " +
+			"Restituisce id+type+label; per il record completo chiamare get_<type>(id)."
+	} else {
+		toolName = "search_" + snake(only.Plural)
+		description = "Bleve full-text search ristretto a " + only.Plural + ". " +
+			only.Description + " Analyzer italiano + fuzzy 1-edit."
+	}
+
+	opts := []mcp.ToolOption{
+		mcp.WithDescription(description),
+		mcp.WithString("q",
+			mcp.Required(),
+			mcp.Description("Query string (italiano preferito, max 256 chars)."),
+		),
+		mcp.WithString("region",
+			mcp.Description("Regione italiana opzionale (es. \"Lombardia\")."),
+		),
+		mcp.WithNumber("limit",
+			mcp.Description("Max risultati (default 10, max 50)."),
+		),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(true),
+	}
+	if only == nil {
+		keys := make([]string, 0, len(allTypes))
+		for _, t := range allTypes {
+			keys = append(keys, t.Key)
+		}
+		opts = append(opts, mcp.WithString("types",
+			mcp.Description("Csv di tipi da filtrare. Valori validi: "+strings.Join(keys, ", ")),
+		))
+	}
+
+	s.AddTool(mcp.NewTool(toolName, opts...), makeSearchHandler(app, only))
 }
 
-func makeSearchTool(app core.App) server.ToolHandlerFunc {
-	return func(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func makeSearchHandler(app core.App, only *searchableType) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		claims, ok := ClaimsFromContext(ctx)
+		if !ok {
+			return nil, fmt.Errorf("unauthorized: missing MCP auth context")
+		}
+
 		q := strings.TrimSpace(req.GetString("q", ""))
 		if q == "" {
 			return nil, fmt.Errorf("q is required")
@@ -85,166 +97,119 @@ func makeSearchTool(app core.App) server.ToolHandlerFunc {
 		if len(q) > 256 {
 			q = q[:256]
 		}
-
-		typesRaw := req.GetString("types", "")
 		region := strings.TrimSpace(req.GetString("region", ""))
-		limitPerType := int(req.GetFloat("limit_per_type", 5))
-		if limitPerType < 1 {
-			limitPerType = 5
+		limit := int(req.GetFloat("limit", 10))
+		if limit < 1 {
+			limit = 10
 		}
-		if limitPerType > 25 {
-			limitPerType = 25
+		if limit > 50 {
+			limit = 50
 		}
 
 		var types []string
-		if typesRaw != "" {
-			for _, t := range strings.Split(typesRaw, ",") {
-				t = strings.TrimSpace(t)
-				if t != "" {
+		if only != nil {
+			types = []string{only.Key}
+		} else if raw := req.GetString("types", ""); raw != "" {
+			for _, t := range strings.Split(raw, ",") {
+				if t = strings.TrimSpace(t); t != "" {
 					types = append(types, t)
 				}
 			}
-		}
-		if len(types) == 0 {
-			types = supportedSearchTypes
+		} else {
+			types = make([]string, 0, len(allTypes))
+			for _, tt := range allTypes {
+				types = append(types, tt.Key)
+			}
 		}
 
-		hits, err := search.Query(q, search.Filters{Types: types, Region: region}, limitPerType*len(types))
+		hits, err := search.Query(q, search.Filters{Types: types, Region: region}, limit)
 		if err != nil {
-			return nil, fmt.Errorf("search query: %w", err)
+			return nil, fmt.Errorf("bleve query: %w", err)
 		}
 
-		// Raggruppa per tipo preservando l'ordine di score, cap a limitPerType.
-		perType := make(map[string][]search.Result, len(types))
+		// Idrata via pbCollectionGet per ogni hit: cosi` le viewRule della
+		// collection vengono applicate dall'utente MCP autenticato. Se PB
+		// ritorna 404 (non autorizzato a vedere) si scarta silenziosamente.
+		out := make([]searchHit, 0, len(hits))
 		for _, h := range hits {
-			if len(perType[h.Type]) >= limitPerType {
+			t := typeByKey(h.Type)
+			if t == nil {
 				continue
 			}
-			perType[h.Type] = append(perType[h.Type], h)
-		}
-
-		// Idrata in struttura piatta tipo->[]item.
-		appURL := app.Settings().Meta.AppURL
-		results := make(map[string][]searchResultItem, len(types))
-		total := 0
-		for _, typ := range types {
-			tHits := perType[typ]
-			if len(tHits) == 0 {
-				results[typ] = []searchResultItem{}
+			status, body, err := pbCollectionGet(ctx, app, claims, t.Collection, h.ID, nil)
+			if err != nil || status != 200 {
 				continue
 			}
-			items := make([]searchResultItem, 0, len(tHits))
-			for _, h := range tHits {
-				rec, err := app.FindRecordById(collectionForType(typ), h.ID)
-				if err != nil || rec == nil {
-					continue
-				}
-				items = append(items, hydrateForMCP(appURL, typ, rec))
-			}
-			results[typ] = items
-			total += len(items)
+			label := extractLabel(h.Type, body)
+			out = append(out, searchHit{ID: h.ID, Type: h.Type, Label: label})
 		}
 
 		return jsonResult(map[string]any{
 			"query":   q,
-			"total":   total,
-			"results": results,
+			"total":   len(out),
+			"results": out,
 		})
 	}
 }
 
-// collectionForType e` la versione MCP del mapping type->collection
-// (duplicata da main/api/search/handler.go per non creare un import ciclico).
-func collectionForType(t string) string {
-	switch t {
-	case "sig":
-		return "sigs"
-	case "document":
-		return "documents"
-	case "event":
-		return "events"
-	case "deal":
-		return "deals"
-	case "member":
-		return "members_registry"
-	case "org_group":
-		return "org_chart_groups"
-	case "org_role":
-		return "org_chart_members"
-	case "quid_article":
-		return "quid_articles"
-	case "quid_issue":
-		return "quid_issues"
-	case "podcast":
-		return "podcasts"
-	case "podcast_episode":
-		return "podcast_episodes"
-	case "linktree_link":
-		return "local_offices_links"
-	default:
-		return t
+// extractLabel ricava una label leggibile dal record PB serializzato,
+// scegliendo per ogni tipo i campi piu` utili senza forzare il modello a
+// ri-ispezionare strutture. Per i dettagli si fa get_<type>(id).
+func extractLabel(typ string, body []byte) string {
+	m := map[string]any{}
+	if err := json.Unmarshal(body, &m); err != nil {
+		return ""
 	}
-}
-
-// hydrateForMCP costruisce un searchResultItem leggibile dal modello. Titolo
-// + subtitle informativo + URL ufficiale se costruibile.
-func hydrateForMCP(appURL, typ string, rec *core.Record) searchResultItem {
-	item := searchResultItem{ID: rec.Id, Type: typ}
+	get := func(k string) string {
+		if v, ok := m[k].(string); ok {
+			return v
+		}
+		return ""
+	}
 	switch typ {
 	case "event":
-		item.Title = rec.GetString("name")
-		if t := rec.GetDateTime("when_start"); !t.IsZero() {
-			item.Subtitle = t.Time().Format("02 Jan 2006")
-		}
+		return joinNonEmpty(get("name"), get("when_start"))
 	case "sig":
-		item.Title = rec.GetString("name")
-		item.Subtitle = rec.GetString("group_type")
+		return joinNonEmpty(get("name"), get("group_type"))
 	case "deal":
-		item.Title = rec.GetString("name")
-		item.Subtitle = rec.GetString("commercial_sector")
+		return joinNonEmpty(get("name"), get("commercial_sector"))
 	case "document":
-		item.Title = rec.GetString("name")
-		item.Subtitle = rec.GetString("category")
+		return joinNonEmpty(get("name"), get("category"))
 	case "member":
-		item.Title = rec.GetString("name")
-		city := rec.GetString("city")
-		state := rec.GetString("state")
-		switch {
-		case city != "" && state != "":
-			item.Subtitle = city + ", " + state
-		case state != "":
-			item.Subtitle = state
-		default:
-			item.Subtitle = city
-		}
+		return joinNonEmpty(get("name"), get("city"), get("state"))
 	case "org_group":
-		item.Title = rec.GetString("title")
+		return get("title")
 	case "org_role":
-		item.Title = rec.GetString("role")
-		item.Subtitle = rec.GetString("group")
+		return get("role")
 	case "quid_article":
-		item.Title = rec.GetString("title")
-		item.Subtitle = rec.GetString("category_name")
-		item.URL = rec.GetString("link")
+		return joinNonEmpty(get("title"), get("category_name"))
 	case "quid_issue":
-		item.Title = rec.GetString("name")
-		if c := rec.GetInt("articles_count"); c > 0 {
-			item.Subtitle = fmt.Sprintf("%d articoli", c)
-		}
+		return get("name")
 	case "podcast":
-		item.Title = rec.GetString("title")
+		return get("title")
 	case "podcast_episode":
-		item.Title = rec.GetString("title")
-		if t := rec.GetDateTime("published_at"); !t.IsZero() {
-			item.Subtitle = t.Time().Format("02 Jan 2006")
-		}
+		return joinNonEmpty(get("title"), get("published_at"))
 	case "linktree_link":
-		item.Title = rec.GetString("title")
-		item.URL = rec.GetString("url")
+		return joinNonEmpty(get("title"), get("url"))
 	}
-	if item.URL == "" {
-		// Fallback: link al record PB via API (utile come "approfondisci")
-		item.URL = fmt.Sprintf("%s/api/collections/%s/records/%s", strings.TrimRight(appURL, "/"), collectionForType(typ), rec.Id)
-	}
-	return item
+	return get("name")
 }
+
+func joinNonEmpty(parts ...string) string {
+	out := []string{}
+	for _, p := range parts {
+		if strings.TrimSpace(p) != "" {
+			out = append(out, p)
+		}
+	}
+	return strings.Join(out, " · ")
+}
+
+func jsonResult(v any) (*mcp.CallToolResult, error) {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return nil, fmt.Errorf("json marshal: %w", err)
+	}
+	return mcp.NewToolResultText(string(b)), nil
+}
+
