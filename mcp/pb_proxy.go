@@ -3,6 +3,7 @@ package mcp
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -56,35 +57,89 @@ func normalizeLoopback(addr string) string {
 }
 
 // resolveUserFromClaims trova il record `users` corrispondente all'utente
-// Zitadel autenticato. Tenta nell'ordine (la prima strategia che funziona
-// vince):
+// Zitadel autenticato. Vedi resolveUserFromClaimsCtx — questa wrapper non
+// prova il fallback su /oidc/v1/userinfo perche` manca il bearer; e` utile
+// solo per code path che gia` hanno l'email nei claims.
+func resolveUserFromClaims(app core.App, c *Claims) (*core.Record, error) {
+	return resolveUserFromClaimsCtx(context.Background(), app, c, "")
+}
+
+// resolveUserFromClaimsCtx fa il mapping Zitadel → users PB. Strategie:
 //
 //   1. claims.Email su users.email — canonico
-//   2. claims.Subject come users.id — federazione SSO con id propagato
-//   3. claims.Subject come users.zitadel_id — campo di mapping esplicito
-//      (se esiste sulla collection users)
-//   4. claims.Email come members_registry.alias_mail → recupera l'id
-//      del socio, prova quello come users.id (i due collection condividono
-//      l'id se l'utente si e` registrato sull'app)
+//   2. /oidc/v1/userinfo (Zitadel mette l'email solo nell'id_token, non
+//      nell'access_token, anche con scope email. Userinfo invece la
+//      ritorna sempre se lo scope e` autorizzato).
+//   3. claims.Subject come users.id — federazione SSO con id propagato
+//   4. claims.Email (o quella da userinfo) come members_registry.alias_mail
+//      o original_mail → recupera l'id del socio, prova quello come users.id
 //
-// Su errore include tutti i tentativi nel messaggio per facilitare il debug.
-func resolveUserFromClaims(app core.App, c *Claims) (*core.Record, error) {
+// Cache in-memory per (sub → email) per evitare di chiamare userinfo ad
+// ogni request MCP.
+func resolveUserFromClaimsCtx(ctx context.Context, app core.App, c *Claims, bearer string) (*core.Record, error) {
 	if c == nil {
 		return nil, fmt.Errorf("no MCP claims in request context")
 	}
 
 	tried := []string{}
+	email := c.Email
 
-	if c.Email != "" {
-		tried = append(tried, "users.email")
+	tryUserByEmail := func(e string) *core.Record {
+		if e == "" {
+			return nil
+		}
 		recs, err := app.FindRecordsByFilter("users",
-			"email = {:e}", "", 1, 0, dbx.Params{"e": c.Email},
+			"email = {:e}", "", 1, 0, dbx.Params{"e": e},
 		)
 		if err == nil && len(recs) > 0 {
-			return recs[0], nil
+			return recs[0]
+		}
+		return nil
+	}
+
+	tryUserByMembersRegistry := func(e string) *core.Record {
+		if e == "" {
+			return nil
+		}
+		for _, field := range []string{"alias_mail", "original_mail"} {
+			recs, err := app.FindRecordsByFilter("members_registry",
+				field+" = {:e}", "", 1, 0, dbx.Params{"e": e},
+			)
+			if err == nil && len(recs) > 0 {
+				if u, err := app.FindRecordById("users", recs[0].Id); err == nil && u != nil {
+					return u
+				}
+			}
+		}
+		return nil
+	}
+
+	// Strategia 1: email gia` nei claims.
+	if email != "" {
+		tried = append(tried, "users.email(claims)")
+		if rec := tryUserByEmail(email); rec != nil {
+			return rec, nil
 		}
 	}
 
+	// Strategia 2: chiama Zitadel /oidc/v1/userinfo. Zitadel mette l'email
+	// nell'id_token ma NON nell'access_token (config-dipendente). userinfo
+	// con scope `email` autorizzato la ritorna sempre.
+	if email == "" && bearer != "" {
+		tried = append(tried, "userinfo")
+		ui, err := fetchUserinfo(ctx, bearer)
+		if err != nil {
+			app.Logger().Warn("[mcp] userinfo fetch fallita", "err", err)
+		} else if ui.Email != "" {
+			email = ui.Email
+			cacheEmail(c.Subject, email)
+			if rec := tryUserByEmail(email); rec != nil {
+				return rec, nil
+			}
+		}
+	}
+
+	// Strategia 3: id Zitadel = users.id (federazione SSO con id propagato).
 	if c.Subject != "" {
 		tried = append(tried, "users.id")
 		if rec, err := app.FindRecordById("users", c.Subject); err == nil && rec != nil {
@@ -92,40 +147,133 @@ func resolveUserFromClaims(app core.App, c *Claims) (*core.Record, error) {
 		}
 	}
 
-	if c.Email != "" {
-		// alias_mail e` la mail @mensa.it ufficiale; quando l'utente fa
-		// login Zitadel SSO con la mail @mensa.it lo troviamo qui.
-		tried = append(tried, "members_registry.alias_mail")
-		recs, err := app.FindRecordsByFilter("members_registry",
-			"alias_mail = {:e}", "", 1, 0, dbx.Params{"e": c.Email},
-		)
-		if err == nil && len(recs) > 0 {
-			memberID := recs[0].Id
-			if u, err := app.FindRecordById("users", memberID); err == nil && u != nil {
-				return u, nil
-			}
-		}
-		// fallback su original_mail (la mail dichiarata su Area32)
-		tried = append(tried, "members_registry.original_mail")
-		recs, err = app.FindRecordsByFilter("members_registry",
-			"original_mail = {:e}", "", 1, 0, dbx.Params{"e": c.Email},
-		)
-		if err == nil && len(recs) > 0 {
-			memberID := recs[0].Id
-			if u, err := app.FindRecordById("users", memberID); err == nil && u != nil {
-				return u, nil
-			}
+	// Strategia 4: email → members_registry.{alias_mail,original_mail} → users.
+	if email != "" {
+		tried = append(tried, "members_registry")
+		if rec := tryUserByMembersRegistry(email); rec != nil {
+			return rec, nil
 		}
 	}
 
 	app.Logger().Warn("[mcp] user resolution failed",
-		"email", c.Email, "subject", c.Subject, "tried", strings.Join(tried, ","))
+		"email", email, "subject", c.Subject, "tried", strings.Join(tried, ","))
 	return nil, fmt.Errorf("MCP user non risolvibile: il token Zitadel "+
 		"(email=%q, sub=%q) non corrisponde a nessun account utente nel "+
-		"sistema. Probabili cause: (a) Zitadel non ha rilasciato lo scope "+
-		"'email', (b) l'utente non si e` mai loggato nell'app Mensa Italia, "+
-		"(c) email @mensa.it diversa da quella registrata in app. Tentati: %s",
-		c.Email, c.Subject, strings.Join(tried, ", "))
+		"sistema. Probabili cause: (a) /oidc/v1/userinfo non ha ritornato "+
+		"email (scope email non autorizzato sul client?), (b) l'utente non "+
+		"si e` mai loggato nell'app Mensa Italia, (c) email diversa da "+
+		"quella registrata in app. Tentati: %s",
+		email, c.Subject, strings.Join(tried, ", "))
+}
+
+// userinfoResponse e` un subset utile dei campi che Zitadel ritorna sul
+// /oidc/v1/userinfo. La risposta segue lo standard OIDC.
+type userinfoResponse struct {
+	Sub           string `json:"sub"`
+	Email         string `json:"email"`
+	EmailVerified bool   `json:"email_verified"`
+	Name          string `json:"name"`
+	GivenName     string `json:"given_name"`
+	FamilyName    string `json:"family_name"`
+}
+
+var (
+	userinfoCacheMu sync.RWMutex
+	userinfoCache   = map[string]userinfoCacheEntry{}
+)
+
+type userinfoCacheEntry struct {
+	email     string
+	expiresAt time.Time
+}
+
+const userinfoCacheTTL = 10 * time.Minute
+
+// fetchUserinfo chiama Zitadel /oidc/v1/userinfo con il bearer e ritorna
+// l'email. Usa una cache in-memory keyed su sub Zitadel per evitare round-trip
+// ad ogni tool call.
+func fetchUserinfo(ctx context.Context, bearer string) (*userinfoResponse, error) {
+	subFromBearer, _ := subFromJWT(bearer)
+	if subFromBearer != "" {
+		if email, ok := lookupCachedEmail(subFromBearer); ok {
+			return &userinfoResponse{Sub: subFromBearer, Email: email}, nil
+		}
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, userinfoURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+bearer)
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("userinfo http: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		return nil, fmt.Errorf("userinfo http %d: %s", resp.StatusCode, string(body))
+	}
+	var ui userinfoResponse
+	if err := json.NewDecoder(resp.Body).Decode(&ui); err != nil {
+		return nil, fmt.Errorf("userinfo decode: %w", err)
+	}
+	if ui.Sub != "" && ui.Email != "" {
+		cacheEmail(ui.Sub, ui.Email)
+	}
+	return &ui, nil
+}
+
+func cacheEmail(sub, email string) {
+	if sub == "" || email == "" {
+		return
+	}
+	userinfoCacheMu.Lock()
+	userinfoCache[sub] = userinfoCacheEntry{email: email, expiresAt: time.Now().Add(userinfoCacheTTL)}
+	userinfoCacheMu.Unlock()
+}
+
+func lookupCachedEmail(sub string) (string, bool) {
+	userinfoCacheMu.RLock()
+	defer userinfoCacheMu.RUnlock()
+	e, ok := userinfoCache[sub]
+	if !ok || time.Now().After(e.expiresAt) {
+		return "", false
+	}
+	return e.email, true
+}
+
+// subFromJWT estrae il claim `sub` da un token JWT senza validare la firma.
+// La validazione viene fatta una sola volta dal middleware; qui ci serve
+// solo come chiave di cache. Tollera token malformati ritornando ""/error.
+func subFromJWT(token string) (string, error) {
+	parts := strings.Split(token, ".")
+	if len(parts) < 2 {
+		return "", fmt.Errorf("malformed jwt")
+	}
+	payload, err := base64URLDecode(parts[1])
+	if err != nil {
+		return "", err
+	}
+	var m map[string]any
+	if err := json.Unmarshal(payload, &m); err != nil {
+		return "", err
+	}
+	if s, ok := m["sub"].(string); ok {
+		return s, nil
+	}
+	return "", nil
+}
+
+// base64URLDecode decodifica un segmento base64url-encoded (senza padding)
+// tipico dei JWT.
+func base64URLDecode(s string) ([]byte, error) {
+	if pad := len(s) % 4; pad != 0 {
+		s += strings.Repeat("=", 4-pad)
+	}
+	return base64.URLEncoding.DecodeString(s)
 }
 
 // pbCall esegue una request HTTP verso PocketBase (loopback) impersonando
@@ -139,7 +287,8 @@ func pbCall(ctx context.Context, app core.App, claims *Claims, method, path stri
 	if addr == "" {
 		return 0, nil, fmt.Errorf("internal: pb server addr non inizializzato")
 	}
-	user, err := resolveUserFromClaims(app, claims)
+	bearer, _ := BearerFromContext(ctx)
+	user, err := resolveUserFromClaimsCtx(ctx, app, claims, bearer)
 	if err != nil {
 		return 0, nil, fmt.Errorf("auth: %w", err)
 	}

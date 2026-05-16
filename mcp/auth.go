@@ -14,14 +14,18 @@ import (
 )
 
 const (
-	oidcIssuer = "https://auth.mensa.it"
-	jwksURL    = "https://auth.mensa.it/oauth/v2/keys"
+	oidcIssuer  = "https://auth.mensa.it"
+	jwksURL     = "https://auth.mensa.it/oauth/v2/keys"
+	userinfoURL = "https://auth.mensa.it/oidc/v1/userinfo"
 )
 
 // contextKey is an unexported type to avoid context key collisions.
 type contextKey string
 
-const claimsKey contextKey = "mcp_claims"
+const (
+	claimsKey contextKey = "mcp_claims"
+	bearerKey contextKey = "mcp_bearer"
+)
 
 // Claims wraps the standard JWT registered claims.
 // azp (authorized party) is the OAuth2 client ID that requested the token —
@@ -108,6 +112,10 @@ func newAuthMiddleware(next http.Handler) http.Handler {
 		}
 
 		ctx := context.WithValue(r.Context(), claimsKey, claims)
+		// Stash anche il raw bearer cosi` i tool MCP possono chiamare
+		// /oidc/v1/userinfo per ottenere claim che Zitadel mette solo
+		// nell'id_token (email su tutti).
+		ctx = context.WithValue(ctx, bearerKey, rawToken)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -130,6 +138,13 @@ func setWWWAuthenticate(w http.ResponseWriter, r *http.Request) {
 func ClaimsFromContext(ctx context.Context) (*Claims, bool) {
 	c, ok := ctx.Value(claimsKey).(*Claims)
 	return c, ok
+}
+
+// BearerFromContext retrieves the raw bearer token attached by the auth
+// middleware. Returns ("", false) if absent.
+func BearerFromContext(ctx context.Context) (string, bool) {
+	t, ok := ctx.Value(bearerKey).(string)
+	return t, ok
 }
 
 func extractBearer(r *http.Request) (string, error) {

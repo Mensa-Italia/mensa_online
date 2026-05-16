@@ -59,7 +59,8 @@ func Init(app core.App) http.Handler {
 					"issuer":         claims.Issuer,
 				},
 			}
-			if user, err := resolveUserFromClaims(app, claims); err == nil {
+			bearer, _ := BearerFromContext(ctx)
+			if user, err := resolveUserFromClaimsCtx(ctx, app, claims, bearer); err == nil {
 				info["pb_user"] = map[string]any{
 					"id":       user.Id,
 					"email":    user.Email(),
