@@ -79,6 +79,12 @@ func Load(app core.App) {
 	app.OnRecordAfterUpdateSuccess("quid_issues").BindFunc(indexQuidIssueAsync)
 	app.OnRecordAfterDeleteSuccess("quid_issues").BindFunc(unindexAsync)
 
+	// linktree links: solo le foglie (kind=link, active=true) vengono
+	// effettivamente indicizzate; il filtro e` dentro indexLinktreeLinkAsync.
+	app.OnRecordAfterCreateSuccess("local_offices_links").BindFunc(indexLinktreeLinkAsync)
+	app.OnRecordAfterUpdateSuccess("local_offices_links").BindFunc(indexLinktreeLinkAsync)
+	app.OnRecordAfterDeleteSuccess("local_offices_links").BindFunc(unindexAsync)
+
 	// podcasts: quando l'admin crea una serie, hook async popola metadata
 	// + scarica tutti gli episodi via yt-dlp.
 	app.OnRecordAfterCreateSuccess("podcasts").BindFunc(PodcastAfterCreateAsync)
