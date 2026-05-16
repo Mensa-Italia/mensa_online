@@ -76,6 +76,12 @@ func main() {
 		e.Router.GET("/.well-known/oauth-authorization-server", mcp.WellKnownAuthServerHandler())
 		e.Router.GET("/authorize", mcp.AuthorizeRedirectHandler())
 
+		// Salva l'addr del server PB cosi` i tool MCP che fanno proxy verso
+		// /api/collections/... via loopback (per rispettare le list/view rule)
+		// sanno dove andare. Deve avvenire PRIMA di mcp.Init.
+		if e.Server != nil {
+			mcp.SetServerAddr(e.Server.Addr)
+		}
 		mcpHandler := mcp.Init(e.App)
 		e.Router.Any("/mcp", func(re *core.RequestEvent) error {
 			mcpHandler.ServeHTTP(re.Response, re.Request)

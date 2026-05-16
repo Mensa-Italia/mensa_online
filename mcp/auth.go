@@ -26,9 +26,13 @@ const claimsKey contextKey = "mcp_claims"
 // Claims wraps the standard JWT registered claims.
 // azp (authorized party) is the OAuth2 client ID that requested the token —
 // present in Zitadel access tokens alongside the aud array.
+// Email is required by MCP tools that need to resolve the authenticated
+// member to a PB users record (cross-system identity).
 type Claims struct {
 	jwt.RegisteredClaims
 	AuthorizedParty string `json:"azp"`
+	Email           string `json:"email"`
+	EmailVerified   bool   `json:"email_verified"`
 }
 
 // validMethods mirrors the algorithms advertised by auth.mensa.it.
