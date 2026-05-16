@@ -83,6 +83,58 @@ func hydrateRecord(app core.App, typ string, rec *core.Record, score float64) It
 			}
 			item.DeepLink = "mensa://quid/" + rec.GetString("category_id")
 		}
+	case "local_office":
+		// Gruppo locale: deep link al linktree del gruppo.
+		item.Title = rec.GetString("name")
+		item.Subtitle = rec.GetString("region")
+		item.Image = firstFileURL(rec, "image")
+		if slug := rec.GetString("slug"); slug != "" {
+			item.DeepLink = "mensa://local-office/" + slug
+		}
+	case "local_office_admin", "local_office_test_assistant":
+		// Ruolo in un gruppo locale (segretario / cosegretario / assistente).
+		// Title costruito nel builder gia` come "Ruolo di Gruppo".
+		// Subtitle = nome socio (info principale per chi cerca il nome).
+		// Image = avatar del socio dal members_registry.
+		// Deep link = pagina del gruppo (slug).
+		officeID := rec.GetString("local_office")
+		userID := rec.GetString("user")
+		var officeName, officeSlug, officeRegion string
+		if officeID != "" {
+			if o, err := app.FindRecordById("local_offices", officeID); err == nil {
+				officeName = o.GetString("name")
+				officeSlug = o.GetString("slug")
+				officeRegion = o.GetString("region")
+			}
+		}
+		memberName := ""
+		var memberAvatar string
+		if userID != "" {
+			if mr, err := app.FindRecordById("members_registry", userID); err == nil {
+				memberName = mr.GetString("name")
+				memberAvatar = firstFileURL(mr, "image")
+			}
+		}
+		// Title sintetico anche se il record ha solo i campi PB grezzi
+		roleLabel := "Assistente al test"
+		if typ == "local_office_admin" {
+			if rec.GetBool("is_the_officer") {
+				roleLabel = "Segretario"
+			} else {
+				roleLabel = "Co-segretario"
+			}
+		}
+		if officeName != "" {
+			item.Title = roleLabel + " di " + officeName
+		} else {
+			item.Title = roleLabel
+		}
+		item.Subtitle = memberName
+		item.Image = memberAvatar
+		_ = officeRegion
+		if officeSlug != "" {
+			item.DeepLink = "mensa://local-office/" + officeSlug
+		}
 	case "linktree_link":
 		// Link del linktree di un gruppo locale. Title = titolo del link,
 		// subtitle = nome del gruppo, image = avatar del gruppo, deep_link

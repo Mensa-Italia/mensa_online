@@ -102,6 +102,42 @@ func indexPodcastEpisodeAsync(e *core.RecordEvent) error {
 // gruppo locale. Le sezioni (kind="section") e i link disattivati
 // (active=false) vengono rimossi dall'indice: l'utente finale non se ne fa
 // nulla, e per i link reattivati ripopoleremo al successivo update.
+func indexLocalOfficeAsync(e *core.RecordEvent) error {
+	rec := e.Record
+	app := e.App
+	go func() {
+		doc := BuildLocalOfficeDoc(app, rec)
+		if err := search.Upsert(doc); err != nil {
+			app.Logger().Error("search index upsert failed", "type", "local_office", "id", rec.Id, "err", err)
+		}
+	}()
+	return e.Next()
+}
+
+func indexLocalOfficeAdminAsync(e *core.RecordEvent) error {
+	rec := e.Record
+	app := e.App
+	go func() {
+		doc := BuildLocalOfficeAdminDoc(app, rec)
+		if err := search.Upsert(doc); err != nil {
+			app.Logger().Error("search index upsert failed", "type", "local_office_admin", "id", rec.Id, "err", err)
+		}
+	}()
+	return e.Next()
+}
+
+func indexLocalOfficeTestAssistantAsync(e *core.RecordEvent) error {
+	rec := e.Record
+	app := e.App
+	go func() {
+		doc := BuildLocalOfficeTestAssistantDoc(app, rec)
+		if err := search.Upsert(doc); err != nil {
+			app.Logger().Error("search index upsert failed", "type", "local_office_test_assistant", "id", rec.Id, "err", err)
+		}
+	}()
+	return e.Next()
+}
+
 func indexLinktreeLinkAsync(e *core.RecordEvent) error {
 	rec := e.Record
 	app := e.App

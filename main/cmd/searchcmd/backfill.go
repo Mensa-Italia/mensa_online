@@ -20,7 +20,7 @@ const batchSize = 500
 
 type builder func(core.App, *core.Record) search.Doc
 
-var DefaultCollections = []string{"events", "sigs", "deals", "documents", "members_registry", "org_chart_groups", "org_chart_members", "local_offices_links"}
+var DefaultCollections = []string{"events", "sigs", "deals", "documents", "members_registry", "org_chart_groups", "org_chart_members", "local_offices_links", "local_offices", "local_offices_admins", "local_offices_test_assistants"}
 
 // filterFor restituisce un filtro PB opzionale per ogni collection durante
 // il backfill. members_registry indicizza solo i soci attivi (is_active=true).
@@ -129,6 +129,12 @@ func resolveBuilder(collection string) builder {
 		return hooks.BuildOrgRoleDoc
 	case "local_offices_links":
 		return hooks.BuildLinktreeLinkDoc
+	case "local_offices":
+		return hooks.BuildLocalOfficeDoc
+	case "local_offices_admins":
+		return hooks.BuildLocalOfficeAdminDoc
+	case "local_offices_test_assistants":
+		return hooks.BuildLocalOfficeTestAssistantDoc
 	default:
 		return nil
 	}

@@ -38,6 +38,12 @@ var allTypes = []searchableType{
 		Description: "Single episodes of imported podcasts. Audio is hosted on Minio. Fields: title, description, podcast, duration_seconds, published_at."},
 	{Key: "linktree_link", Collection: "local_offices_links", Singular: "local office link", Plural: "local office links",
 		Description: "Linktree-style links curated by each local office. Tree structure via parent + kind (section|link). Only active=true links are indexed."},
+	{Key: "local_office", Collection: "local_offices", Singular: "local office", Plural: "local offices",
+		Description: "Italian regional Mensa local offices (Lombardia, Lazio, ecc.). Fields: name, region, slug, bio, image."},
+	{Key: "local_office_admin", Collection: "local_offices_admins", Singular: "local office admin", Plural: "local office admins",
+		Description: "Segretari + co-segretari (is_the_officer=true → segretario) per ogni gruppo locale. Search anche per nome del referente: il title del risultato e' 'Segretario di <Office>' o 'Co-segretario di <Office>'."},
+	{Key: "local_office_test_assistant", Collection: "local_offices_test_assistants", Singular: "local office test assistant", Plural: "local office test assistants",
+		Description: "Assistenti al test di un gruppo locale. Search anche per nome dell'assistente: il title del risultato e' 'Assistente al test di <Office>'."},
 }
 
 // typeByKey resolves Key → *searchableType.

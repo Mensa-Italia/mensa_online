@@ -85,6 +85,22 @@ func Load(app core.App) {
 	app.OnRecordAfterUpdateSuccess("local_offices_links").BindFunc(indexLinktreeLinkAsync)
 	app.OnRecordAfterDeleteSuccess("local_offices_links").BindFunc(unindexAsync)
 
+	// Gruppi locali e referenti: indicizzati come 3 tipi distinti
+	// (local_office, local_office_admin, local_office_test_assistant).
+	// Cercando il nome di un segretario/cosegretario/assistente trova la
+	// riga di ruolo + l'ufficio di appartenenza nel titolo.
+	app.OnRecordAfterCreateSuccess("local_offices").BindFunc(indexLocalOfficeAsync)
+	app.OnRecordAfterUpdateSuccess("local_offices").BindFunc(indexLocalOfficeAsync)
+	app.OnRecordAfterDeleteSuccess("local_offices").BindFunc(unindexAsync)
+
+	app.OnRecordAfterCreateSuccess("local_offices_admins").BindFunc(indexLocalOfficeAdminAsync)
+	app.OnRecordAfterUpdateSuccess("local_offices_admins").BindFunc(indexLocalOfficeAdminAsync)
+	app.OnRecordAfterDeleteSuccess("local_offices_admins").BindFunc(unindexAsync)
+
+	app.OnRecordAfterCreateSuccess("local_offices_test_assistants").BindFunc(indexLocalOfficeTestAssistantAsync)
+	app.OnRecordAfterUpdateSuccess("local_offices_test_assistants").BindFunc(indexLocalOfficeTestAssistantAsync)
+	app.OnRecordAfterDeleteSuccess("local_offices_test_assistants").BindFunc(unindexAsync)
+
 	// podcasts: quando l'admin crea una serie, hook async popola metadata
 	// + scarica tutti gli episodi via yt-dlp.
 	app.OnRecordAfterCreateSuccess("podcasts").BindFunc(PodcastAfterCreateAsync)

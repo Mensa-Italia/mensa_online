@@ -136,6 +136,108 @@ func BuildOrgRoleDoc(app core.App, rec *core.Record) search.Doc {
 	}
 }
 
+// BuildLocalOfficeDoc indicizza un gruppo locale (Lombardia, Lazio, ecc.).
+// Tag = regione, body = name + region + bio. Visibility "members" (gli
+// utenti devono essere autenticati per vedere il dettaglio dell'ufficio).
+func BuildLocalOfficeDoc(app core.App, rec *core.Record) search.Doc {
+	region := rec.GetString("region")
+	body := joinNonEmpty(" ", rec.GetString("name"), region, rec.GetString("bio"))
+	return search.Doc{
+		ID:         rec.Id,
+		Type:       "local_office",
+		Title:      rec.GetString("name"),
+		Body:       body,
+		Tags:       filterNonEmpty(region),
+		Region:     region,
+		Visibility: "members",
+		CreatedAt:  rec.GetDateTime("created").Time(),
+	}
+}
+
+// BuildLocalOfficeAdminDoc indicizza un segretario o co-segretario di un
+// gruppo locale. Title costruito come "Segretario di X" o "Co-segretario
+// di X" cosi` cercando il nome del referente compare anche l'ufficio.
+// Body raccoglie nome socio + email per matching full-text.
+func BuildLocalOfficeAdminDoc(app core.App, rec *core.Record) search.Doc {
+	officeName, region := lookupOfficeNameRegion(app, rec.GetString("local_office"))
+	memberName, memberMail := lookupMemberNameMail(app, rec.GetString("user"))
+
+	roleLabel := "Co-segretario"
+	if rec.GetBool("is_the_officer") {
+		roleLabel = "Segretario"
+	}
+	title := roleLabel
+	if officeName != "" {
+		title = roleLabel + " di " + officeName
+	}
+	body := joinNonEmpty(" ", memberName, memberMail, officeName, region, roleLabel)
+	return search.Doc{
+		ID:         rec.Id,
+		Type:       "local_office_admin",
+		Title:      title,
+		Body:       body,
+		Tags:       filterNonEmpty(region, roleLabel, officeName),
+		Region:     region,
+		Visibility: "members",
+		CreatedAt:  rec.GetDateTime("created").Time(),
+	}
+}
+
+// BuildLocalOfficeTestAssistantDoc indicizza un assistente al test di un
+// gruppo locale. Stessa logica di BuildLocalOfficeAdminDoc ma ruolo
+// "Assistente al test".
+func BuildLocalOfficeTestAssistantDoc(app core.App, rec *core.Record) search.Doc {
+	officeName, region := lookupOfficeNameRegion(app, rec.GetString("local_office"))
+	memberName, memberMail := lookupMemberNameMail(app, rec.GetString("user"))
+
+	const roleLabel = "Assistente al test"
+	title := roleLabel
+	if officeName != "" {
+		title = roleLabel + " di " + officeName
+	}
+	body := joinNonEmpty(" ", memberName, memberMail, officeName, region, roleLabel)
+	return search.Doc{
+		ID:         rec.Id,
+		Type:       "local_office_test_assistant",
+		Title:      title,
+		Body:       body,
+		Tags:       filterNonEmpty(region, roleLabel, officeName),
+		Region:     region,
+		Visibility: "members",
+		CreatedAt:  rec.GetDateTime("created").Time(),
+	}
+}
+
+// lookupOfficeNameRegion ritorna (name, region) di un local_office, o
+// (\"\", \"\") se non trovato.
+func lookupOfficeNameRegion(app core.App, officeID string) (string, string) {
+	if officeID == "" {
+		return "", ""
+	}
+	o, err := app.FindRecordById("local_offices", officeID)
+	if err != nil || o == nil {
+		return "", ""
+	}
+	return o.GetString("name"), o.GetString("region")
+}
+
+// lookupMemberNameMail risale al socio collegato a un users.id, leggendo
+// nome e alias_mail da members_registry (entry autoritativa per
+// l'anagrafica). Se l'utente non ha record in members_registry, ripiega
+// su users.name.
+func lookupMemberNameMail(app core.App, userID string) (string, string) {
+	if userID == "" {
+		return "", ""
+	}
+	if mr, err := app.FindRecordById("members_registry", userID); err == nil && mr != nil {
+		return mr.GetString("name"), mr.GetString("alias_mail")
+	}
+	if u, err := app.FindRecordById("users", userID); err == nil && u != nil {
+		return u.GetString("name"), u.GetString("email")
+	}
+	return "", ""
+}
+
 // BuildLinktreeLinkDoc indicizza un singolo link del linktree di un gruppo
 // locale come tipo "linktree_link". Solo i record kind="link" e active=true
 // vanno chiamati qui (il filtro lo fa il caller / hook). Pubblico, non

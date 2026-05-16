@@ -29,7 +29,7 @@ func applyRecencyBoost(score float64, created, now time.Time) float64 {
 	return score / (1 + years/2)
 }
 
-var allTypes = []string{"event", "sig", "deal", "document", "member", "org_group", "org_role", "quid_issue", "quid_article", "podcast", "podcast_episode", "linktree_link"}
+var allTypes = []string{"event", "sig", "deal", "document", "member", "org_group", "org_role", "quid_issue", "quid_article", "podcast", "podcast_episode", "linktree_link", "local_office", "local_office_admin", "local_office_test_assistant"}
 
 // collectionFor maps a search type to its PocketBase collection name.
 func collectionFor(typ string) string {
@@ -56,6 +56,12 @@ func collectionFor(typ string) string {
 		return "podcasts"
 	case "linktree_link":
 		return "local_offices_links"
+	case "local_office":
+		return "local_offices"
+	case "local_office_admin":
+		return "local_offices_admins"
+	case "local_office_test_assistant":
+		return "local_offices_test_assistants"
 	case "podcast_episode":
 		return "podcast_episodes"
 	default:
