@@ -26,10 +26,15 @@ func init() {
 			return err
 		}
 
-		// 1. Image MaxSize: aggiorna il field esistente in-place.
+		// 1. Image: MaxSize 2GB + thumb 0x500 (resize a 500px di altezza,
+		//    width preservato dall'aspect ratio). Serve all'app per le card
+		//    senza scaricare la full-res.
 		if f := col.Fields.GetByName("image"); f != nil {
 			if img, ok := f.(*core.FileField); ok {
 				img.MaxSize = 2_000_000_000
+				if !containsThumb(img.Thumbs, "0x500") {
+					img.Thumbs = append(img.Thumbs, "0x500")
+				}
 			}
 		}
 
@@ -51,6 +56,7 @@ func init() {
 		if f := col.Fields.GetByName("image"); f != nil {
 			if img, ok := f.(*core.FileField); ok {
 				img.MaxSize = 0 // torna al default PB
+				img.Thumbs = removeThumb(img.Thumbs, "0x500")
 			}
 		}
 		// Down: ripristina la rule di 1779002200 (bio-only).
@@ -64,4 +70,23 @@ func init() {
 		col.UpdateRule = &rule
 		return app.Save(col)
 	})
+}
+
+func containsThumb(list []string, t string) bool {
+	for _, x := range list {
+		if x == t {
+			return true
+		}
+	}
+	return false
+}
+
+func removeThumb(list []string, t string) []string {
+	out := list[:0]
+	for _, x := range list {
+		if x != t {
+			out = append(out, x)
+		}
+	}
+	return out
 }
