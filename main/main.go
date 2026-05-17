@@ -8,6 +8,7 @@ import (
 	"mensadb/main/cmd/searchcmd"
 	"mensadb/main/crons"
 	"mensadb/main/hooks"
+	"mensadb/main/api/zitadelauth"
 	"mensadb/main/links"
 	"mensadb/main/utilities"
 	"mensadb/mcp"
@@ -63,6 +64,7 @@ func main() {
 		printful.SetupWebhook(env.GetPrintfulWebhookURL())
 		go importers.GetFullMailList()
 		tolgee.Load(env.GetTolgeeKey(), e.App)
+		e.Router.Bind(zitadelauth.LoadAuth())
 		api.Load(e.Router.Group("/api"))
 		e.Router.GET("/ical/{hash}", RetrieveICAL)
 		e.Router.GET("/static/{path...}", apis.Static(os.DirFS("./pb_public"), false))
