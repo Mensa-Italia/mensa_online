@@ -104,7 +104,7 @@ func generatePKCE() (verifier, challenge string, err error) {
 }
 
 func startAuthRequest(challenge string) (string, error) {
-	host := strings.TrimRight(env.GetZitadelHost(), "/")
+	host := normalizeHTTPHost(env.GetZitadelHost())
 	q := url.Values{}
 	q.Set("client_id", env.GetZitadelOIDCClientID())
 	q.Set("redirect_uri", env.GetZitadelOIDCRedirectURI())
@@ -192,7 +192,7 @@ func extractCodeFromCallback(callbackURL string) (string, error) {
 }
 
 func exchangeCodeForTokens(code, verifier string) (*TokenSet, error) {
-	host := strings.TrimRight(env.GetZitadelHost(), "/")
+	host := normalizeHTTPHost(env.GetZitadelHost())
 	form := url.Values{}
 	form.Set("grant_type", "authorization_code")
 	form.Set("code", code)
