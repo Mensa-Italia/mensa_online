@@ -278,7 +278,7 @@ I contributi sono benvenuti. Prima di aprire una Pull Request leggi le [Contribu
 1. Fork del repository e branch dedicato dal ramo `dev` (`feature/xxx` o `fix/xxx`)
 2. `go build ./...` + `go vet ./...` devono essere puliti
 3. `golangci-lint run --timeout=5m` passa senza warning
-4. Nessun segreto committato (il workflow Gitleaks blocca i PR)
+4. Nessun segreto committato. Workflow Gitleaks blocca i PR; in locale installa una volta sola il pre-commit hook con `brew install pre-commit && pre-commit install` (config in `.pre-commit-config.yaml`)
 5. Se aggiungi una nuova variabile d'ambiente: aggiorna `tools/env/init.go` + la pagina [Configuration](https://github.com/Mensa-Italia/mensa_online/wiki/Configuration)
 6. Se modifichi lo schema: aggiungi una migrazione in `migrations/<timestamp>_<nome>.go` e verifica che l'automigrate funzioni
 7. Commit in italiano con prefisso conventional (`feat:`, `fix:`, `chore:`, `refactor:`, `docs:`)

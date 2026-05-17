@@ -1,0 +1,10 @@
+# Hook locali per evitare di committare segreti.
+# Setup una volta sola:
+#   brew install pre-commit  (o pipx install pre-commit)
+#   pre-commit install
+# Da quel momento `git commit` esegue gitleaks sul diff prima di accettare.
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
