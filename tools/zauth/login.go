@@ -127,6 +127,14 @@ func startAuthRequest(challenge string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	// Header obbligatorio per far generare a Zitadel un auth request v2
+	// (visibile via OIDCServiceV2): identifica il service user che agisce
+	// da "login client". Senza, Zitadel crea un auth request legacy v1
+	// non queryable via gRPC e CreateCallback fallisce con NotFound.
+	if lcid := env.GetZitadelLoginClientUserID(); lcid != "" {
+		req.Header.Set("x-zitadel-login-client", lcid)
+		req.Header.Set("Authorization", "Bearer "+env.GetZitadelPAT())
+	}
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return "", err
@@ -146,8 +154,12 @@ func startAuthRequest(challenge string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if id := parsed.Query().Get("authRequest"); id != "" {
-		return id, nil
+	// Zitadel redirige verso /ui/login/login?authRequestID=<id>.
+	// Accettiamo entrambe le grafie per robustezza fra versioni.
+	for _, key := range []string{"authRequestID", "authRequest"} {
+		if id := parsed.Query().Get(key); id != "" {
+			return id, nil
+		}
 	}
 	// Fallback: Zitadel a volte mette l'id come ultimo segmento del path.
 	segs := strings.Split(strings.TrimRight(parsed.Path, "/"), "/")

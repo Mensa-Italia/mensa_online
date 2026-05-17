@@ -44,9 +44,10 @@ type config struct {
 	ZitadelPAT              string `env:"ZITADEL_PAT"`
 	ZitadelHOST             string `env:"ZITADEL_HOST"`
 	ZitadelOrganizationID   string `env:"ZITADEL_ORGANIZATION_ID"`
-	ZitadelOIDCClientID     string `env:"ZITADEL_OIDC_CLIENT_ID"`
-	ZitadelOIDCClientSecret string `env:"ZITADEL_OIDC_CLIENT_SECRET" envDefault:""`
-	ZitadelOIDCRedirectURI  string `env:"ZITADEL_OIDC_REDIRECT_URI"`
+	ZitadelOIDCClientID       string `env:"ZITADEL_OIDC_CLIENT_ID"`
+	ZitadelOIDCClientSecret   string `env:"ZITADEL_OIDC_CLIENT_SECRET" envDefault:""`
+	ZitadelOIDCRedirectURI    string `env:"ZITADEL_OIDC_REDIRECT_URI"`
+	ZitadelLoginClientUserID  string `env:"ZITADEL_LOGIN_CLIENT_USER_ID"`
 	MCPClientID             string `env:"MCP_CLIENT_ID" envDefault:""`
 }
 
@@ -99,6 +100,9 @@ func MustValidate() error {
 	}
 	if cfg.ZitadelOIDCRedirectURI == "" {
 		missing = append(missing, "ZITADEL_OIDC_REDIRECT_URI")
+	}
+	if cfg.ZitadelLoginClientUserID == "" {
+		missing = append(missing, "ZITADEL_LOGIN_CLIENT_USER_ID")
 	}
 	if cfg.Area32InternalEmail == "" {
 		missing = append(missing, "AREA32_INTERNAL_EMAIL")
@@ -245,6 +249,10 @@ func GetZitadelOIDCClientSecret() string {
 
 func GetZitadelOIDCRedirectURI() string {
 	return cfg.ZitadelOIDCRedirectURI
+}
+
+func GetZitadelLoginClientUserID() string {
+	return cfg.ZitadelLoginClientUserID
 }
 
 func GetMCPClientID() string {
