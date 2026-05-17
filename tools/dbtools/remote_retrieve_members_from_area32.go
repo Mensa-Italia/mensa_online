@@ -183,7 +183,10 @@ func UpdateMembers(app core.App, member map[string]any) string {
 		if aliasMail == "" {
 			aliasMail = raw
 		}
-		if dm, ok := member["deepData"].(map[string]string); ok {
+		// dm puo` essere un map[string]string ma anche un typed nil (quando
+		// GetRegSocioDeepData fallisce dopo retry): in quel caso assegnare
+		// una chiave panicherebbe. Skippiamo la riscrittura di full_data.
+		if dm, ok := member["deepData"].(map[string]string); ok && dm != nil {
 			dm["E-mail:"] = "mailto:" + aliasMail
 			if b, err := json.Marshal(dm); err == nil {
 				fullDataBytes = b
