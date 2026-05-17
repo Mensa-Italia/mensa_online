@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"mensadb/tools/aitools"
@@ -414,11 +415,35 @@ func (api *ScraperApi) DownloadFile(url string) (*filesystem.File, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Quando la sessione cloud32 scade le richieste a /Documenti/... ritornano
+	// la pagina di login HTML (qualche centinaio di byte). Va rifiutata: se la
+	// salvassimo come immagine il client vedrebbe un avatar rotto.
+	ct := strings.ToLower(resp.Header().Get("Content-Type"))
+	if strings.HasPrefix(ct, "text/") || strings.Contains(ct, "html") {
+		return nil, fmt.Errorf("download: rifiutato content-type non-binario %q per %s", ct, url)
+	}
+	if looksLikeHTMLBody(all) {
+		return nil, fmt.Errorf("download: corpo HTML inatteso per %s (probabile login page)", url)
+	}
 	file, err := filesystem.NewFileFromBytes(all, fileName)
 	if err != nil {
 		return nil, err
 	}
 	return file, nil
+}
+
+func looksLikeHTMLBody(b []byte) bool {
+	if len(b) == 0 {
+		return false
+	}
+	// Sniffing minimale: i primi byte non whitespace iniziano per "<".
+	for _, c := range b {
+		if c == ' ' || c == '\t' || c == '\n' || c == '\r' {
+			continue
+		}
+		return c == '<'
+	}
+	return false
 }
 
 func (api *ScraperApi) GetAllRegSoci() ([]map[string]any, error) {
@@ -616,29 +641,91 @@ func (api *ScraperApi) GetRegSoci(page int, search string) ([]map[string]any, er
 	return users, nil
 }
 
-// GetRegSocioDeepData retrieves deep data for a member from their full profile page
+// GetRegSocioDeepData retrieves deep data for a member from their full profile page.
+// Ritorna nil quando la pagina ottenuta e` la login page di cloud32 (sessione
+// scaduta o anti-abuse): in quel caso il chiamante deve trattare il record
+// come "fetch fallito" e NON sovrascrivere quello che e` gia` in DB.
 func (api *ScraperApi) GetRegSocioDeepData(url string) map[string]string {
-	resp, err := api.client.R().Get(url)
-	if err != nil {
-		return map[string]string{}
+	parse := func() (map[string]string, bool) {
+		resp, err := api.client.R().Get(url)
+		if err != nil {
+			return nil, false
+		}
+		raw, err := io.ReadAll(resp.RawBody())
+		if err != nil {
+			return nil, false
+		}
+		if isLoginPage(raw) {
+			return nil, true
+		}
+		doc, err := goquery.NewDocumentFromReader(bytes.NewReader(raw))
+		if err != nil {
+			return nil, false
+		}
+		data := map[string]string{}
+		doc.Find(".form-group").Each(func(i int, s *goquery.Selection) {
+			key := strings.TrimSpace(s.Find("div").First().Text())
+			value := strings.TrimSpace(s.Find("label").Last().Text())
+			if value == "" {
+				value, _ = s.Find("a").Last().Attr("href")
+			}
+			if key != "" && value != "" {
+				data[key] = value
+			}
+		})
+		if !looksLikeValidDeepData(data) {
+			return nil, true
+		}
+		return data, false
 	}
 
-	doc, err := goquery.NewDocumentFromReader(resp.RawBody())
-	if err != nil {
-		return map[string]string{}
+	data, isLogin := parse()
+	if data != nil {
+		return data
 	}
-
-	data := map[string]string{}
-	doc.Find(".form-group").Each(func(i int, s *goquery.Selection) {
-		key := strings.TrimSpace(s.Find("div").First().Text())
-		value := strings.TrimSpace(s.Find("label").Last().Text())
-		if value == "" {
-			value, _ = s.Find("a").Last().Attr("href")
-		}
-		if key != "" && value != "" {
-			data[key] = value
-		}
-	})
-
+	if !isLogin || api.email == "" || api.password == "" {
+		return nil
+	}
+	log.Println("area32: deep data sessione scaduta, relogin")
+	if _, err := api.DoLoginAndRetrieveMain(api.email, api.password); err != nil {
+		log.Println("area32: relogin deep data failed:", err)
+		return nil
+	}
+	data, _ = parse()
 	return data
+}
+
+// isLoginPage riconosce la pagina di login di cloud32 dai suoi marker
+// caratteristici (form con password reset). Funziona sui byte raw cosi`
+// possiamo controllarla prima di parsare HTML.
+func isLoginPage(raw []byte) bool {
+	low := bytes.ToLower(raw)
+	if bytes.Contains(low, []byte(`type="password"`)) {
+		return true
+	}
+	if bytes.Contains(low, []byte("hai dimenticato la password")) {
+		return true
+	}
+	if bytes.Contains(low, []byte("/associazioni/utenti/password/reset")) {
+		return true
+	}
+	return false
+}
+
+// looksLikeValidDeepData rifiuta i map che sembrano estratti dalla login
+// page (E-mail: vuota, presenza della voce "Hai dimenticato la password?").
+func looksLikeValidDeepData(d map[string]string) bool {
+	if len(d) == 0 {
+		return false
+	}
+	if _, hasReset := d["Hai dimenticato la password?"]; hasReset {
+		return false
+	}
+	if mail, ok := d["E-mail:"]; ok && strings.TrimSpace(strings.ReplaceAll(mail, "mailto:", "")) == "" {
+		// Una email vuota su una pagina anagrafica e` praticamente sempre
+		// segnale che abbiamo letto la login page senza scattare gli altri
+		// marker (es. lingua diversa nel template).
+		return false
+	}
+	return true
 }
