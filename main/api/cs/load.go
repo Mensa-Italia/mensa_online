@@ -18,6 +18,7 @@ func Load(e *router.RouterGroup[*core.RequestEvent]) {
 	exapp.Load(e.Group("/exapp"))
 
 	e.POST("/auth-with-area", AuthWithAreaHandler)
+	e.POST("/auth-with-zitadel", AuthWithZitadelHandler)
 	e.POST("/send-update-notify", SendUpdateNotifyHandler)
 	e.GET("/force-update-addons", ForceUpdateAddonsHandler)
 	e.GET("/force-notification", forceNotification)
