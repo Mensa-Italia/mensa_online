@@ -1,26 +1,54 @@
 package spatial
 
 import (
-	"github.com/tidwall/gjson"
-	"os"
+	_ "embed"
 	"strings"
+	"sync"
+
+	"github.com/tidwall/gjson"
 )
 
+//go:embed province.json
+var provinceJSON []byte
+
+var (
+	provinceOnce  sync.Once
+	provinceIndex map[string]string // lowercase nome -> regione
+	provinceList  []provinceEntry   // per il fallback substring
+)
+
+type provinceEntry struct {
+	name   string // lowercase
+	region string
+}
+
+func loadProvinces() {
+	provinceOnce.Do(func() {
+		provinceIndex = make(map[string]string, 128)
+		for _, item := range gjson.ParseBytes(provinceJSON).Array() {
+			name := strings.ToLower(item.Get("nome").String())
+			region := item.Get("regione").String()
+			if name == "" || region == "" {
+				continue
+			}
+			provinceIndex[name] = region
+			provinceList = append(provinceList, provinceEntry{name: name, region: region})
+		}
+	})
+}
+
 func CheckProvinceFromState(state string) string {
-	dataRead, err := os.ReadFile("pb_public/province.json")
-	if err != nil {
+	loadProvinces()
+	if state == "" {
 		return "NaN"
 	}
-	province := gjson.ParseBytes(dataRead)
-
-	for _, item := range province.Array() {
-		if strings.EqualFold(item.Get("nome").String(), state) {
-			return item.Get("regione").String()
-		}
+	key := strings.ToLower(strings.TrimSpace(state))
+	if region, ok := provinceIndex[key]; ok {
+		return region
 	}
-	for _, item := range province.Array() {
-		if strings.Contains(strings.ToLower(item.Get("nome").String()), strings.ToLower(state)) {
-			return item.Get("regione").String()
+	for _, p := range provinceList {
+		if strings.Contains(p.name, key) {
+			return p.region
 		}
 	}
 	return "NaN"

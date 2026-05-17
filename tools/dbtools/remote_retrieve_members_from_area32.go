@@ -116,56 +116,138 @@ func RemoteRetrieveMembersFromArea32(app core.App) {
 
 }
 
+// memberDataDigest racchiude in ordine deterministico i campi anagrafici
+// da hashare per decidere se una riga members_registry e` cambiata.
+// json.Marshal di una struct rispetta l'ordine dei campi, quindi l'output
+// e` stabile e adatto a un confronto SHA256.
+type memberDataDigest struct {
+	Name            string `json:"name"`
+	City            string `json:"city"`
+	Birthdate       string `json:"birthdate"`
+	State           string `json:"state"`
+	Area            string `json:"area"`
+	OriginalMail    string `json:"original_mail"`
+	AliasMail       string `json:"alias_mail"`
+	FullData        string `json:"full_data"`
+	IsActive        bool   `json:"is_active"`
+	FullProfileLink string `json:"full_profile_link"`
+}
+
+func computeDataHash(d memberDataDigest) string {
+	buf, err := json.Marshal(d)
+	if err != nil {
+		return ""
+	}
+	h := sha256.Sum256(buf)
+	return hex.EncodeToString(h[:])
+}
+
 // Funzione per aggiornare i membri nel database
 func UpdateMembers(app core.App, member map[string]any) string {
-	// Recupera la collezione "members" dal database
 	id, err := app.FindCollectionByNameOrId("members_registry")
 	if err != nil {
 		return ""
 	}
 	memberId := member["uid"].(string)
-	// Controlla se il membro esiste già nel database
+
 	newRecord, err := app.FindRecordById(id, memberId)
+	isNew := false
 	if err != nil {
 		newRecord = core.NewRecord(id)
-		newRecord.Id = member["uid"].(string)
+		newRecord.Id = memberId
+		isNew = true
 	}
-	newRecord.Set("name", member["name"].(string))
-	newRecord.Set("city", member["city"].(string))
-	newRecord.Set("birthdate", member["birthDate"])
-	newRecord.Set("state", member["state"].(string))
-	newRecord.Set("area", member["area"].(string))
-	marshal, err := json.Marshal(member["deepData"])
-	if err == nil {
-		elems := gjson.ParseBytes(marshal)
-		newRecord.Set("original_mail", strings.ToLower(strings.TrimSpace(strings.ReplaceAll(elems.Get("E-mail:").String(), "mailto:", ""))))
-		alias := importers.RetrieveAliasFromMail(strings.ToLower(strings.TrimSpace(strings.ReplaceAll(elems.Get("E-mail:").String(), "mailto:", ""))))
-		if alias == "" {
-			alias = strings.ToLower(strings.TrimSpace(strings.ReplaceAll(elems.Get("E-mail:").String(), "mailto:", "")))
-		}
-		newRecord.Set("alias_mail", alias)
 
-		member["deepData"].(map[string]string)["E-mail:"] = "mailto:" + alias
-		marshal, err := json.Marshal(member["deepData"])
-		if err == nil {
-			newRecord.Set("full_data", marshal)
-		}
+	name, _ := member["name"].(string)
+	city, _ := member["city"].(string)
+	state, _ := member["state"].(string)
+	area, _ := member["area"].(string)
+	fullProfileLink, _ := member["full_profile_link"].(string)
+
+	// birthdate puo` essere time.Time o stringa: serializziamo a stringa per
+	// avere un input deterministico al digest.
+	birthdate := member["birthDate"]
+	birthdateStr := ""
+	if b, err := json.Marshal(birthdate); err == nil {
+		birthdateStr = string(b)
 	}
-	if img, _ := member["image"].(*filesystem.File); img != nil {
-		newHash := fileSHA256(img)
-		// Se i bytes scaricati sono identici a quelli gia` salvati evitiamo
-		// di sovrascrivere il file: PocketBase rinominerebbe l'asset e
-		// invaliderebbe le cache HTTP/CDN lato client.
-		if newHash == "" || newHash != newRecord.GetString("image_hash") {
-			newRecord.Set("image", img)
-			if newHash != "" {
-				newRecord.Set("image_hash", newHash)
+
+	// Estrae email + alias e ricostruisce il payload full_data (mantenendo
+	// la stessa logica originale di sostituzione mailto: con l'alias).
+	originalMail, aliasMail, fullDataBytes := "", "", []byte(nil)
+	if deepMarshal, err := json.Marshal(member["deepData"]); err == nil {
+		elems := gjson.ParseBytes(deepMarshal)
+		raw := strings.ToLower(strings.TrimSpace(strings.ReplaceAll(elems.Get("E-mail:").String(), "mailto:", "")))
+		originalMail = raw
+		aliasMail = importers.RetrieveAliasFromMail(raw)
+		if aliasMail == "" {
+			aliasMail = raw
+		}
+		if dm, ok := member["deepData"].(map[string]string); ok {
+			dm["E-mail:"] = "mailto:" + aliasMail
+			if b, err := json.Marshal(dm); err == nil {
+				fullDataBytes = b
 			}
 		}
 	}
-	newRecord.Set("is_active", true)
-	newRecord.Set("full_profile_link", member["full_profile_link"])
-	// Salva il record nel database
+
+	digest := memberDataDigest{
+		Name:            name,
+		City:            city,
+		Birthdate:       birthdateStr,
+		State:           state,
+		Area:            area,
+		OriginalMail:    originalMail,
+		AliasMail:       aliasMail,
+		FullData:        string(fullDataBytes),
+		IsActive:        true,
+		FullProfileLink: fullProfileLink,
+	}
+	newDataHash := computeDataHash(digest)
+
+	img, _ := member["image"].(*filesystem.File)
+	storedImageHash := newRecord.GetString("image_hash")
+	newImageHash := storedImageHash
+	if img != nil {
+		if h := fileSHA256(img); h != "" {
+			newImageHash = h
+		}
+	}
+
+	// Forziamo l'update se la riga era stata disattivata altrove: il digest
+	// porta sempre is_active=true (lo settiamo qui), quindi senza questo
+	// override il riattivamento verrebbe ignorato.
+	dataChanged := isNew || newDataHash == "" ||
+		newDataHash != newRecord.GetString("data_hash") ||
+		!newRecord.GetBool("is_active")
+	imageChanged := img != nil && newImageHash != storedImageHash
+
+	if !dataChanged && !imageChanged {
+		return memberId
+	}
+
+	if dataChanged {
+		newRecord.Set("name", name)
+		newRecord.Set("city", city)
+		newRecord.Set("birthdate", birthdate)
+		newRecord.Set("state", state)
+		newRecord.Set("area", area)
+		newRecord.Set("original_mail", originalMail)
+		newRecord.Set("alias_mail", aliasMail)
+		if len(fullDataBytes) > 0 {
+			newRecord.Set("full_data", fullDataBytes)
+		}
+		newRecord.Set("is_active", true)
+		newRecord.Set("full_profile_link", fullProfileLink)
+		if newDataHash != "" {
+			newRecord.Set("data_hash", newDataHash)
+		}
+	}
+	if imageChanged {
+		newRecord.Set("image", img)
+		newRecord.Set("image_hash", newImageHash)
+	}
+
 	if err := app.Save(newRecord); err != nil {
 		app.Logger().Error("members sync: save failed", "id", newRecord.Id, "err", err)
 	}
