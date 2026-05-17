@@ -8,7 +8,7 @@
 //	ZITADEL_OIDC_CLIENT_SECRET=...   (opz)    \
 //	ZITADEL_OIDC_REDIRECT_URI=https://...     \
 //	go run ./cmd/debug_zitadel_login \
-//	    -email redacted@example.com -password REDACTED-CREDENTIAL
+//	    -email <user@example.com> -password <password>
 //
 // Stampa cosa risponde Zitadel ad ogni step.
 package main
