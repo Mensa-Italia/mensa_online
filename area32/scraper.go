@@ -52,12 +52,39 @@ type ScraperApi struct {
 	jar      *cookiejar.Jar
 	email    string
 	password string
+
+	// reloginMu serializza i tentativi di re-login concorrenti: piu`
+	// goroutine che si accorgono insieme della sessione scaduta non si
+	// rilogegheranno N volte di fila. lastRelogin permette un debounce.
+	reloginMu    sync.Mutex
+	lastRelogin  time.Time
 }
 
 func NewAPI() *ScraperApi {
 	cookieJar, _ := cookiejar.New(nil)
 	client := resty.New().SetTimeout(30 * time.Second).SetCookieJar(cookieJar).SetDoNotParseResponse(true)
 	return &ScraperApi{client: client, jar: cookieJar}
+}
+
+// ensureSession forza una re-login se l'ultima e` piu` vecchia di minAge,
+// altrimenti considera la sessione gia` rinnovata da un'altra goroutine.
+// Thread-safe; debounce a 5s per evitare tempeste di login concorrenti.
+func (api *ScraperApi) ensureSession(reason string) error {
+	if api.email == "" || api.password == "" {
+		return errors.New("area32: credenziali assenti per re-login")
+	}
+	api.reloginMu.Lock()
+	defer api.reloginMu.Unlock()
+	if time.Since(api.lastRelogin) < 5*time.Second {
+		// Qualcun altro si e` appena ri-loggato, riprovo direttamente.
+		return nil
+	}
+	log.Printf("area32: re-login (%s)", reason)
+	if _, err := api.DoLoginAndRetrieveMain(api.email, api.password); err != nil {
+		return err
+	}
+	api.lastRelogin = time.Now()
+	return nil
 }
 
 func (api *ScraperApi) DoLoginAndRetrieveMain(email, password string) (*Area32User, error) {
@@ -396,40 +423,53 @@ func (api *ScraperApi) DownloadFileNoError(url string) *filesystem.File {
 }
 
 func (api *ScraperApi) DownloadFile(url string) (*filesystem.File, error) {
-	resp, err := api.client.R().Head(url)
-	if err != nil {
-		return nil, err
+	// Quando cloud32 chiude la sessione le richieste a /Documenti/...
+	// ritornano la login page HTML al posto del JPEG. Quando lo rileviamo
+	// re-logghiamo e ritentiamo, fino a maxAttempts.
+	const maxAttempts = 3
+	var lastErr error
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		head, err := api.client.R().Head(url)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		fileName := head.Header().Get("content-disposition")
+		if fileName == "" {
+			fileName = "filedownloaded"
+		} else {
+			fileName = strings.Split(fileName, "filename=")[1]
+			fileName = strings.ReplaceAll(fileName, `"`, "")
+		}
+		resp, err := api.client.R().Get(url)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		all, err := io.ReadAll(resp.RawBody())
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		ct := strings.ToLower(resp.Header().Get("Content-Type"))
+		isHTML := strings.HasPrefix(ct, "text/") || strings.Contains(ct, "html") || looksLikeHTMLBody(all)
+		if isHTML {
+			lastErr = fmt.Errorf("download: risposta HTML (probabile login page) per %s", url)
+			if attempt < maxAttempts {
+				if err := api.ensureSession("download HTML su " + url); err != nil {
+					return nil, err
+				}
+				continue
+			}
+			return nil, lastErr
+		}
+		file, err := filesystem.NewFileFromBytes(all, fileName)
+		if err != nil {
+			return nil, err
+		}
+		return file, nil
 	}
-	fileName := resp.Header().Get("content-disposition")
-	if fileName == "" {
-		fileName = "filedownloaded"
-	} else {
-		fileName = strings.Split(fileName, "filename=")[1]
-		fileName = strings.ReplaceAll(fileName, `"`, "")
-	}
-	resp, err = api.client.R().Get(url)
-	if err != nil {
-		return nil, err
-	}
-	all, err := io.ReadAll(resp.RawBody())
-	if err != nil {
-		return nil, err
-	}
-	// Quando la sessione cloud32 scade le richieste a /Documenti/... ritornano
-	// la pagina di login HTML (qualche centinaio di byte). Va rifiutata: se la
-	// salvassimo come immagine il client vedrebbe un avatar rotto.
-	ct := strings.ToLower(resp.Header().Get("Content-Type"))
-	if strings.HasPrefix(ct, "text/") || strings.Contains(ct, "html") {
-		return nil, fmt.Errorf("download: rifiutato content-type non-binario %q per %s", ct, url)
-	}
-	if looksLikeHTMLBody(all) {
-		return nil, fmt.Errorf("download: corpo HTML inatteso per %s (probabile login page)", url)
-	}
-	file, err := filesystem.NewFileFromBytes(all, fileName)
-	if err != nil {
-		return nil, err
-	}
-	return file, nil
+	return nil, lastErr
 }
 
 func looksLikeHTMLBody(b []byte) bool {
@@ -641,28 +681,29 @@ func (api *ScraperApi) GetRegSoci(page int, search string) ([]map[string]any, er
 	return users, nil
 }
 
-// GetRegSocioDeepData retrieves deep data for a member from their full profile page.
-// Ritorna nil quando la pagina ottenuta e` la login page di cloud32 (sessione
-// scaduta o anti-abuse): in quel caso il chiamante deve trattare il record
-// come "fetch fallito" e NON sovrascrivere quello che e` gia` in DB.
+// GetRegSocioDeepData scarica e parsa la pagina anagrafica di un socio.
+// Quando cloud32 chiude la sessione mid-scrape la pagina diventa quella di
+// login (con .form-group "E-mail:" vuota e "Hai dimenticato la password?"):
+// in quel caso re-logghiamo e ritentiamo, fino a maxAttempts.
 func (api *ScraperApi) GetRegSocioDeepData(url string) map[string]string {
-	parse := func() (map[string]string, bool) {
+	const maxAttempts = 3
+	parse := func() (data map[string]string, isLogin bool, ok bool) {
 		resp, err := api.client.R().Get(url)
 		if err != nil {
-			return nil, false
+			return nil, false, false
 		}
 		raw, err := io.ReadAll(resp.RawBody())
 		if err != nil {
-			return nil, false
+			return nil, false, false
 		}
 		if isLoginPage(raw) {
-			return nil, true
+			return nil, true, false
 		}
 		doc, err := goquery.NewDocumentFromReader(bytes.NewReader(raw))
 		if err != nil {
-			return nil, false
+			return nil, false, false
 		}
-		data := map[string]string{}
+		data = map[string]string{}
 		doc.Find(".form-group").Each(func(i int, s *goquery.Selection) {
 			key := strings.TrimSpace(s.Find("div").First().Text())
 			value := strings.TrimSpace(s.Find("label").Last().Text())
@@ -674,25 +715,25 @@ func (api *ScraperApi) GetRegSocioDeepData(url string) map[string]string {
 			}
 		})
 		if !looksLikeValidDeepData(data) {
-			return nil, true
+			return nil, true, false
 		}
-		return data, false
+		return data, false, true
 	}
 
-	data, isLogin := parse()
-	if data != nil {
-		return data
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		data, isLogin, ok := parse()
+		if ok {
+			return data
+		}
+		if !isLogin || attempt == maxAttempts {
+			return nil
+		}
+		if err := api.ensureSession("deep data " + url); err != nil {
+			log.Println("area32: ensureSession deep data failed:", err)
+			return nil
+		}
 	}
-	if !isLogin || api.email == "" || api.password == "" {
-		return nil
-	}
-	log.Println("area32: deep data sessione scaduta, relogin")
-	if _, err := api.DoLoginAndRetrieveMain(api.email, api.password); err != nil {
-		log.Println("area32: relogin deep data failed:", err)
-		return nil
-	}
-	data, _ = parse()
-	return data
+	return nil
 }
 
 // isLoginPage riconosce la pagina di login di cloud32 dai suoi marker
