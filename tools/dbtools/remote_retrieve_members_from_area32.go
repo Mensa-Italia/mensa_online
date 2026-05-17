@@ -150,6 +150,14 @@ func UpdateMembers(app core.App, member map[string]any) string {
 	}
 	memberId := member["uid"].(string)
 
+	// Se lo scraper ha ritornato un deepData "sporco" (login page parsata
+	// come anagrafica: email vuota + voce "Hai dimenticato la password?")
+	// non tocchiamo il record: preserviamo i dati buoni gia` in DB.
+	if !isDeepDataUsable(member["deepData"]) {
+		app.Logger().Warn("members sync: deepData inutilizzabile, skip", "id", memberId)
+		return memberId
+	}
+
 	newRecord, err := app.FindRecordById(id, memberId)
 	isNew := false
 	if err != nil {
@@ -426,6 +434,24 @@ func SnapshotArea32Members(app core.App) {
 		app.Logger().Error("upload snapshot members_registry", "error", err)
 		return
 	}
+}
+
+// isDeepDataUsable filtra i deepData inquinati dalla login page di cloud32
+// (sessione scaduta mid-scrape). I sintomi tipici: map vuota o presenza
+// della voce "Hai dimenticato la password?" con email vuota.
+func isDeepDataUsable(raw any) bool {
+	dm, ok := raw.(map[string]string)
+	if !ok || len(dm) == 0 {
+		return false
+	}
+	if _, hasReset := dm["Hai dimenticato la password?"]; hasReset {
+		return false
+	}
+	mail := strings.TrimSpace(strings.ReplaceAll(dm["E-mail:"], "mailto:", ""))
+	if mail == "" {
+		return false
+	}
+	return true
 }
 
 // fileSHA256 ritorna lo SHA256 esadecimale dei bytes del file in memoria.
