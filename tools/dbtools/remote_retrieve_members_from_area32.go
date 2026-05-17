@@ -2,8 +2,10 @@ package dbtools
 
 import (
 	"crypto/md5"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"io"
 	"mensadb/area32"
 	"mensadb/importers"
 	"mensadb/tools/cdnfiles"
@@ -149,8 +151,17 @@ func UpdateMembers(app core.App, member map[string]any) string {
 			newRecord.Set("full_data", marshal)
 		}
 	}
-	if member["image"].(*filesystem.File) != nil {
-		newRecord.Set("image", member["image"].(*filesystem.File))
+	if img, _ := member["image"].(*filesystem.File); img != nil {
+		newHash := fileSHA256(img)
+		// Se i bytes scaricati sono identici a quelli gia` salvati evitiamo
+		// di sovrascrivere il file: PocketBase rinominerebbe l'asset e
+		// invaliderebbe le cache HTTP/CDN lato client.
+		if newHash == "" || newHash != newRecord.GetString("image_hash") {
+			newRecord.Set("image", img)
+			if newHash != "" {
+				newRecord.Set("image_hash", newHash)
+			}
+		}
 	}
 	newRecord.Set("is_active", true)
 	newRecord.Set("full_profile_link", member["full_profile_link"])
@@ -333,4 +344,23 @@ func SnapshotArea32Members(app core.App) {
 		app.Logger().Error("upload snapshot members_registry", "error", err)
 		return
 	}
+}
+
+// fileSHA256 ritorna lo SHA256 esadecimale dei bytes del file in memoria.
+// Ritorna "" se il reader non e` apribile, cosi` il chiamante puo` decidere
+// di non valorizzare image_hash e ricadere sul comportamento storico.
+func fileSHA256(f *filesystem.File) string {
+	if f == nil || f.Reader == nil {
+		return ""
+	}
+	r, err := f.Reader.Open()
+	if err != nil {
+		return ""
+	}
+	defer r.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, r); err != nil {
+		return ""
+	}
+	return hex.EncodeToString(h.Sum(nil))
 }
