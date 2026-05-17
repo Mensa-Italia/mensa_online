@@ -41,10 +41,13 @@ type config struct {
 	PrintfulWebhookURL     string `env:"PRINTFUL_WEBHOOK_URL" envDefault:""`
 	PrintfulWebhookSecret  string `env:"PRINTFUL_WEBHOOK_SECRET" envDefault:""`
 	UnsplashKey            string `env:"UNSPLASH_KEY" envDefault:""`
-	ZitadelPAT             string `env:"ZITADEL_PAT"`
-	ZitadelHOST            string `env:"ZITADEL_HOST"`
-	ZitadelOrganizationID  string `env:"ZITADEL_ORGANIZATION_ID"`
-	MCPClientID            string `env:"MCP_CLIENT_ID" envDefault:""`
+	ZitadelPAT              string `env:"ZITADEL_PAT"`
+	ZitadelHOST             string `env:"ZITADEL_HOST"`
+	ZitadelOrganizationID   string `env:"ZITADEL_ORGANIZATION_ID"`
+	ZitadelOIDCClientID     string `env:"ZITADEL_OIDC_CLIENT_ID"`
+	ZitadelOIDCClientSecret string `env:"ZITADEL_OIDC_CLIENT_SECRET" envDefault:""`
+	ZitadelOIDCRedirectURI  string `env:"ZITADEL_OIDC_REDIRECT_URI"`
+	MCPClientID             string `env:"MCP_CLIENT_ID" envDefault:""`
 }
 
 var cfg = config{}
@@ -90,6 +93,12 @@ func MustValidate() error {
 	}
 	if cfg.ZitadelOrganizationID == "" {
 		missing = append(missing, "ZITADEL_ORGANIZATION_ID")
+	}
+	if cfg.ZitadelOIDCClientID == "" {
+		missing = append(missing, "ZITADEL_OIDC_CLIENT_ID")
+	}
+	if cfg.ZitadelOIDCRedirectURI == "" {
+		missing = append(missing, "ZITADEL_OIDC_REDIRECT_URI")
 	}
 	if cfg.Area32InternalEmail == "" {
 		missing = append(missing, "AREA32_INTERNAL_EMAIL")
@@ -224,6 +233,18 @@ func GetZitadelHost() string {
 
 func GetZitadelOrganizationID() string {
 	return cfg.ZitadelOrganizationID
+}
+
+func GetZitadelOIDCClientID() string {
+	return cfg.ZitadelOIDCClientID
+}
+
+func GetZitadelOIDCClientSecret() string {
+	return cfg.ZitadelOIDCClientSecret
+}
+
+func GetZitadelOIDCRedirectURI() string {
+	return cfg.ZitadelOIDCRedirectURI
 }
 
 func GetMCPClientID() string {
