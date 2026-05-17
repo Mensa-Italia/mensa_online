@@ -253,6 +253,27 @@ func UpdateUser(userID string, name string, aliasMail string, originalMail strin
 	slog.Info("user updated", "userID", userID, "username", aliasMail)
 }
 
+// GetUserMetadata ritorna i metadati dell'utente Zitadel come map key->value.
+// Usato dal middleware come fallback per recuperare l'id PB ("membership_id")
+// quando il mapping user_zitadel_auth non e` ancora popolato per quel sub.
+func GetUserMetadata(userID string) map[string]string {
+	if apiClient == nil || strings.TrimSpace(userID) == "" {
+		return nil
+	}
+	resp, err := apiClient.UserServiceV2().ListUserMetadata(ctx, &user.ListUserMetadataRequest{
+		UserId: userID,
+	})
+	if err != nil {
+		slog.Error("failed to list user metadata", "userID", userID, "error", err)
+		return nil
+	}
+	out := make(map[string]string, len(resp.Metadata))
+	for _, m := range resp.Metadata {
+		out[m.Key] = string(m.Value)
+	}
+	return out
+}
+
 func SetUserPassword(membershipID string, password string) {
 	if apiClient == nil {
 		slog.Error("api client not initialized")

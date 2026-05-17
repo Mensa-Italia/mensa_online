@@ -120,6 +120,8 @@ if [ -n "$PB_RECORD_ID" ]; then
   http_get "view users/$PB_RECORD_ID" "$HOST/api/collections/users/records/$PB_RECORD_ID"
 fi
 
+http_get "GET /api/cs/me (own record via bearer)" "$HOST/api/cs/me"
+
 out=$(curl -sS -o /dev/null -w "%{http_code} %{time_total}" \
       -X POST -H "Authorization: Bearer $AT" --max-time 20 \
       "$HOST/api/collections/users/auth-refresh" 2>&1)

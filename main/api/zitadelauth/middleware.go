@@ -74,16 +74,32 @@ func extractBearer(e *core.RequestEvent) string {
 }
 
 // findUserByZitadelSub risolve il record users a partire dal sub Zitadel.
-// 1) prova la cache user_zitadel_auth (mapping sub -> users.id)
-// 2) se assente prova a lookup via email del JWT
-// 3) se trovato via email, popola lazy il mapping per le prossime chiamate
+// Strategia, in ordine di costo:
+//  1. cache locale user_zitadel_auth (mapping sub -> users.id)
+//  2. metadata Zitadel "membership_id" sul sub (chiamata gRPC, autoritativa)
+//  3. lookup PB per email/preferred_username del JWT
+// Ad ogni successo via 2 o 3 popoliamo lazy la cache.
 func findUserByZitadelSub(app core.App, sub, email string) (*core.Record, error) {
 	if mapping, err := app.FindFirstRecordByFilter(
 		"user_zitadel_auth", "zitadel_sub = {:s}", dbx.Params{"s": sub},
 	); err == nil && mapping != nil {
 		userID := mapping.GetString("user")
 		if userID != "" {
-			return app.FindRecordById("users", userID)
+			if rec, err := app.FindRecordById("users", userID); err == nil && rec != nil {
+				return rec, nil
+			}
+		}
+	}
+
+	// Fallback autoritativo: i metadati Zitadel del nostro user contengono
+	// "membership_id" valorizzato con l'id PB (lo settiamo noi quando creiamo
+	// l'utente Zitadel via zauth.CreateUser).
+	if meta := zauth.GetUserMetadata(sub); meta != nil {
+		if pbID := strings.TrimSpace(meta["membership_id"]); pbID != "" {
+			if rec, err := app.FindRecordById("users", pbID); err == nil && rec != nil {
+				dbtools.UpsertUserZitadelAuth(app, sub, rec.Id, email)
+				return rec, nil
+			}
 		}
 	}
 
