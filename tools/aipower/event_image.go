@@ -3,20 +3,67 @@ package aipower
 import (
 	"bytes"
 	"context"
+	_ "embed"
 	"fmt"
-	"github.com/fogleman/gg"
-	"github.com/tidwall/gjson"
-	"google.golang.org/genai"
 	"image"
 	"image/png"
 	"log"
 	"math"
 	"mensadb/tools/aitools"
 	"time"
+
+	"github.com/fogleman/gg"
+	"github.com/golang/freetype/truetype"
+	"github.com/tidwall/gjson"
+	"golang.org/x/image/font"
+	"google.golang.org/genai"
 )
 
-func _generateEventImageGenerationPrompt(prompt string) (string, error) {
+// Asset embeddati: overlay PNG e font TTF. Sono accanto al package perche`
+// in produzione il binario gira con WORKDIR /pb/main mentre pb_public/ e`
+// montato in /pb_public/, quindi i path relativi (./pb_public/...) erano
+// fs.ErrNotExist - errore che PocketBase trasforma in 404 generico
+// (tools/router/error.go ToApiError).
+//
+//go:embed assets/overlay.png
+var overlayPNG []byte
 
+//go:embed assets/GothamBlack.ttf
+var gothamBlackTTF []byte
+
+//go:embed assets/GothamMedium.ttf
+var gothamMediumTTF []byte
+
+var (
+	parsedOverlay   image.Image
+	parsedBlackFont *truetype.Font
+	parsedMediumFont *truetype.Font
+)
+
+func init() {
+	ov, _, err := image.Decode(bytes.NewReader(overlayPNG))
+	if err != nil {
+		log.Println("aipower: decode overlay embed:", err)
+	} else {
+		parsedOverlay = ov
+	}
+	if f, err := truetype.Parse(gothamBlackTTF); err != nil {
+		log.Println("aipower: parse GothamBlack embed:", err)
+	} else {
+		parsedBlackFont = f
+	}
+	if f, err := truetype.Parse(gothamMediumTTF); err != nil {
+		log.Println("aipower: parse GothamMedium embed:", err)
+	} else {
+		parsedMediumFont = f
+	}
+}
+
+func faceFor(f *truetype.Font, points float64) font.Face {
+	return truetype.NewFace(f, &truetype.Options{Size: points})
+}
+
+func _generateEventImageGenerationPrompt(prompt string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	client := aitools.GetAIClient()
@@ -38,9 +85,7 @@ func _generateEventImageGenerationPrompt(prompt string) (string, error) {
 		ResponseSchema: &genai.Schema{
 			Type: genai.TypeObject,
 			Properties: map[string]*genai.Schema{
-				"prompt": &genai.Schema{
-					Type: genai.TypeString,
-				},
+				"prompt": {Type: genai.TypeString},
 			},
 		},
 	}
@@ -101,6 +146,9 @@ func _generateBackgroundImageAI(prompt string) ([]byte, error) {
 			break
 		}
 	}
+	if len(bytesOutput) == 0 {
+		return nil, fmt.Errorf("imagen returned no image bytes")
+	}
 
 	img, _, err := image.Decode(bytes.NewReader(bytesOutput))
 	if err != nil {
@@ -115,34 +163,24 @@ func _generateBackgroundImageAI(prompt string) ([]byte, error) {
 	return buffer.Bytes(), nil
 }
 
-// addText carica il font specificato, imposta il colore, l’allineamento e il debug,
-// quindi disegna un testo in (x,y), contenuto in larghezza w e limitato a maxLines righe.
-func addText(dc *gg.Context, fontPath string, fontSize float64, text string, x, y, w float64, maxLines int, align string, debug bool, r, g, b float64) *gg.Context {
-	// Carica il font specificato
-	if err := dc.LoadFontFace(fontPath, fontSize); err != nil {
-		panic(err)
-	}
-	// Prepara colore testo
+// addText disegna text in (x,y), contenuto in w e limitato a maxLines righe,
+// usando il font.Face passato (gia` caricato dal font embed).
+func addText(dc *gg.Context, face font.Face, text string, x, y, w float64, maxLines int, align string, debug bool, r, g, b float64) *gg.Context {
+	dc.SetFontFace(face)
 	dc.SetRGB(r, g, b)
-	// Suddivide il testo in linee che non superano la larghezza w
 	lines := dc.WordWrap(text, w)
 	if len(lines) > maxLines {
 		lines = lines[:maxLines]
 	}
-	// Calcola interlinea e altezza totale del blocco
 	lineGap := dc.FontHeight() * 1.2
 	totalHeight := lineGap * float64(len(lines))
-	// Debug: disegna un rettangolo intorno all’area di testo
 	if debug {
-		// usa rosso semitrasparente per il rettangolo
 		dc.SetRGBA(1, 0, 0, 0.5)
 		dc.SetLineWidth(1)
 		dc.DrawRectangle(x, y, w, totalHeight)
 		dc.Stroke()
-		// ripristina colore testo
 		dc.SetRGB(r, g, b)
 	}
-	// Determina posizione orizzontale in base all’allineamento
 	var anchorX, textX float64
 	switch align {
 	case "center":
@@ -151,11 +189,10 @@ func addText(dc *gg.Context, fontPath string, fontSize float64, text string, x, 
 	case "right":
 		anchorX = 1
 		textX = x + w
-	default: // left
+	default:
 		anchorX = 0
 		textX = x
 	}
-	// Disegna ogni linea
 	for i, line := range lines {
 		dy := y + float64(i+1)*lineGap
 		dc.DrawStringAnchored(line, textX, dy, anchorX, 0)
@@ -163,24 +200,19 @@ func addText(dc *gg.Context, fontPath string, fontSize float64, text string, x, 
 	return dc
 }
 
-// GenerateEventCard crea un’immagine combinata usando background.png, overlay.png e
-// sei righe di testo, allineate a destra e centrate verticalmente.
+// GenerateEventCard crea un'immagine combinata usando lo sfondo IA, l'overlay
+// embeddato e sei righe di testo.
 func GenerateEventCard(title string, lines [5]string) ([]byte, error) {
-	// Genera o carica sfondo da prompt
+	if parsedOverlay == nil || parsedBlackFont == nil || parsedMediumFont == nil {
+		return nil, fmt.Errorf("aipower: assets embed non disponibili (vedi log di init)")
+	}
+
 	descriptionPrompt := fmt.Sprintf("%s\n%s\n%s\n%s\n%s\n%s", title, lines[0], lines[1], lines[2], lines[3], lines[4])
-	var bg image.Image
 	bgBytes, err := _generateBackgroundImageAI(descriptionPrompt)
 	if err != nil {
 		return nil, err
 	}
-	// Decodifica generica (PNG, JPEG, ecc.) e converte in image.Image
-	imgGeneric, _, err := image.Decode(bytes.NewReader(bgBytes))
-	if err != nil {
-		return nil, err
-	}
-	bg = imgGeneric
-	// Carica overlay
-	ov, err := gg.LoadImage("./pb_public/overlay.png")
+	bg, _, err := image.Decode(bytes.NewReader(bgBytes))
 	if err != nil {
 		return nil, err
 	}
@@ -189,14 +221,11 @@ func GenerateEventCard(title string, lines [5]string) ([]byte, error) {
 	H := 900
 	dc := gg.NewContext(W, H)
 
-	// Disegna sfondo coprendo il canvas senza distorsioni (cover)
 	bw := float64(bg.Bounds().Dx())
 	bh := float64(bg.Bounds().Dy())
-	// Scala per coprire mantenendo l’aspect ratio
 	scale := math.Max(float64(W)/bw, float64(H)/bh)
 	nw := bw * scale
 	nh := bh * scale
-	// Centra l’immagine scalata
 	dx := (float64(W) - nw) / 2
 	dy := (float64(H) - nh) / 2
 	dc.Push()
@@ -204,62 +233,22 @@ func GenerateEventCard(title string, lines [5]string) ([]byte, error) {
 	dc.Scale(scale, scale)
 	dc.DrawImage(bg, 0, 0)
 	dc.Pop()
-	// Disegna overlay senza scala
-	dc.DrawImage(ov, 0, 0)
 
-	dc = addText(dc,
-		"./pb_public/GothamBlack.ttf", 78,
-		title,
-		20, 400,
-		(float64(W)/2)-70, 2,
-		"right", false,
-		1, 1, 1,
-	)
+	dc.DrawImage(parsedOverlay, 0, 0)
 
-	dc = addText(dc,
-		"./pb_public/GothamMedium.ttf", 45,
-		lines[0],
-		20, 535,
-		(float64(W)/2)-70, 2,
-		"right", false,
-		1, 1, 1,
-	)
+	dc = addText(dc, faceFor(parsedBlackFont, 78), title,
+		20, 400, (float64(W)/2)-70, 2, "right", false, 1, 1, 1)
+	dc = addText(dc, faceFor(parsedMediumFont, 45), lines[0],
+		20, 535, (float64(W)/2)-70, 2, "right", false, 1, 1, 1)
+	dc = addText(dc, faceFor(parsedMediumFont, 45), lines[1],
+		20, 580, (float64(W)/2)-70, 2, "right", false, 1, 1, 1)
+	dc = addText(dc, faceFor(parsedMediumFont, 45), lines[2],
+		20, 705, (float64(W)/2)-70, 2, "right", false, 1, 1, 1)
+	dc = addText(dc, faceFor(parsedMediumFont, 32), lines[3],
+		20, 760, (float64(W)/2)-70, 2, "right", false, 1, 1, 1)
+	dc = addText(dc, faceFor(parsedMediumFont, 32), lines[4],
+		20, 790, (float64(W)/2)-70, 2, "right", false, 1, 1, 1)
 
-	dc = addText(dc,
-		"./pb_public/GothamMedium.ttf", 45,
-		lines[1],
-		20, 580,
-		(float64(W)/2)-70, 2,
-		"right", false,
-		1, 1, 1,
-	)
-
-	dc = addText(dc,
-		"./pb_public/GothamMedium.ttf", 45,
-		lines[2],
-		20, 705,
-		(float64(W)/2)-70, 2,
-		"right", false,
-		1, 1, 1,
-	)
-	dc = addText(dc,
-		"./pb_public/GothamMedium.ttf", 32,
-		lines[3],
-		20, 760,
-		(float64(W)/2)-70, 2,
-		"right", false,
-		1, 1, 1,
-	)
-	dc = addText(dc,
-		"./pb_public/GothamMedium.ttf", 32,
-		lines[4],
-		20, 790,
-		(float64(W)/2)-70, 2,
-		"right", false,
-		1, 1, 1,
-	)
-
-	// Esporta in PNG bytes
 	var buf bytes.Buffer
 	if err := png.Encode(&buf, dc.Image()); err != nil {
 		return nil, err
