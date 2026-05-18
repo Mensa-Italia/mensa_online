@@ -74,21 +74,30 @@ func Run(app core.App) {
 		return
 	}
 
-	app.Logger().Info("[CRON] quidnotify: nuovo numero rilevato, invio notifiche",
+	app.Logger().Info("[CRON] quidnotify: nuovo numero rilevato",
 		"issue", latest.Number, "name", latest.Name, "id", latest.ID)
 
-	dbtools.SendPushNotificationToAllUsers(app, dbtools.PushNotification{
-		TrTag: "push_notification.new_quid_issue",
-		TrNamedParams: map[string]string{
-			"name": latest.Name,
-		},
-		Data: map[string]string{
-			"type":    "quid",
-			"quid_id": strconv.Itoa(latest.ID),
-		},
-	})
+	// Stesso pattern dei hook events: la notifica parte solo se la config
+	// notify_quid_new e` "true". Il counter quid_last_issue_number viene
+	// aggiornato comunque, cosi` riaccendendo la config in futuro non si
+	// triggherano notifiche retroattive per numeri gia` usciti.
+	if dbtools.GetInternalConfig(app, "notify_quid_new") == "true" {
+		dbtools.SendPushNotificationToAllUsers(app, dbtools.PushNotification{
+			TrTag: "push_notification.new_quid_issue",
+			TrNamedParams: map[string]string{
+				"name": latest.Name,
+			},
+			Data: map[string]string{
+				"type":    "quid",
+				"quid_id": strconv.Itoa(latest.ID),
+			},
+		})
+	} else {
+		app.Logger().Info("[CRON] quidnotify: notifiche disattivate (notify_quid_new != true), aggiorno solo il counter",
+			"issue", latest.Number)
+	}
 
 	if err := dbtools.SetInternalConfig(app, configKey, strconv.Itoa(latest.Number)); err != nil {
-		app.Logger().Error("[CRON] quidnotify: aggiornamento config fallito (notifiche gia` inviate)", "err", err)
+		app.Logger().Error("[CRON] quidnotify: aggiornamento config fallito", "err", err)
 	}
 }
