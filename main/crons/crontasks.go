@@ -28,6 +28,12 @@ func CronTasks(app core.App) {
 		dbtools.RefreshUserStatesManagersPowers(app)
 		app.Logger().Info("[CRON] Updated the powers of all the users based on the segretari list")
 
+		// Calcola il potere "super" dagli alias del consiglio
+		// (consigliere, comunicazione, tesoriere, segretario, sviluppo).
+		// Solo destinazioni univoche, fail-safe se l'alias e` shared.
+		dbtools.RefreshUserSuperPowers(app)
+		app.Logger().Info("[CRON] Updated super powers from board aliases")
+
 		// Subito dopo: scrappa /gruppi-locali-referenti/ per linkare/slincare
 		// segretari, co-segretari e assistenti al test ai rispettivi
 		// local_offices. Stesso identity key (cloud32 uid) dei members_registry.
