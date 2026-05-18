@@ -10,6 +10,9 @@ import (
 	"strings"
 	"time"
 
+	"mensadb/tools/dbtools"
+
+	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
 )
@@ -92,6 +95,16 @@ func SyncEpisodes(app core.App, podcast *core.Record) error {
 	}
 	defer func() { _ = os.RemoveAll(tmpRoot) }()
 
+	// Bootstrap detection: se il podcast non ha ancora nessun episodio in DB,
+	// il sync corrente fara` un batch import iniziale (potenzialmente decine
+	// di righe). NON vogliamo notificare quel batch (spam). Le notifiche
+	// partono solo da run successivi, quando il delta e` di 0-1-2 episodi
+	// nuovi al massimo.
+	existingCount, _ := app.CountRecords("podcast_episodes",
+		dbx.NewExp("podcast = {:p}", dbx.Params{"p": podcast.Id}))
+	bootstrap := existingCount == 0
+	notifyEnabled := !bootstrap && dbtools.GetInternalConfig(app, "notify_podcast_new") == "true"
+
 	added := 0
 	skippedShorts := 0
 	for _, entry := range meta.Entries {
@@ -162,6 +175,21 @@ func SyncEpisodes(app core.App, podcast *core.Record) error {
 			app.Logger().Error("[podcastsync] save episode fallito",
 				"podcast", podcast.Id, "video", entry.ID, "err", err)
 			continue
+		}
+
+		if notifyEnabled {
+			dbtools.SendPushNotificationToAllUsers(app, dbtools.PushNotification{
+				TrTag: "push_notification.new_podcast_episode",
+				TrNamedParams: map[string]string{
+					"podcast": podcast.GetString("title"),
+					"episode": rec.GetString("title"),
+				},
+				Data: map[string]string{
+					"type":       "podcast_episode",
+					"podcast_id": podcast.Id,
+					"episode_id": rec.Id,
+				},
+			})
 		}
 
 		// Trascrizione: prima via i sottotitoli auto YouTube (gratis,
