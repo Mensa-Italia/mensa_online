@@ -53,7 +53,7 @@ func LoadAuth() *hook.Handler[*core.RequestEvent] {
 			}
 
 			email, _ := claims.Claims["email"].(string)
-			record, err := findUserByZitadelSub(e.App, sub, email)
+			record, err := FindUserByZitadelSub(e.App, sub, email)
 			if err != nil || record == nil {
 				e.App.Logger().Debug("zitadel auth: no PB user for sub", "sub", sub, "err", err)
 				return e.Next()
@@ -73,13 +73,18 @@ func extractBearer(e *core.RequestEvent) string {
 	return strings.TrimPrefix(raw, "Bearer ")
 }
 
-// findUserByZitadelSub risolve il record users a partire dal sub Zitadel.
+// FindUserByZitadelSub risolve il record users a partire dal sub Zitadel.
+//
+// Esportata perche` la usa anche l'handler di login con passkey: quel flusso non
+// ha la password, quindi non puo` passare per upsertUserFromAreaUser e deve
+// risolvere il record esattamente come fa questo middleware sulle richieste
+// successive. Se la risoluzione fallisce qui, fallirebbe anche dopo.
 // Strategia, in ordine di costo:
 //  1. cache locale user_zitadel_auth (mapping sub -> users.id)
 //  2. metadata Zitadel "membership_id" sul sub (chiamata gRPC, autoritativa)
 //  3. lookup PB per email/preferred_username del JWT
 // Ad ogni successo via 2 o 3 popoliamo lazy la cache.
-func findUserByZitadelSub(app core.App, sub, email string) (*core.Record, error) {
+func FindUserByZitadelSub(app core.App, sub, email string) (*core.Record, error) {
 	if mapping, err := app.FindFirstRecordByFilter(
 		"user_zitadel_auth", "zitadel_sub = {:s}", dbx.Params{"s": sub},
 	); err == nil && mapping != nil {

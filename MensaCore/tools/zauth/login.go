@@ -43,16 +43,6 @@ func LoginWithPassword(email, password string) (*TokenSet, error) {
 		return nil, ErrUserNotFound
 	}
 
-	verifier, challenge, err := generatePKCE()
-	if err != nil {
-		return nil, fmt.Errorf("zauth: generate pkce: %w", err)
-	}
-
-	authRequestID, err := startAuthRequest(challenge)
-	if err != nil {
-		return nil, fmt.Errorf("zauth: start auth request: %w", err)
-	}
-
 	sessResp, err := apiClient.SessionServiceV2().CreateSession(ctx, &sessionV2.CreateSessionRequest{
 		Checks: &sessionV2.Checks{
 			User: &sessionV2.CheckUser{
@@ -71,12 +61,42 @@ func LoginWithPassword(email, password string) (*TokenSet, error) {
 		return nil, fmt.Errorf("zauth: create session: %w", err)
 	}
 
+	return TokensForSession(sessResp.SessionId, sessResp.SessionToken)
+}
+
+// TokensForSession converte una sessione Zitadel gia` verificata in un set di
+// token OIDC, girando la catena authorize -> CreateCallback -> token exchange
+// con PKCE.
+//
+// E` il pezzo in comune fra login con password e login con passkey: quello che
+// cambia fra i due e` solo il *check* che ha reso valida la sessione, non il
+// modo di trasformarla in token. Il chiamante deve aver gia` soddisfatto tutti
+// i check richiesti, altrimenti CreateCallback rifiuta la sessione.
+//
+// L'auth request viene creata qui e non prima della sessione: e` indipendente
+// dalla sessione (CreateCallback e` cio` che le lega) e cosi` un check fallito
+// non lascia auth request orfane su Zitadel.
+func TokensForSession(sessionID, sessionToken string) (*TokenSet, error) {
+	if apiClient == nil {
+		return nil, errors.New("zauth: api client not initialized")
+	}
+
+	verifier, challenge, err := generatePKCE()
+	if err != nil {
+		return nil, fmt.Errorf("zauth: generate pkce: %w", err)
+	}
+
+	authRequestID, err := startAuthRequest(challenge)
+	if err != nil {
+		return nil, fmt.Errorf("zauth: start auth request: %w", err)
+	}
+
 	cbResp, err := apiClient.OIDCServiceV2().CreateCallback(ctx, &oidcV2.CreateCallbackRequest{
 		AuthRequestId: authRequestID,
 		CallbackKind: &oidcV2.CreateCallbackRequest_Session{
 			Session: &oidcV2.Session{
-				SessionId:    sessResp.SessionId,
-				SessionToken: sessResp.SessionToken,
+				SessionId:    sessionID,
+				SessionToken: sessionToken,
 			},
 		},
 	})
