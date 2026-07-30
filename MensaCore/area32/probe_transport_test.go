@@ -46,23 +46,26 @@ func TestProbeCloud32Transport(t *testing.T) {
 		t.Fatalf("cookiejar: %v", err)
 	}
 
+	client := resty.New().
+		SetTimeout(30 * time.Second).
+		SetCookieJar(jar).
+		SetDoNotParseResponse(true)
+
+	resp, err := client.R().Get(loginURL)
+	if err != nil {
+		t.Fatalf("GET pagina di login non riuscita: %v", err)
+	}
+
+	// Letti direttamente da RawResponse e non dentro un hook OnAfterResponse:
+	// con SetDoNotParseResponse(true) — che e` la configurazione dello scraper —
+	// quell'hook non arriva a popolarli e i valori restano vuoti.
 	var (
 		tlsVersion uint16
 		tlsCipher  uint16
 		certSigAlg string
 		negotiated string
 	)
-
-	client := resty.New().
-		SetTimeout(30 * time.Second).
-		SetCookieJar(jar).
-		SetDoNotParseResponse(true)
-
-	client.OnAfterResponse(func(_ *resty.Client, resp *resty.Response) error {
-		raw := resp.RawResponse
-		if raw == nil {
-			return nil
-		}
+	if raw := resp.RawResponse; raw != nil {
 		negotiated = raw.Proto
 		if cs := raw.TLS; cs != nil {
 			tlsVersion, tlsCipher = cs.Version, cs.CipherSuite
@@ -70,12 +73,6 @@ func TestProbeCloud32Transport(t *testing.T) {
 				certSigAlg = cs.PeerCertificates[0].SignatureAlgorithm.String()
 			}
 		}
-		return nil
-	})
-
-	resp, err := client.R().Get(loginURL)
-	if err != nil {
-		t.Fatalf("GET pagina di login non riuscita: %v", err)
 	}
 	body, err := io.ReadAll(resp.RawBody())
 	if err != nil {
