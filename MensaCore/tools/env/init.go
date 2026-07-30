@@ -49,6 +49,14 @@ type config struct {
 	ZitadelOIDCRedirectURI    string `env:"ZITADEL_OIDC_REDIRECT_URI"`
 	ZitadelLoginClientUserID  string `env:"ZITADEL_LOGIN_CLIENT_USER_ID"`
 	MCPClientID             string `env:"MCP_CLIENT_ID" envDefault:""`
+	// Fingerprint SHA-256 aggiuntivi (separati da virgola) da pubblicare in
+	// /.well-known/assetlinks.json sotto la relation get_login_creds, oltre a
+	// quello della chiave di release. Servono a far funzionare le passkey sulle
+	// build Android firmate col keystore di debug, che e` diverso per ogni
+	// macchina di sviluppo: per questo il valore sta in env e non nel codice.
+	// Lasciarlo vuoto in produzione: ogni fingerprint elencato qui puo`
+	// richiedere le passkey del nostro relying party.
+	AndroidDebugSHA256 string `env:"ANDROID_DEBUG_SHA256" envDefault:""`
 }
 
 var cfg = config{}
@@ -257,4 +265,20 @@ func GetZitadelLoginClientUserID() string {
 
 func GetMCPClientID() string {
 	return cfg.MCPClientID
+}
+
+// GetAndroidDebugSHA256 ritorna i fingerprint di debug configurati, ripuliti e
+// senza voci vuote. Nil quando la variabile non e` impostata (caso produzione).
+func GetAndroidDebugSHA256() []string {
+	raw := strings.Split(cfg.AndroidDebugSHA256, ",")
+	out := make([]string, 0, len(raw))
+	for _, f := range raw {
+		if f = strings.TrimSpace(f); f != "" {
+			out = append(out, f)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }

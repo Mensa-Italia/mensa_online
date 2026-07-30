@@ -19,6 +19,19 @@ func Load(e *router.RouterGroup[*core.RequestEvent]) {
 
 	e.POST("/auth-with-area", AuthWithAreaHandler)
 	e.POST("/auth-with-zitadel", AuthWithZitadelHandler)
+
+	// Login con passkey: due passi, perche` fra il begin e il finish ci sta il
+	// prompt biometrico del sistema operativo.
+	e.POST("/auth-with-passkey/begin", AuthWithPasskeyBeginHandler)
+	e.POST("/auth-with-passkey/finish", AuthWithPasskeyFinishHandler)
+
+	// Gestione delle passkey dell'utente autenticato (attivazione dai settings,
+	// lista, revoca).
+	e.POST("/passkeys/begin", PasskeyRegisterBeginHandler)
+	e.POST("/passkeys/finish", PasskeyRegisterFinishHandler)
+	e.GET("/passkeys", PasskeyListHandler)
+	e.DELETE("/passkeys/{id}", PasskeyDeleteHandler)
+
 	e.GET("/me", MeHandler)
 	e.POST("/send-update-notify", SendUpdateNotifyHandler)
 	e.GET("/force-update-addons", ForceUpdateAddonsHandler)
