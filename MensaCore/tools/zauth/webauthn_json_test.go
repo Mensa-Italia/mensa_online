@@ -38,6 +38,12 @@ const creationOptionsFixture = `{
 
 // PublicKeyCredential come lo restituisce Android Credential Manager (e, dopo
 // la ricostruzione manuale, iOS).
+//
+// I valori sono sintetici e volutamente a bassa entropia: sono base64url del
+// nome del campo stesso. L'adapter non li decodifica mai — verifica solo che
+// passino verbatim — quindi un contenuto realistico non aggiungerebbe copertura,
+// mentre farebbe scattare le regole di secret scanning su stringhe che non sono
+// segreti.
 const assertionCredentialFixture = `{
   "id": "Zm9vYmFyX2NyZWRlbnRpYWxfaWQ",
   "rawId": "Zm9vYmFyX2NyZWRlbnRpYWxfaWQ",
@@ -45,7 +51,7 @@ const assertionCredentialFixture = `{
   "authenticatorAttachment": "platform",
   "clientExtensionResults": {},
   "response": {
-    "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0In0",
+    "clientDataJSON": "Y2xpZW50RGF0YUpTT04",
     "authenticatorData": "YXV0aGVudGljYXRvckRhdGE",
     "signature": "c2lnbmF0dXJl",
     "userHandle": "NTM2Ng"
@@ -174,7 +180,7 @@ func TestCredentialToStructRoundTrip(t *testing.T) {
 		t.Fatalf("response = %v, want un oggetto", m["response"])
 	}
 	for field, want := range map[string]string{
-		"clientDataJSON":    "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0In0",
+		"clientDataJSON":    "Y2xpZW50RGF0YUpTT04",
 		"authenticatorData": "YXV0aGVudGljYXRvckRhdGE",
 		"signature":         "c2lnbmF0dXJl",
 		"userHandle":        "NTM2Ng",
