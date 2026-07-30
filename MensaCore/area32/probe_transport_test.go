@@ -46,10 +46,14 @@ func TestProbeCloud32Transport(t *testing.T) {
 		t.Fatalf("cookiejar: %v", err)
 	}
 
+	// Stessa costruzione di NewAPI, transport incluso: se la sonda usasse un
+	// client di default misurerebbe una connessione h2 che lo scraper non fa
+	// piu`, e i numeri non direbbero nulla di utile.
 	client := resty.New().
 		SetTimeout(30 * time.Second).
 		SetCookieJar(jar).
-		SetDoNotParseResponse(true)
+		SetDoNotParseResponse(true).
+		SetTransport(newHTTP1Transport())
 
 	resp, err := client.R().Get(loginURL)
 	if err != nil {
