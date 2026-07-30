@@ -7,7 +7,13 @@
 # non autenticato. Il sync soci e l'/api/cs/auth-with-area si bloccano.
 # Curl dal medesimo IP/server passa perche` ha fingerprint OpenSSL noto.
 # Prima di bumpare di nuovo: investigare il workaround TLS specifico
-# (cipher suite list, h2 SETTINGS values) e testare contro cloud32.
+# (cipher suite list, h2 SETTINGS values) e testare contro cloud32 con
+#   AREA32_PROBE=1 AREA32_PROBE_EMAIL=... AREA32_PROBE_PASSWORD=... \
+#     go test ./area32/ -run TestProbeCloud32 -v
+# ATTENZIONE: quel test verde non basta da solo. Il Bot Manager decide anche
+# su IP e reputazione, quindi passa dalla rete di uno sviluppatore e puo`
+# fallire dall'egress di produzione. Verificato: con go1.26.5 la sonda passa
+# in locale, il che NON scagiona il bump.
 FROM golang:1.25.9-alpine AS builder
 
 RUN apk add --no-cache build-base
