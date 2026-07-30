@@ -57,14 +57,6 @@ func normalizeLoopback(addr string) string {
 	return addr
 }
 
-// resolveUserFromClaims trova il record `users` corrispondente all'utente
-// Zitadel autenticato. Vedi resolveUserFromClaimsCtx — questa wrapper non
-// prova il fallback su /oidc/v1/userinfo perche` manca il bearer; e` utile
-// solo per code path che gia` hanno l'email nei claims.
-func resolveUserFromClaims(app core.App, c *Claims) (*core.Record, error) {
-	return resolveUserFromClaimsCtx(context.Background(), app, c, "")
-}
-
 // resolveUserFromClaimsCtx fa il mapping Zitadel → users PB. Strategie:
 //
 //   0. lookup in user_zitadel_auth (DB cache) per claims.Subject — HOT PATH

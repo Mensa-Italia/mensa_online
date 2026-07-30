@@ -131,7 +131,7 @@ func makeSearchHandler(app core.App, only *searchableType) server.ToolHandlerFun
 		// collection vengono applicate dall'utente MCP autenticato. Se PB
 		// ritorna 4xx per quel singolo record (rule non soddisfatta) si
 		// scarta silenziosamente. Un errore di RISOLUZIONE UTENTE invece
-		// (resolveUserFromClaims fallisce) e` fatale e va segnalato subito
+		// (resolveUserFromClaimsCtx fallisce) e` fatale e va segnalato subito
 		// con messaggio leggibile — altrimenti il chiamante riceve "0
 		// risultati" senza capire la causa.
 		out := make([]searchHit, 0, len(hits))

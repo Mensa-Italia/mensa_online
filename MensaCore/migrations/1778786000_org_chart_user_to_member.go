@@ -60,6 +60,11 @@ func swapRelationTarget(app core.App, collection, fieldName, newTarget string) e
 		return fmt.Errorf("update _collections: %w", err)
 	}
 
-	app.ReloadCachedCollections()
+	// Se il reload fallisce la migration ha aggiornato _collections ma il resto
+	// del processo lavorerebbe su una cache stantia: meglio fallire e far
+	// ritentare che proseguire in quello stato.
+	if err := app.ReloadCachedCollections(); err != nil {
+		return fmt.Errorf("reload cached collections: %w", err)
+	}
 	return nil
 }

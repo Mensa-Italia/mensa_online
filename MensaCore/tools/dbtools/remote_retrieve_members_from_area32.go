@@ -442,7 +442,7 @@ func fileSHA256(f *filesystem.File) string {
 	if err != nil {
 		return ""
 	}
-	defer r.Close()
+	defer func() { _ = r.Close() }()
 	h := sha256.New()
 	if _, err := io.Copy(h, r); err != nil {
 		return ""
