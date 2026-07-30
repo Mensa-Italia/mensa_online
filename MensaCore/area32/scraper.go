@@ -3,6 +3,7 @@ package area32
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -10,6 +11,7 @@ import (
 	"mensadb/tools/aitools"
 	"mensadb/tools/env"
 	"mensadb/tools/spatial"
+	"net/http"
 	"net/http/cookiejar"
 	"net/url"
 	"slices"
@@ -62,8 +64,47 @@ type ScraperApi struct {
 
 func NewAPI() *ScraperApi {
 	cookieJar, _ := cookiejar.New(nil)
-	client := resty.New().SetTimeout(30 * time.Second).SetCookieJar(cookieJar).SetDoNotParseResponse(true)
+	client := resty.New().
+		SetTimeout(30 * time.Second).
+		SetCookieJar(cookieJar).
+		SetDoNotParseResponse(true).
+		SetTransport(newHTTP1Transport())
 	return &ScraperApi{client: client, jar: cookieJar}
+}
+
+// newHTTP1Transport costruisce un transport che parla solo HTTP/1.1.
+//
+// Motivo: cloud32.it sta dietro il Bot Manager di Azure Front Door, che
+// classifica i client anche dal fingerprint del frame SETTINGS di HTTP/2.
+// Quel frame cambia fra versioni di Go — la patch di 1.25.10 su
+// SETTINGS_MAX_FRAME_SIZE e` esattamente cio` che ci ha fatto classificare come
+// automation, con la POST di login che torna 302 ma senza i cookie applicativi
+// (vedi il commento in testa al Dockerfile). Senza h2 quel frame non esiste, e
+// un bump del toolchain non puo` piu` spostare quell'impronta.
+//
+// Attenzione: non e` una sottrazione pura. Annunciando solo http/1.1 in ALPN
+// cambia anche il ClientHello, quindi l'impronta TLS si sposta comunque — in
+// meglio o in peggio non e` deducibile a tavolino. Va misurato dall'egress di
+// produzione con la sonda in probe_transport_test.go: dalla rete di uno
+// sviluppatore passa in ogni caso, perche` il Bot Manager pesa anche IP e
+// reputazione.
+//
+// Non basta la mappa TLSNextProto vuota: quella disabilita il *gestore* h2 di
+// Go, ma non tocca cio` che il client annuncia in ALPN. Se http.DefaultTransport
+// e` gia` stato usato altrove nel processo, il suo setup lazy di h2 ha gia`
+// scritto NextProtos ["h2","http/1.1"] nella TLSClientConfig, e Clone() se lo
+// porta dietro: il server negozia h2 e Go prova a leggere i frame binari come
+// HTTP/1.1, fallendo con "malformed HTTP status code". Per questo NextProtos
+// viene imposto esplicitamente.
+func newHTTP1Transport() *http.Transport {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.ForceAttemptHTTP2 = false
+	transport.TLSNextProto = map[string]func(string, *tls.Conn) http.RoundTripper{}
+	transport.TLSClientConfig = &tls.Config{
+		MinVersion: tls.VersionTLS12,
+		NextProtos: []string{"http/1.1"},
+	}
+	return transport
 }
 
 // ensureSession forza una re-login se l'ultima e` piu` vecchia di minAge,

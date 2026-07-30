@@ -6,14 +6,24 @@
 # applicativi (id, codper, codass, date, logged), lasciando l'utente
 # non autenticato. Il sync soci e l'/api/cs/auth-with-area si bloccano.
 # Curl dal medesimo IP/server passa perche` ha fingerprint OpenSSL noto.
-# Prima di bumpare di nuovo: investigare il workaround TLS specifico
-# (cipher suite list, h2 SETTINGS values) e testare contro cloud32 con
+# STATO: il vettore h2 e` stato rimosso. Da area32.newHTTP1Transport lo
+# scraper annuncia solo http/1.1 in ALPN, quindi non manda piu` nessun frame
+# SETTINGS e la patch di 1.25.10 non ha piu` niente da spostare. Verificato
+# in locale con 1.25.9 e 1.26.5: protocollo HTTP/1.1, cookie di sessione
+# trattenuti, login riuscita in entrambi i casi.
+#
+# Il pin resta finche` quella mitigazione non e` stata vista funzionare
+# dall'egress di produzione, perche` il Bot Manager pesa anche IP e
+# reputazione: dalla rete di uno sviluppatore passa in ogni caso, anche con
+# h2 e 1.26.5, quindi da qui il test non discrimina.
+#
+# Per liftare il pin: lasciare girare in produzione questa immagine (il cron
+# del registro soci esercita la login piu` volte al giorno), controllare che
+# il sync non degradi, poi bumpare. Verifica manuale, da dentro il server:
 #   AREA32_PROBE=1 AREA32_PROBE_EMAIL=... AREA32_PROBE_PASSWORD=... \
 #     go test ./area32/ -run TestProbeCloud32 -v
-# ATTENZIONE: quel test verde non basta da solo. Il Bot Manager decide anche
-# su IP e reputazione, quindi passa dalla rete di uno sviluppatore e puo`
-# fallire dall'egress di produzione. Verificato: con go1.26.5 la sonda passa
-# in locale, il che NON scagiona il bump.
+# Se anche senza h2 il fingerprint TLS bastasse a farci bloccare, la strada
+# successiva e` utls per imitare il ClientHello di un browser.
 FROM golang:1.25.9-alpine AS builder
 
 RUN apk add --no-cache build-base
