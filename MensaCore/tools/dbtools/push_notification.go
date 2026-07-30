@@ -252,7 +252,11 @@ func sendNotification(tokens []string, title, body string, data ...map[string]st
 		return err
 	}
 
-	opts := []option.ClientOption{option.WithCredentialsJSON(decodedKey)}
+	// WithAuthCredentialsJSON invece della deprecata WithCredentialsJSON: vincola
+	// il tipo di credenziale a service account, cosi` un JSON di tipo diverso
+	// (es. external_account) non viene caricato per errore. FIREBASE_AUTH_KEY e`
+	// la chiave dell'Admin SDK, quindi service account e` il tipo corretto.
+	opts := []option.ClientOption{option.WithAuthCredentialsJSON(option.ServiceAccount, decodedKey)}
 	appFirebase, err := firebase.NewApp(context.Background(), nil, opts...)
 	if err != nil {
 		return err
