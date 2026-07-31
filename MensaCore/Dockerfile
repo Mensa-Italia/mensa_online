@@ -1,30 +1,31 @@
-# IMPORTANTE: pin a 1.25.9 voluto. Il bump a 1.25.10 (CVE GO-2026-4918,
-# patch sull'handling di HTTP/2 SETTINGS_MAX_FRAME_SIZE) cambia il
-# ClientHello/HTTP fingerprint Go quel tanto che basta perche` il Bot
-# Manager di Azure Front Door davanti a cloud32.it ci classifichi come
-# automation: la POST di login risponde 302 ma omette i cookie
-# applicativi (id, codper, codass, date, logged), lasciando l'utente
-# non autenticato. Il sync soci e l'/api/cs/auth-with-area si bloccano.
-# Curl dal medesimo IP/server passa perche` ha fingerprint OpenSSL noto.
-# STATO: il vettore h2 e` stato rimosso. Da area32.newHTTP1Transport lo
-# scraper annuncia solo http/1.1 in ALPN, quindi non manda piu` nessun frame
-# SETTINGS e la patch di 1.25.10 non ha piu` niente da spostare. Verificato
-# in locale con 1.25.9 e 1.26.5: protocollo HTTP/1.1, cookie di sessione
-# trattenuti, login riuscita in entrambi i casi.
+# STORIA: questo builder e` stato pinnato a lungo a 1.25.9. Il bump a 1.25.10
+# (CVE GO-2026-4918, patch sull'handling di HTTP/2 SETTINGS_MAX_FRAME_SIZE)
+# cambiava il fingerprint h2 di Go quel tanto che basta perche` il Bot Manager
+# di Azure Front Door davanti a cloud32.it ci classificasse come automation: la
+# POST di login rispondeva 302 ma senza i cookie applicativi (id, codper,
+# codass, date, logged), e il sync soci si fermava senza errori visibili.
 #
-# Il pin resta finche` quella mitigazione non e` stata vista funzionare
-# dall'egress di produzione, perche` il Bot Manager pesa anche IP e
-# reputazione: dalla rete di uno sviluppatore passa in ogni caso, anche con
-# h2 e 1.26.5, quindi da qui il test non discrimina.
+# Risolto alla radice in area32.newHTTP1Transport: lo scraper annuncia solo
+# http/1.1 in ALPN, quindi non manda piu` nessun frame SETTINGS e non c'e` piu`
+# nessuna impronta h2 che una patch di Go possa spostare.
 #
-# Per liftare il pin: lasciare girare in produzione questa immagine (il cron
-# del registro soci esercita la login piu` volte al giorno), controllare che
-# il sync non degradi, poi bumpare. Verifica manuale, da dentro il server:
-#   AREA32_PROBE=1 AREA32_PROBE_EMAIL=... AREA32_PROBE_PASSWORD=... \
-#     go test ./area32/ -run TestProbeCloud32 -v
-# Se anche senza h2 il fingerprint TLS bastasse a farci bloccare, la strada
-# successiva e` utls per imitare il ClientHello di un browser.
-FROM golang:1.25.9-alpine AS builder
+# Verificato in produzione con 1.25.9 + mitigazione: POST /api/cs/auth-with-zitadel
+# ha riscritto il record del socio, e quella scrittura passa da
+# upsertUserFromAreaUser, cioe` dallo scraping riuscito dall'egress reale.
+# Solo dopo quella prova il pin e` stato liftato a 1.26.5, che chiude le 9 CVE
+# della stdlib e fa passare govulncheck (quindi Security -> Build -> GHCR).
+#
+# Se il sync soci dovesse degradare di nuovo dopo un bump, l'ordine di indagine
+# e` questo:
+#   1. controllare che sia ancora HTTP/1.1 e che i cookie sopravvivano:
+#        AREA32_PROBE=1 AREA32_PROBE_EMAIL=... AREA32_PROBE_PASSWORD=... \
+#          go test ./area32/ -run TestProbeCloud32 -v
+#      da dentro il server: dalla rete di uno sviluppatore passa in ogni caso,
+#      perche` il Bot Manager pesa anche IP e reputazione.
+#   2. se h2 e` gia` escluso, il sospetto resta il fingerprint TLS del
+#      ClientHello, che cambia comunque fra versioni di Go. La strada e` utls,
+#      per imitare il ClientHello di un browser.
+FROM golang:1.26.5-alpine AS builder
 
 RUN apk add --no-cache build-base
 

@@ -6,7 +6,7 @@ module mensadb
 // solo i cookie framework e bloccando l'autenticazione applicativa.
 // Idem per x/net oltre v0.51 e x/image oltre v0.38 (pin allineati).
 // Vedi Dockerfile per dettagli completi.
-go 1.25.9
+go 1.26.5
 
 require (
 	firebase.google.com/go/v4 v4.18.0
