@@ -11,20 +11,30 @@ import (
 
 // PasskeyRPID e` il relying party id delle nostre passkey.
 //
+// Vale auth.mensa.it, cioe` il dominio dell'istanza Zitadel, e non quello di
+// questo server. La ragione non e` estetica: e` l'unico modo di condividere le
+// passkey con gli altri servizi che entrano via OIDC su quello stesso IdP (per
+// esempio join.svc.mensa.it). Una passkey e` legata a un rpId, quindi un rpId
+// diverso significherebbe per il socio una credenziale separata solo per l'app.
+//
+// C'e` un secondo effetto, decisivo per le passkey gia` esistenti: quelle create
+// dalla Console o dalla vecchia login UI hanno RPID vuoto, e il filtro di Zitadel
+// (WebAuthNsToCredentials) le accetta solo quando l'rpId richiesto coincide con
+// il dominio dell'istanza. Chiedendo auth.mensa.it funzionano senza ricrearle.
+//
 // Deve combaciare con il dominio che serve i due file di associazione
 // app<->dominio, altrimenti iOS e Android rifiutano la cerimonia prima ancora
 // di contattarci:
 //   - /.well-known/apple-app-site-association (chiave "webcredentials")
 //   - /.well-known/assetlinks.json (relation "get_login_creds")
 //
-// Entrambi sono serviti da questo stesso server (vedi main/utilities/aasa.go e
-// main/utilities/assetslinks.go), quindi il valore e` per costruzione allineato.
-// svc.mensa.it copre anche il webApp su web.svc.mensa.it, perche` un rpId puo`
-// essere il dominio esatto o un suo dominio padre.
+// Zitadel non li espone: registra solo openid-configuration sotto .well-known.
+// Li serve questo server (main/utilities/aasa.go e assetslinks.go), instradato
+// su auth.mensa.it da una route Traefik dedicata a quei due path.
 //
 // Zitadel non valida questo valore: CreateWebAuthNChallenge lo gira as-is a
 // go-webauthn come RPID. Il vincolo reale e` solo lato sistema operativo.
-const PasskeyRPID = "svc.mensa.it"
+const PasskeyRPID = "auth.mensa.it"
 
 // ErrPasskeyUnavailable copre due casi che il client deve trattare allo stesso
 // modo — utente sconosciuto a Zitadel e utente senza passkey registrate — e che
