@@ -10,6 +10,7 @@ import (
 	"log"
 	"math"
 	"mensadb/tools/aitools"
+	"mensadb/tools/env"
 	"time"
 
 	"github.com/fogleman/gg"
@@ -91,7 +92,7 @@ func _generateEventImageGenerationPrompt(prompt string) (string, error) {
 	}
 	result, err := client.Models.GenerateContent(
 		ctx,
-		"gemini-3-flash-preview",
+		env.GetGeminiTextModel(),
 		genai.Text(fmt.Sprintf("-----\n%s\n\n----\n\nUsing the previous data make a prompt to generate the best image that represents the event.\nUse a lot of details, be descriptive, use a lot of adjectives and nouns.\nUse the best words to describe the image you want to generate.", prompt)),
 		config,
 	)
@@ -121,33 +122,13 @@ func _generateBackgroundImageAI(prompt string) ([]byte, error) {
 		log.Println("Error generating event image prompt:", err)
 		return nil, err
 	}
-	config := &genai.GenerateImagesConfig{
-		NumberOfImages:   1,
-		OutputMIMEType:   "image/jpeg",
-		PersonGeneration: genai.PersonGenerationAllowAdult,
-		AspectRatio:      "16:9",
-	}
-
-	result, err := client.Models.GenerateImages(
-		ctx,
-		"models/imagen-4.0-generate-001",
-		promptToUse,
-		config,
-	)
-
+	// Stessa migrazione fatta per i timbri: Imagen e` stato ritirato dalla
+	// Gemini API, quindi l'immagine passa da GenerateContent (vedi
+	// aitools.GenerateImageBytes).
+	bytesOutput, err := aitools.GenerateImageBytes(ctx, promptToUse, "16:9")
 	if err != nil {
 		log.Println("Response:", err.Error())
 		return nil, fmt.Errorf("failed to generate image: %w", err)
-	}
-	var bytesOutput []byte
-	for _, part := range result.GeneratedImages {
-		if part.Image != nil {
-			bytesOutput = part.Image.ImageBytes
-			break
-		}
-	}
-	if len(bytesOutput) == 0 {
-		return nil, fmt.Errorf("imagen returned no image bytes")
 	}
 
 	img, _, err := image.Decode(bytes.NewReader(bytesOutput))

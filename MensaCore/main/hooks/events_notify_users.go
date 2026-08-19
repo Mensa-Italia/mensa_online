@@ -27,11 +27,13 @@ func EventsNotifyUsersAsync(e *core.RecordEvent) error {
 	}
 
 	go func(e *core.RecordEvent) {
+		defer recoverAsyncHook(e.App, "eventsNotifyUsers")
 		eventsNotifyUsers(e)
 	}(e)
 
 	if !e.Record.GetBool("is_spot") {
 		go func(e *core.RecordEvent) {
+			defer recoverAsyncHook(e.App, "createEventStamp")
 			createEventStamp(e.App, e.Record)
 		}(e)
 	}
@@ -46,6 +48,7 @@ func EventsUpdateNotifyUsersAsync(e *core.RecordEvent) error {
 		return e.Next()
 	}
 	go func(e *core.RecordEvent) {
+		defer recoverAsyncHook(e.App, "EventsUpdateNotifyUsers")
 		EventsUpdateNotifyUsers(e)
 	}(e)
 	return e.Next()
@@ -112,11 +115,30 @@ func createEventStamp(app core.App, record *core.Record) []byte {
 
 	key := record.BaseFilesPath() + "/" + record.GetString("image")
 
-	fsys, _ := app.NewFilesystem()
-	defer func() { _ = fsys.Close() }()
+	attachments := map[string]io.Reader{
+		"stamp.png": bytes.NewReader(geminiImage),
+	}
+	// GenQrCode ritorna nil quando fallisce: meglio una mail senza QR che
+	// un io.Reader nil dentro la mappa degli allegati.
+	if stampImage != nil {
+		attachments["stamp_qr.png"] = stampImage
+	}
 
-	blob, _ := fsys.GetReader(key)
-	defer func() { _ = blob.Close() }()
+	// La copertina e` opzionale (events.image non e` required). Prima gli
+	// errori venivano scartati e il defer su un blob nil faceva panic dentro
+	// una goroutine nuda: senza recover, l'intero processo moriva alla
+	// creazione di un evento senza copertina.
+	if fsys, err := app.NewFilesystem(); err != nil {
+		app.Logger().Error("apertura filesystem fallita, mail senza copertina", "err", err)
+	} else {
+		defer func() { _ = fsys.Close() }()
+		if blob, err := fsys.GetReader(key); err != nil {
+			app.Logger().Warn("copertina non disponibile, mail inviata senza", "key", key, "err", err)
+		} else {
+			defer func() { _ = blob.Close() }()
+			attachments["copertina.png"] = blob
+		}
+	}
 
 	// Preparazione del messaggio email da inviare
 	message := &mailer.Message{
@@ -127,11 +149,7 @@ func createEventStamp(app core.App, record *core.Record) []byte {
 		To: []mail.Address{{
 			Address: userRecord.Email(),
 		}},
-		Subject: "Ciao creatore di eventi!", Attachments: map[string]io.Reader{
-			"stamp_qr.png":  stampImage,
-			"stamp.png":     bytes.NewReader(geminiImage),
-			"copertina.png": blob,
-		},
+		Subject: "Ciao creatore di eventi!", Attachments: attachments,
 		HTML: fmt.Sprintf(`<p>Ciao creatore di eventi!</p><br><p>Trovi allegato il tuo timbro personale per l'evento %s e la copertina!</p><p>Se invece ti serve il link per il timbro eccolo: %s </p>`, record.GetString("name"), qrc),
 		Text: fmt.Sprintf("Ciao creatore di eventi!\n\nTrovi allegato il tuo timbro personale per l'evento %s e la copertina!\n\nSe invece ti serve il link per il timbro eccolo: %s", record.GetString("name"), qrc),
 	}

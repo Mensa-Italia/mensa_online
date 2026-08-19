@@ -127,6 +127,7 @@ func StampUpdateImageAsync(e *core.RecordEvent) error {
 	record := e.Record
 
 	go func(e *core.RecordEvent) {
+		defer recoverAsyncHook(e.App, "StampUpdateImageAsync")
 		if strings.Contains(record.GetString("description"), "[UPDATE]") {
 			descriptionToUse := strings.TrimSpace(strings.ReplaceAll(record.GetString("description"), "[UPDATE]", ""))
 			makeItRed := false

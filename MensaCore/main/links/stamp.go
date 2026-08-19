@@ -219,9 +219,15 @@ type StampTemplateData struct {
 // It returns a social-preview-friendly HTML page that attempts to open the Mensa Italia app.
 // There is intentionally no web fallback.
 func LinksStamps(e *core.RequestEvent) error {
+	// Il path arriva nella forma "<id>:::<code>" dal QR, ma la og:url che
+	// pubblichiamo qui sotto (e il README) usano la forma senza codice: fare
+	// Split(...)[1] a occhi chiusi mandava in panic — index out of range —
+	// ogni apertura del link "nudo", crawler social inclusi.
 	idStamp := e.Request.PathValue("id")
-	codeStamp := strings.Split(idStamp, ":::")[1]
-	idStamp = strings.Split(idStamp, ":::")[0]
+	codeStamp := ""
+	if parts := strings.SplitN(idStamp, ":::", 2); len(parts) == 2 {
+		idStamp, codeStamp = parts[0], parts[1]
+	}
 	app := e.App
 
 	collection, _ := app.FindCollectionByNameOrId("stamp")
@@ -254,7 +260,9 @@ func LinksStamps(e *core.RequestEvent) error {
 		return e.String(500, "Template execution error")
 	}
 
-	if e.Request.URL.Query().Has("qrcode") {
+	// Il QR ha senso solo con il codice segreto: senza, produrrebbe un link
+	// che non permette di riscattare nulla.
+	if e.Request.URL.Query().Has("qrcode") && codeStamp != "" {
 		dataToEncode := fmt.Sprintf("https://svc.mensa.it/links/stamp/%s:::%s", idStamp, codeStamp)
 		code := qrtools.GenQrCode(dataToEncode)
 		if code != nil {

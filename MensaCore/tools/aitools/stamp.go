@@ -7,6 +7,8 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"log"
+	"mensadb/tools/env"
 	"time"
 
 	"github.com/tidwall/gjson"
@@ -51,11 +53,15 @@ func GenerateStampPrompt(stampDescription string) string {
 
 	result, err := client.Models.GenerateContent(
 		ctx,
-		"gemini-3-flash-preview",
+		env.GetGeminiTextModel(),
 		contents,
 		config,
 	)
 	if err != nil {
+		// Errore loggato e non inghiottito: senza questa riga un modello
+		// ritirato o una quota esaurita degradavano in silenzio a un
+		// prompt generico, rendendo il guasto invisibile.
+		log.Printf("GenerateStampPrompt: %v", err)
 		return ""
 	}
 
@@ -64,36 +70,17 @@ func GenerateStampPrompt(stampDescription string) string {
 
 func GenerateStamp(prompt string, makeitred bool) ([]byte, error) {
 	newPrompt := GenerateStampPrompt(prompt)
-	client := GetAIClient()
-	if client == nil {
-		return nil, errStampClientUnavailable
-	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	images, err := client.Models.GenerateImages(
+	bytesOutput, err := GenerateImageBytes(
 		ctx,
-		"models/imagen-4.0-generate-001",
 		"Make an ink stamp black and solid white background with the following description: "+newPrompt,
-		&genai.GenerateImagesConfig{
-			NumberOfImages:   1,
-			OutputMIMEType:   "image/jpeg",
-			PersonGeneration: genai.PersonGenerationAllowAdult,
-			AspectRatio:      "1:1",
-			ImageSize:        "1K",
-		},
+		"1:1",
 	)
 	if err != nil {
 		return nil, err
-	}
-
-	var bytesOutput []byte
-	for _, part := range images.GeneratedImages {
-		if part.Image != nil {
-			bytesOutput = part.Image.ImageBytes
-			break
-		}
 	}
 
 	img, _, err := image.Decode(bytes.NewReader(bytesOutput))

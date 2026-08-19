@@ -19,6 +19,13 @@ type config struct {
 	Area32InternalEmail    string `env:"AREA32_INTERNAL_EMAIL"`
 	Area32InternalPassword string `env:"AREA32_INTERNAL_PASSWORD"`
 	GeminiKey              string `env:"GEMINI_KEY"`
+	// Modelli Gemini per testo e immagini. Stanno in env e non nel codice
+	// perche` Google ritira gli id con un preavviso che non controlliamo:
+	// la famiglia imagen-* e` sparita dalla Gemini API (404 NOT_FOUND su
+	// models/imagen-4.0-generate-001) e ha fermato timbri e copertine AI.
+	// Con questi in env il prossimo ritiro e` una variabile, non una release.
+	GeminiTextModel        string `env:"GEMINI_TEXT_MODEL" envDefault:"gemini-3-flash-preview"`
+	GeminiImageModel       string `env:"GEMINI_IMAGE_MODEL" envDefault:"gemini-3.1-flash-image"`
 	GeminiTTSKey           string `env:"GEMINI_TTS_KEY" envDefault:""`
 	GeminiTTSModel         string `env:"GEMINI_TTS_MODEL" envDefault:"gemini-3.1-flash-tts-preview"`
 	GeminiTTSVoice         string `env:"GEMINI_TTS_VOICE" envDefault:"Charon"`
@@ -173,6 +180,9 @@ func GetGeminiTTSKey() string {
 	}
 	return cfg.GeminiKey
 }
+
+func GetGeminiTextModel() string  { return cfg.GeminiTextModel }
+func GetGeminiImageModel() string { return cfg.GeminiImageModel }
 
 func GetGeminiTTSModel() string        { return cfg.GeminiTTSModel }
 func GetGeminiTTSVoice() string        { return cfg.GeminiTTSVoice }
