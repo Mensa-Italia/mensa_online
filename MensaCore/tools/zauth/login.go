@@ -28,6 +28,13 @@ type TokenSet struct {
 var (
 	ErrUserNotFound    = errors.New("zauth: user not found")
 	ErrInvalidPassword = errors.New("zauth: invalid password")
+	// ErrPasswordNotSet segnala un utente che esiste su Zitadel ma non ha
+	// (ancora) una credenziale password: e` il caso degli utenti creati dal
+	// bulk import (tools/dbtools/update_zitadel.go), che vengono creati con
+	// profilo + metadata ma senza password. Zitadel risponde FailedPrecondition
+	// "User has not set a password (COMMAND-3nJ4t)". Va trattato come
+	// ErrInvalidPassword dal chiamante: riallinea la password da Area32.
+	ErrPasswordNotSet = errors.New("zauth: user has no password set")
 )
 
 // LoginWithPassword esegue un login completo OIDC contro Zitadel
@@ -52,6 +59,9 @@ func LoginWithPassword(email, password string) (*TokenSet, error) {
 		},
 	})
 	if err != nil {
+		if isPasswordNotSetError(err) {
+			return nil, ErrPasswordNotSet
+		}
 		if isPasswordError(err) {
 			return nil, ErrInvalidPassword
 		}
@@ -257,6 +267,19 @@ func isPasswordError(err error) bool {
 		strings.Contains(msg, "password") && strings.Contains(msg, "invalid")
 }
 
+// isPasswordNotSetError riconosce l'utente senza credenziale password.
+// Zitadel emette "User has not set a password (COMMAND-3nJ4t)" con codice
+// FailedPrecondition.
+func isPasswordNotSetError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "command-3nj4t") ||
+		strings.Contains(msg, "has not set a password") ||
+		strings.Contains(msg, "has no password")
+}
+
 func isUserNotFoundError(err error) bool {
 	if err == nil {
 		return false
@@ -264,4 +287,3 @@ func isUserNotFoundError(err error) bool {
 	msg := strings.ToLower(err.Error())
 	return strings.Contains(msg, "not found") || strings.Contains(msg, "notfound")
 }
-

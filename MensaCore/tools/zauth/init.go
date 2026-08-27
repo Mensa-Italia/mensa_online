@@ -2,6 +2,8 @@ package zauth
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log"
 	"log/slog"
 	"mensadb/tools/env"
@@ -274,18 +276,35 @@ func GetUserMetadata(userID string) map[string]string {
 	return out
 }
 
-func SetUserPassword(membershipID string, password string) {
+// SetUserPassword imposta la password Zitadel risolvendo l'utente dai metadata
+// (membership_id). Ritorna errore: il chiamante deve sapere se la sync ha
+// funzionato, altrimenti l'utente resta senza credenziale e ogni login futuro
+// fallisce con COMMAND-3nJ4t.
+func SetUserPassword(membershipID string, password string) error {
 	if apiClient == nil {
-		slog.Error("api client not initialized")
-		return
+		return errors.New("zauth: api client not initialized")
 	}
 	userFound, found := FindUserByMembershipID(membershipID)
 	if !found {
 		slog.Error("user not found", "membershipID", membershipID)
-		return
+		return fmt.Errorf("zauth: no zitadel user with membership_id %q", membershipID)
+	}
+	return SetUserPasswordByUserID(userFound.UserId, password)
+}
+
+// SetUserPasswordByUserID imposta la password direttamente sull'id Zitadel.
+// Da preferire quando l'id e` gia` noto (UserExists/CreateUser): la ricerca per
+// metadata passa dalle proiezioni, che sono eventually consistent e falliscono
+// subito dopo una CreateUser o sugli utenti importati senza membership_id.
+func SetUserPasswordByUserID(userID string, password string) error {
+	if apiClient == nil {
+		return errors.New("zauth: api client not initialized")
+	}
+	if strings.TrimSpace(userID) == "" {
+		return errors.New("zauth: missing userID")
 	}
 	_, err := apiClient.UserServiceV2().UpdateUser(ctx, &user.UpdateUserRequest{
-		UserId: userFound.UserId,
+		UserId: userID,
 		UserType: &user.UpdateUserRequest_Human_{
 			Human: &user.UpdateUserRequest_Human{
 				Password: &user.SetPassword{
@@ -300,12 +319,12 @@ func SetUserPassword(membershipID string, password string) {
 		},
 	})
 	if err != nil {
-		slog.Error("failed to set user password", "userID", userFound.UserId, "error", err)
-		return
+		slog.Error("failed to set user password", "userID", userID, "error", err)
+		return fmt.Errorf("zauth: set password: %w", err)
 	}
 
 	_, _ = apiClient.UserServiceV2().SetUserMetadata(ctx, &user.SetUserMetadataRequest{
-		UserId: userFound.UserId,
+		UserId: userID,
 		Metadata: []*user.Metadata{
 			{
 				Key:   "area32_password_set",
@@ -313,5 +332,37 @@ func SetUserPassword(membershipID string, password string) {
 			},
 		},
 	})
-	slog.Info("user password set", "userID", userFound.UserId)
+	slog.Info("user password set", "userID", userID)
+	return nil
+}
+
+// SetUserMetadataValues fa upsert di metadata arbitrari sull'utente Zitadel.
+// Serve a riparare gli utenti importati senza membership_id, che altrimenti
+// restano irraggiungibili da FindUserByMembershipID.
+func SetUserMetadataValues(userID string, kv map[string]string) error {
+	if apiClient == nil {
+		return errors.New("zauth: api client not initialized")
+	}
+	if strings.TrimSpace(userID) == "" {
+		return errors.New("zauth: missing userID")
+	}
+	metadata := make([]*user.Metadata, 0, len(kv))
+	for key, value := range kv {
+		if key == "" || value == "" {
+			continue
+		}
+		metadata = append(metadata, &user.Metadata{Key: key, Value: []byte(value)})
+	}
+	if len(metadata) == 0 {
+		return nil
+	}
+	_, err := apiClient.UserServiceV2().SetUserMetadata(ctx, &user.SetUserMetadataRequest{
+		UserId:   userID,
+		Metadata: metadata,
+	})
+	if err != nil {
+		slog.Error("failed to set user metadata", "userID", userID, "error", err)
+		return fmt.Errorf("zauth: set metadata: %w", err)
+	}
+	return nil
 }

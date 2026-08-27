@@ -31,7 +31,15 @@ func AuthWithZitadelHandler(e *core.RequestEvent) error {
 
 	tokens, zerr := zauth.LoginWithPassword(email, password)
 
-	if errors.Is(zerr, zauth.ErrUserNotFound) {
+	// Tre casi vanno tutti riparati nello stesso modo: l'utente non esiste su
+	// Zitadel, esiste ma con password diversa, oppure esiste senza alcuna
+	// credenziale password (utenti creati dal bulk import: Zitadel risponde
+	// FailedPrecondition COMMAND-3nJ4t). In tutti e tre Area32 e` la fonte di
+	// verita`: ci autentichiamo li`, poi allineiamo Zitadel e ritentiamo.
+	if errors.Is(zerr, zauth.ErrUserNotFound) ||
+		errors.Is(zerr, zauth.ErrInvalidPassword) ||
+		errors.Is(zerr, zauth.ErrPasswordNotSet) {
+
 		var aerr error
 		areaUser, aerr = scraperApi.DoLoginAndRetrieveMain(email, password)
 		if aerr != nil {
@@ -40,31 +48,39 @@ func AuthWithZitadelHandler(e *core.RequestEvent) error {
 			}
 			return apis.NewApiError(http.StatusUnauthorized, "Invalid credentials", aerr)
 		}
-		zauth.CreateUser(areaUser.Fullname, email, email, map[string]string{
-			"membership_id": areaUser.Id,
-		})
-		zauth.SetUserPassword(areaUser.Id, password)
+
+		metadata := map[string]string{"membership_id": areaUser.Id}
+
+		// CreateUser fa upsert e ritorna l'id Zitadel in entrambi i rami.
+		// Usiamo quell'id diretto invece di risalire dai metadata: la ricerca
+		// per membership_id passa dalle proiezioni (eventually consistent) e
+		// non trova gli utenti importati senza quel metadato.
+		zitadelUserID := zauth.CreateUser(areaUser.Fullname, email, email, metadata)
+		if zitadelUserID == "" {
+			if existingID, ok := zauth.UserExists(email); ok {
+				zitadelUserID = existingID
+			}
+		}
+		if zitadelUserID == "" {
+			log.Println("zitadel provisioning failed for", email)
+			return apis.NewApiError(http.StatusInternalServerError, "Zitadel sync failed", nil)
+		}
+
+		// Ripara i vecchi utenti importati senza membership_id, cosi` le
+		// lookup per metadata (e SetUserPassword) tornano a funzionare.
+		if err := zauth.SetUserMetadataValues(zitadelUserID, metadata); err != nil {
+			log.Println("zitadel metadata sync failed:", err)
+		}
+
+		if err := zauth.SetUserPasswordByUserID(zitadelUserID, password); err != nil {
+			log.Println("zitadel password sync failed:", err)
+			return apis.NewApiError(http.StatusInternalServerError, "Zitadel password sync failed", err)
+		}
 
 		tokens, zerr = zauth.LoginWithPassword(email, password)
 		if zerr != nil {
 			log.Println("zitadel login still failing after provisioning:", zerr)
 			return apis.NewApiError(http.StatusInternalServerError, "Zitadel sync failed", zerr)
-		}
-	} else if errors.Is(zerr, zauth.ErrInvalidPassword) {
-		var aerr error
-		areaUser, aerr = scraperApi.DoLoginAndRetrieveMain(email, password)
-		if aerr != nil {
-			if errors.Is(aerr, area32.ErrUnableToConnect) {
-				return apis.NewApiError(http.StatusServiceUnavailable, "Unable to connect to area32", aerr)
-			}
-			return apis.NewApiError(http.StatusUnauthorized, "Invalid credentials", aerr)
-		}
-		zauth.SetUserPassword(areaUser.Id, password)
-
-		tokens, zerr = zauth.LoginWithPassword(email, password)
-		if zerr != nil {
-			log.Println("zitadel login still failing after password realign:", zerr)
-			return apis.NewApiError(http.StatusInternalServerError, "Zitadel password sync failed", zerr)
 		}
 	} else if zerr != nil {
 		log.Println("zitadel login error:", zerr)
