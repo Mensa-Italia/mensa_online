@@ -1,0 +1,16 @@
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Segreti e configurazione locale
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode/
+
+# Build Go
+*.exe
+*.test
+*.out
