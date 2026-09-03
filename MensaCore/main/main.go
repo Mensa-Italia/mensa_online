@@ -110,8 +110,15 @@ func main() {
 	// rompere cio` che un header non puo` mandarlo — le anteprime social di
 	// /links/event e /links/stamp, le versioni dell'app gia` installate, i
 	// player audio — mentre il link S3 smette di circolare.
+	// Il gate su e.Auth e` sotto un interruttore di config (FILE_LINK_REQUIRE_AUTH,
+	// default true). A false il link firmato torna a chiunque, per mettere in
+	// produzione questa immagine con la stessa resa della vecchia durante il
+	// cutover e riattivare la protezione da config quando l'app aggiornata e`
+	// diffusa. Nota: il gate non nega mai il file — a true una richiesta anonima
+	// non fa 404, cade su e.Next() e il file lo serve PocketBase; cambia solo se
+	// i byte li offloada S3 o li serve il backend. Vedi env.GetFileLinkRequireAuth.
 	app.OnFileDownloadRequest().BindFunc(func(e *core.FileDownloadRequestEvent) error {
-		if e.Auth == nil {
+		if env.GetFileLinkRequireAuth() && e.Auth == nil {
 			return e.Next()
 		}
 

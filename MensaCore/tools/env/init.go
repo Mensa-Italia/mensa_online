@@ -74,6 +74,44 @@ type config struct {
 	// immagini. In env perche` un CDN davanti a noi puo` volere finestre piu`
 	// larghe, e non si cambia una policy di sicurezza con una release.
 	S3PresignTTLSeconds int `env:"S3_PRESIGN_TTL_SECONDS" envDefault:"300"`
+	// FileLinkRequireAuth decide chi riceve il link S3 firmato (307) sul
+	// download diretto, nell'hook OnFileDownloadRequest.
+	//
+	//   true  (default) — il link firmato si produce solo per una richiesta
+	//                     autenticata (header Authorization). Le richieste
+	//                     anonime cadono su e.Next() e il file lo serve
+	//                     PocketBase, in streaming dal backend.
+	//   false           — il link firmato va a chiunque, come prima di
+	//                     settembre 2026: si riapre il buco (il link S3 e`
+	//                     una capability anonima che circola), ma il carico
+	//                     torna a essere offloadato a S3.
+	//
+	// ATTENZIONE a cosa NON fa. Il flag non nega mai un file: a `true` una
+	// richiesta anonima NON riceve un 404, riceve gli stessi byte serviti dal
+	// backend invece del redirect a S3. Quindi non evita "rotture" — nessun
+	// consumatore anonimo che oggi vede un file smette di vederlo. Quello che
+	// cambia e` DOVE passano i byte: a `true` ogni richiesta senza header
+	// (app vecchie, crawler delle anteprime social, player audio) la serve il
+	// backend invece di S3. L'unica conseguenza reale e` l'egress sul backend.
+	//
+	// Esiste per il cutover verso l'app che manda l'header anche sui download
+	// di file (mensa_italia_app v22.2.8). Finche` la stragrande maggioranza
+	// delle installazioni e` la vecchia app, che l'header non lo manda, `true`
+	// significa servire dal backend quasi tutto il traffico immagini. La
+	// sequenza sensata: tira su l'immagine nuova con `false` (stessa resa
+	// della vecchia su chi-riceve-il-link e su offload a S3), aspetta che la
+	// nuova app si diffonda sugli store, poi alza a `true`. Reversibile da
+	// config, senza redeploy.
+	//
+	// NON e` un ripristino byte-per-byte della vecchia immagine: `false` da
+	// solo tocca solo questo gate. Restano le altre modifiche della stessa
+	// release, ortogonali a questo flag — il TTL del link firmato (5 min di
+	// default, era 1 ora; si allunga con S3_PRESIGN_TTL_SECONDS) e l'endpoint
+	// additivo GET /api/cs/file-link, che le app vecchie non chiamano.
+	//
+	// Il default e` `true`: un'immagine tirata su senza toccare la config e`
+	// quella sicura, non quella comoda.
+	FileLinkRequireAuth bool `env:"FILE_LINK_REQUIRE_AUTH" envDefault:"true"`
 }
 
 var cfg = config{}
@@ -155,6 +193,13 @@ func GetS3PresignTTL() time.Duration {
 		return 5 * time.Minute
 	}
 	return time.Duration(cfg.S3PresignTTLSeconds) * time.Second
+}
+
+// GetFileLinkRequireAuth dice se il link S3 firmato sul download diretto va
+// prodotto solo dietro autenticazione (true, sicuro e default) o per chiunque
+// (false, comportamento storico per il cutover). Vedi il campo omonimo.
+func GetFileLinkRequireAuth() bool {
+	return cfg.FileLinkRequireAuth
 }
 
 func GetPasswordSalt() string {
