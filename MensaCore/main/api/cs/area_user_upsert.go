@@ -70,7 +70,9 @@ func upsertUserFromAreaUser(app core.App, areaUser *area32.Area32User, email, pa
 			_, _ = payment.GetCustomerId(app, areaUser.Id)
 		}()
 		go func() {
-			zauth.SetUserPassword(areaUser.Id, password)
+			if err := zauth.SetUserPassword(areaUser.Id, password); err != nil {
+				log.Println("zitadel password sync failed:", err)
+			}
 		}()
 		return newUser, nil
 	}

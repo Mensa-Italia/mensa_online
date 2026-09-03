@@ -12,8 +12,9 @@
 # Verificato in produzione con 1.25.9 + mitigazione: POST /api/cs/auth-with-zitadel
 # ha riscritto il record del socio, e quella scrittura passa da
 # upsertUserFromAreaUser, cioe` dallo scraping riuscito dall'egress reale.
-# Solo dopo quella prova il pin e` stato liftato a 1.26.5, che chiude le 9 CVE
-# della stdlib e fa passare govulncheck (quindi Security -> Build -> GHCR).
+# Solo dopo quella prova il pin e` stato liftato a 1.26.5, e poi a 1.26.6, che
+# chiude le CVE stdlib rimaste (encoding/xml, encoding/asn1, net/http via
+# x/net/idna) e fa passare govulncheck (quindi Security -> Build -> GHCR).
 #
 # Se il sync soci dovesse degradare di nuovo dopo un bump, l'ordine di indagine
 # e` questo:
@@ -25,7 +26,7 @@
 #   2. se h2 e` gia` escluso, il sospetto resta il fingerprint TLS del
 #      ClientHello, che cambia comunque fra versioni di Go. La strada e` utls,
 #      per imitare il ClientHello di un browser.
-FROM golang:1.26.5-alpine AS builder
+FROM golang:1.26.6-alpine AS builder
 
 RUN apk add --no-cache build-base
 
