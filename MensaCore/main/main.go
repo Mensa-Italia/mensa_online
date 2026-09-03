@@ -93,7 +93,28 @@ func main() {
 		return e.Next()
 	})
 
+	// Il redirect 307 verso S3 consegna al chiamante un link firmato: una
+	// capability anonima che, fino alla scadenza, scarica il file senza header
+	// e senza passare piu` da qui. Prima lo si dava a chiunque conoscesse
+	// l'URL, con un'ora di validita`.
+	//
+	// Ora il link firmato si produce SOLO per una richiesta autenticata. `e.Auth`
+	// e` gia` valorizzato a questo punto da due middleware globali: quello
+	// Zitadel (zitadelauth.LoadAuth, registrato in OnServe) per il bearer OIDC
+	// che manda l'app, e il loader nativo di PocketBase per i token PB.
+	// Autenticarsi vuol dire quindi mandare l'header `Authorization`, ed e`
+	// l'header a decidere se il link firmato viene prodotto.
+	//
+	// Chi non si autentica non riceve un errore: si prosegue con `e.Next()` e
+	// il file lo serve PocketBase, con le stesse regole di sempre. Serve a non
+	// rompere cio` che un header non puo` mandarlo — le anteprime social di
+	// /links/event e /links/stamp, le versioni dell'app gia` installate, i
+	// player audio — mentre il link S3 smette di circolare.
 	app.OnFileDownloadRequest().BindFunc(func(e *core.FileDownloadRequestEvent) error {
+		if e.Auth == nil {
+			return e.Next()
+		}
+
 		s3settings := app.Settings().S3
 		presignedUrl := cdnfiles.GetFilePresignedURL(app, s3settings.Bucket, e.ServedPath)
 		if presignedUrl != "" {

@@ -33,6 +33,12 @@ func Load(e *router.RouterGroup[*core.RequestEvent]) {
 	e.DELETE("/passkeys/{id}", PasskeyDeleteHandler)
 
 	e.GET("/me", MeHandler)
+
+	// Link S3 firmato per un allegato, prodotto solo dietro header di
+	// autenticazione. Serve dove un header non si puo` mandare: PDF aperti in
+	// Safari o in un visualizzatore di sistema, fogli di condivisione, pagine
+	// esterne. Vedi FileLinkHandler.
+	e.GET("/file-link", FileLinkHandler)
 	e.POST("/send-update-notify", SendUpdateNotifyHandler)
 	e.GET("/force-update-addons", ForceUpdateAddonsHandler)
 	e.GET("/force-notification", forceNotification)

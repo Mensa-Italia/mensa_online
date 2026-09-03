@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/caarlos0/env/v11"
 )
@@ -64,6 +65,15 @@ type config struct {
 	// Lasciarlo vuoto in produzione: ogni fingerprint elencato qui puo`
 	// richiedere le passkey del nostro relying party.
 	AndroidDebugSHA256 string `env:"ANDROID_DEBUG_SHA256" envDefault:""`
+	// Durata in secondi dei link S3 firmati che serviamo per immagini e
+	// documenti. Un link firmato e` una capability anonima: chi ce l'ha
+	// scarica il file senza passare piu` da noi, quindi la sua durata e` la
+	// finestra in cui un link finito in un log, in un Referer o in una chat
+	// resta spendibile. Stava a un'ora fissa nel codice; il default e` ora
+	// cinque minuti, che basta per aprire un PDF o caricare una lista di
+	// immagini. In env perche` un CDN davanti a noi puo` volere finestre piu`
+	// larghe, e non si cambia una policy di sicurezza con una release.
+	S3PresignTTLSeconds int `env:"S3_PRESIGN_TTL_SECONDS" envDefault:"300"`
 }
 
 var cfg = config{}
@@ -133,6 +143,18 @@ func MustValidate() error {
 
 func GetPasswordUUID() string {
 	return cfg.PasswordUUID
+}
+
+// GetS3PresignTTL e` la durata dei link S3 firmati.
+//
+// Un valore non positivo in env verrebbe accettato da AWS come "gia` scaduto"
+// e romperebbe ogni download senza un errore leggibile: in quel caso si torna
+// al default di cinque minuti invece di fidarsi della configurazione.
+func GetS3PresignTTL() time.Duration {
+	if cfg.S3PresignTTLSeconds <= 0 {
+		return 5 * time.Minute
+	}
+	return time.Duration(cfg.S3PresignTTLSeconds) * time.Second
 }
 
 func GetPasswordSalt() string {
