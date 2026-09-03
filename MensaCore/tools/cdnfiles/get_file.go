@@ -8,12 +8,30 @@ import (
 	"strings"
 	"time"
 
+	"mensadb/tools/env"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/pocketbase/pocketbase/core"
 )
 
+// GetFilePresignedURL firma un GET sull'oggetto S3 con la durata configurata
+// (S3_PRESIGN_TTL_SECONDS, default 5 minuti).
+//
+// Il valore che torna e` una capability anonima: chiunque lo possieda scarica
+// il file, senza header e senza passare piu` da PocketBase, fino alla
+// scadenza. Va consegnato solo a chi si e` gia` autenticato — vedi l'hook
+// OnFileDownloadRequest in main.go e l'endpoint /api/cs/file-link.
+//
+// Torna stringa vuota quando S3 e` spento o la firma fallisce: chi chiama deve
+// trattarlo come "nessun link" e ricadere sullo streaming di PocketBase.
 func GetFilePresignedURL(app core.App, bucket, fileKey string) string {
+	return GetFilePresignedURLWithTTL(app, bucket, fileKey, env.GetS3PresignTTL())
+}
+
+// GetFilePresignedURLWithTTL e` la variante con durata esplicita, per i
+// chiamanti che hanno una finestra propria da rispettare.
+func GetFilePresignedURLWithTTL(app core.App, bucket, fileKey string, ttl time.Duration) string {
 	s3settings := app.Settings().S3
 	if s3settings.Enabled {
 		s3client, err := NewS3(s3settings.Region, s3settings.Endpoint, s3settings.AccessKey, s3settings.Secret, s3settings.ForcePathStyle)
@@ -27,7 +45,7 @@ func GetFilePresignedURL(app core.App, bucket, fileKey string) string {
 				Bucket: aws.String(bucket),
 				Key:    aws.String(fileKey),
 			},
-			s3.WithPresignExpires(time.Hour))
+			s3.WithPresignExpires(ttl))
 		if err != nil {
 			app.Logger().Error("create s3 presigned url", "error", err)
 			return ""
