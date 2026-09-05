@@ -242,9 +242,19 @@ func LinksStamps(e *core.RequestEvent) error {
 
 	imageKey := record.BaseFilesPath() + "/" + record.GetString("image")
 
+	// La collection `stamp` un campo `name` non ce l'ha — solo id, image,
+	// description, created, updated. `GetString("name")` tornava quindi sempre
+	// stringa vuota, e ogni anteprima social di un francobollo usciva senza
+	// titolo: <title> vuoto e og:title vuoto. Il testo del francobollo sta in
+	// `description`, che qui fa da titolo.
+	title := record.GetString("description")
+	if title == "" {
+		title = "Francobollo Mensa Italia"
+	}
+
 	data := StampTemplateData{
 		Id:          idStamp,
-		Title:       record.GetString("name"),
+		Title:       title,
 		Description: record.GetString("description"),
 		Image:       "https://svc.mensa.it/api/files/" + imageKey,
 		URL:         "https://svc.mensa.it/links/stamp/" + idStamp,
