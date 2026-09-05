@@ -93,33 +93,28 @@ func main() {
 		return e.Next()
 	})
 
-	// Il redirect 307 verso S3 consegna al chiamante un link firmato: una
-	// capability anonima che, fino alla scadenza, scarica il file senza header
-	// e senza passare piu` da qui. Prima lo si dava a chiunque conoscesse
-	// l'URL, con un'ora di validita`.
+	// Il download diretto di un file (/api/files/...) richiede una richiesta
+	// autenticata: senza, 404. `e.Auth` e` gia` valorizzato a questo punto da
+	// due middleware globali — quello Zitadel (zitadelauth.LoadAuth, registrato
+	// in OnServe) per il bearer OIDC che manda l'app, e il loader nativo di
+	// PocketBase per i token PB. In alternativa vale un file token PocketBase
+	// in ?token=, che e` il modo in cui PocketBase stesso autentica i campi
+	// `protected`.
 	//
-	// Ora il link firmato si produce SOLO per una richiesta autenticata. `e.Auth`
-	// e` gia` valorizzato a questo punto da due middleware globali: quello
-	// Zitadel (zitadelauth.LoadAuth, registrato in OnServe) per il bearer OIDC
-	// che manda l'app, e il loader nativo di PocketBase per i token PB.
-	// Autenticarsi vuol dire quindi mandare l'header `Authorization`, ed e`
-	// l'header a decidere se il link firmato viene prodotto.
+	// Chi e` autenticato riceve il 307 verso il link S3 firmato: una capability
+	// anonima che, fino alla scadenza (S3_PRESIGN_TTL_SECONDS), scarica il file
+	// senza header e senza passare piu` da qui. Se S3 e` spento o la firma
+	// fallisce, il file lo serve PocketBase.
 	//
-	// Chi non si autentica non riceve un errore: si prosegue con `e.Next()` e
-	// il file lo serve PocketBase, con le stesse regole di sempre. Serve a non
-	// rompere cio` che un header non puo` mandarlo — le anteprime social di
-	// /links/event e /links/stamp, le versioni dell'app gia` installate, i
-	// player audio — mentre il link S3 smette di circolare.
-	// Il gate su e.Auth e` sotto un interruttore di config (FILE_LINK_REQUIRE_AUTH,
-	// default true). A false il link firmato torna a chiunque, per mettere in
-	// produzione questa immagine con la stessa resa della vecchia durante il
-	// cutover e riattivare la protezione da config quando l'app aggiornata e`
-	// diffusa. Nota: il gate non nega mai il file — a true una richiesta anonima
-	// non fa 404, cade su e.Next() e il file lo serve PocketBase; cambia solo se
-	// i byte li offloada S3 o li serve il backend. Vedi env.GetFileLinkRequireAuth.
+	// Due interruttori di config, vedi tools/env: FILE_LINK_REQUIRE_AUTH
+	// (default true; a false si torna al comportamento storico, link firmato a
+	// chiunque) e FILE_LINK_PUBLIC_COLLECTIONS (collection i cui file restano
+	// leggibili senza autenticazione, per le anteprime social e simili).
 	app.OnFileDownloadRequest().BindFunc(func(e *core.FileDownloadRequestEvent) error {
-		if env.GetFileLinkRequireAuth() && e.Auth == nil {
-			return e.Next()
+		if env.GetFileLinkRequireAuth() &&
+			!env.IsFileLinkPublicCollection(e.Collection.Name, e.Collection.Id) &&
+			!isFileRequestAuthenticated(e) {
+			return e.NotFoundError("", nil)
 		}
 
 		s3settings := app.Settings().S3
@@ -147,4 +142,21 @@ func main() {
 	if err := app.Start(); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// isFileRequestAuthenticated dice se la richiesta di download di un file
+// porta un'identita`: l'header Authorization gia` risolto in e.Auth dai
+// middleware globali, oppure un file token PocketBase valido nel parametro
+// ?token= (quello di POST /api/files/token, che PocketBase usa per i campi
+// `protected`).
+func isFileRequestAuthenticated(e *core.FileDownloadRequestEvent) bool {
+	if e.Auth != nil {
+		return true
+	}
+	token := e.Request.URL.Query().Get("token")
+	if token == "" {
+		return false
+	}
+	record, err := e.App.FindAuthRecordByToken(token, core.TokenTypeFile)
+	return err == nil && record != nil
 }
