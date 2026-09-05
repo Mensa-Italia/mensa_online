@@ -98,11 +98,28 @@ type config struct {
 	// collection (nome o id) i cui file restano scaricabili senza
 	// autenticazione anche con FILE_LINK_REQUIRE_AUTH=true. Per queste il
 	// comportamento e` quello storico: link S3 firmato a chiunque, o file dal
-	// backend se S3 e` spento. Serve per i consumatori che un header non
-	// possono mandarlo (es. le immagini di eventi e stamp nelle anteprime
-	// social di /links/event e /links/stamp). Vuoto di default: nessuna
-	// eccezione finche` non la si dichiara.
-	FileLinkPublicCollections string `env:"FILE_LINK_PUBLIC_COLLECTIONS" envDefault:""`
+	// backend se S3 e` spento.
+	//
+	// Il default NON e` vuoto, ed e` una scelta: le collection elencate qui
+	// hanno gia` `viewRule = ""` nello schema, cioe` sono pubbliche per decisione
+	// nostra. Metterle dietro autenticazione non protegge niente che non fosse
+	// gia` leggibile via /api/collections, e in compenso rompe i consumatori che
+	// un header non possono mandarlo:
+	//
+	//   events, stamp          anteprime social di /links/event e /links/stamp
+	//                          (il crawler di Telegram/WhatsApp non ha sessione)
+	//   podcasts,              audio dato ad ExoPlayer e AVPlayer, che scaricano
+	//   podcast_episodes,      per conto loro e con range request lunghe quanto
+	//   quid_articles_audio    l'ascolto: un link firmato scadrebbe a meta'
+	//   ex_apps, addons        icone dell'area pubblica, mostrate prima del login
+	//   local_offices          immagini delle sedi, viewRule pubblica
+	//
+	// Restano dietro autenticazione le collection che contengono dati dei soci:
+	// documents, members_registry, users, deals, sigs, events_schedule.
+	//
+	// Un'immagine tirata su senza toccare la config si comporta quindi cosi':
+	// gli allegati riservati chiusi, il resto come prima.
+	FileLinkPublicCollections string `env:"FILE_LINK_PUBLIC_COLLECTIONS" envDefault:"events,stamp,podcasts,podcast_episodes,quid_articles_audio,ex_apps,addons,local_offices"`
 }
 
 var cfg = config{}
