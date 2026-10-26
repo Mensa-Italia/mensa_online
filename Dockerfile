@@ -18,6 +18,9 @@
 # Poi 1.26.10, per le CVE stdlib di crypto/tls, crypto/x509, net/http,
 # net/textproto e html/template: e` una patch che tocca crypto/tls, quindi
 # dopo il deploy va guardato il sync soci (vedi sotto).
+# Poi 1.27.3, richiesto da PocketBase 0.40. Qui il salto e` di versione minore:
+# il ClientHello TLS puo` cambiare davvero, e il sync soci va controllato
+# subito dopo il deploy.
 #
 # Se il sync soci dovesse degradare di nuovo dopo un bump, l'ordine di indagine
 # e` questo:
@@ -29,7 +32,7 @@
 #   2. se h2 e` gia` escluso, il sospetto resta il fingerprint TLS del
 #      ClientHello, che cambia comunque fra versioni di Go. La strada e` utls,
 #      per imitare il ClientHello di un browser.
-FROM golang:1.26.10-alpine AS builder
+FROM golang:1.27.3-alpine AS builder
 
 RUN apk add --no-cache build-base
 
