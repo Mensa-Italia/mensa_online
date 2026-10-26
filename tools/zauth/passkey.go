@@ -245,10 +245,8 @@ func FinishPasskeyLogin(sessionID, sessionToken string, credentialJSON []byte) (
 	}
 
 	resp, err := apiClient.SessionServiceV2().SetSession(ctx, &sessionV2.SetSessionRequest{
-		SessionId: sessionID,
-		// Deprecato nella API v2: le istanze Zitadel recenti lo ignorano, ma
-		// quelle precedenti lo richiedono ancora per aggiornare la sessione.
-		SessionToken: sessionToken, //nolint:staticcheck // vedi sopra
+		SessionId:    sessionID,
+		SessionToken: sessionToken,
 		Checks: &sessionV2.Checks{
 			WebAuthN: &sessionV2.CheckWebAuthN{
 				CredentialAssertionData: assertion,

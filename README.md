@@ -50,8 +50,8 @@ Il servizio in produzione è raggiungibile su `https://svc.mensa.it`. Il client 
 
 | Categoria | Tecnologia |
 |---|---|
-| Linguaggio | Go 1.27 |
-| Framework | [PocketBase 0.40](https://pocketbase.io/) (SQLite embedded) |
+| Linguaggio | Go 1.26 |
+| Framework | [PocketBase 0.37](https://pocketbase.io/) (SQLite embedded) |
 | HTTP | Router integrato PocketBase + `net/http` |
 | Migrations | `migratecmd` (automigrate in dev; schema di produzione in JSON + migrazioni Go successive) |
 | Identity | [Zitadel OIDC](https://zitadel.com/) · Area32 legacy scraper |

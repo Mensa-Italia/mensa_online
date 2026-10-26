@@ -8,7 +8,7 @@ module mensadb
 // Resta aperto il fingerprint del ClientHello TLS, che cambia comunque fra
 // versioni di Go: se il sync soci degrada dopo un bump, l'ordine di indagine
 // e' nel Dockerfile.
-go 1.27.3
+go 1.26.10
 
 require (
 	firebase.google.com/go/v4 v4.18.0
@@ -22,7 +22,7 @@ require (
 	github.com/blevesearch/bleve/v2 v2.6.0
 	github.com/caarlos0/env/v11 v11.3.1
 	github.com/fogleman/gg v1.3.0
-	github.com/gabriel-vasile/mimetype v1.4.16
+	github.com/gabriel-vasile/mimetype v1.4.13
 	github.com/go-resty/resty/v2 v2.17.2
 	github.com/golang-jwt/jwt/v4 v4.5.2
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0
@@ -33,7 +33,7 @@ require (
 	github.com/paulmach/orb v0.11.1
 	github.com/pdfcpu/pdfcpu v0.11.1
 	github.com/pocketbase/dbx v1.12.0
-	github.com/pocketbase/pocketbase v0.40.6
+	github.com/pocketbase/pocketbase v0.39.11
 	github.com/spf13/cobra v1.10.2
 	github.com/stripe/stripe-go/v81 v81.4.0
 	github.com/tidwall/gjson v1.18.0
@@ -41,7 +41,7 @@ require (
 	github.com/yeqown/go-qrcode/writer/standard v1.3.0
 	github.com/zitadel/oidc/v3 v3.45.1
 	github.com/zitadel/zitadel-go/v3 v3.25.0
-	golang.org/x/image v0.47.0
+	golang.org/x/image v0.45.0
 	golang.org/x/sync v0.24.0
 	golang.org/x/text v0.43.0
 	google.golang.org/api v0.278.0
@@ -106,7 +106,7 @@ require (
 	github.com/cncf/xds/go v0.0.0-20260202195803-dba9d589def2 // indirect
 	github.com/disintegration/imaging v1.6.2 // indirect
 	github.com/domodwyer/mailyak/v3 v3.6.2 // indirect
-	github.com/dustin/go-humanize v1.1.0 // indirect
+	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/envoyproxy/go-control-plane/envoy v1.37.0 // indirect
 	github.com/envoyproxy/protoc-gen-validate v1.3.3 // indirect
 	github.com/fatih/color v1.19.0 // indirect
@@ -134,13 +134,13 @@ require (
 	github.com/hhrutter/tiff v1.0.2 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/json-iterator/go v0.0.0-20171115153421-f7279a603ede // indirect
-	github.com/mattn/go-colorable v0.1.16 // indirect
-	github.com/mattn/go-isatty v0.0.24 // indirect
+	github.com/mattn/go-colorable v0.1.15 // indirect
+	github.com/mattn/go-isatty v0.0.23 // indirect
 	github.com/mattn/go-runewidth v0.0.19 // indirect
 	github.com/mschoch/smat v0.2.0 // indirect
 	github.com/muhlemmer/gu v0.3.1 // indirect
 	github.com/muhlemmer/httpforwarded v0.1.0 // indirect
-	github.com/ncruces/go-strftime v1.1.0 // indirect
+	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
 	github.com/pocketbase/ozzo-validation/v4 v4.3.0 // indirect
@@ -170,7 +170,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.47.0 // indirect
 	golang.org/x/crypto v0.58.0 // indirect
 	golang.org/x/net v0.61.0 // indirect
-	golang.org/x/oauth2 v0.37.0 // indirect
+	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	google.golang.org/appengine/v2 v2.0.6 // indirect
@@ -179,8 +179,8 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260706201446-f0a921348800 // indirect
 	google.golang.org/grpc v1.84.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	modernc.org/libc v1.77.1 // indirect
+	modernc.org/libc v1.74.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
-	modernc.org/memory v1.12.1 // indirect
-	modernc.org/sqlite v1.60.1 // indirect
+	modernc.org/memory v1.11.0 // indirect
+	modernc.org/sqlite v1.55.0 // indirect
 )
