@@ -8,6 +8,7 @@ import (
 	"log"
 	"mensadb/tolgee"
 	"mensadb/tools/env"
+	"strings"
 	"sync"
 
 	firebase "firebase.google.com/go/v4"
@@ -22,6 +23,27 @@ type PushNotification struct {
 	TrTag         string
 	TrNamedParams map[string]string
 	Data          map[string]string
+
+	// Title e Body sono il testo da usare cosi` com'e` quando TrTag e` vuoto,
+	// per i messaggi che non passano dalle traduzioni Tolgee. Body finisce
+	// nella notifica salvata; PushBody, se valorizzato, e` il testo mandato al
+	// device al suo posto (per esempio un estratto di un Body lungo).
+	Title    string
+	Body     string
+	PushBody string
+}
+
+// texts ritorna titolo e corpo della notifica: dalle traduzioni Tolgee se
+// c'e` TrTag, altrimenti Title e Body. Con push=true il corpo e` quello da
+// mandare al device.
+func (p PushNotification) texts(translate func(key string) string, push bool) (string, string) {
+	if p.TrTag != "" {
+		return translate(p.TrTag + ".title"), translate(p.TrTag + ".body")
+	}
+	if push && p.PushBody != "" {
+		return p.Title, p.PushBody
+	}
+	return p.Title, p.Body
 }
 
 func (p PushNotification) GetDataAsString() string {
@@ -44,8 +66,9 @@ func SendPushNotificationToUser(app core.App, notificationData PushNotification,
 	//userCollection, _ := app.FindCollectionByNameOrId("users")
 
 	if len(store) == 0 || store[0] { // if store is not provided or is true
-		translationTitle := tolgee.GetTranslation(notificationData.TrTag+".title", "it", notificationData.TrNamedParams)
-		translationBody := tolgee.GetTranslation(notificationData.TrTag+".body", "it", notificationData.TrNamedParams)
+		translationTitle, translationBody := notificationData.texts(func(key string) string {
+			return tolgee.GetTranslation(key, "it", notificationData.TrNamedParams)
+		}, false)
 		collectionNotifications, err := app.FindCollectionByNameOrId("user_notifications")
 		if err != nil {
 			app.Logger().Error("push: cannot find user_notifications collection", "err", err, "user", notificationData.UserId)
@@ -100,8 +123,9 @@ func SendPushNotificationToUser(app core.App, notificationData PushNotification,
 	}
 
 	for language, tokens := range listOfFirebaseTokensWithTrTag {
-		translationTitle := tolgee.GetTranslation(notificationData.TrTag+".title", language, notificationData.TrNamedParams)
-		translationBody := tolgee.GetTranslation(notificationData.TrTag+".body", language, notificationData.TrNamedParams)
+		translationTitle, translationBody := notificationData.texts(func(key string) string {
+			return tolgee.GetTranslation(key, language, notificationData.TrNamedParams)
+		}, true)
 		err := sendNotification(tokens, translationTitle, translationBody, notificationData.Data)
 		if err != nil {
 			app.Logger().Error(err.Error())
@@ -199,8 +223,12 @@ func SendPushNotificationToAllUsers(app core.App, notificationData PushNotificat
 			perUser.Data = perUserData
 
 			if shouldStore {
-				translationTitleIt := getTrans("it", titleByLang, perUser.TrTag+".title")
-				translationBodyIt := getTrans("it", bodyByLang, perUser.TrTag+".body")
+				translationTitleIt, translationBodyIt := perUser.texts(func(key string) string {
+					if strings.HasSuffix(key, ".title") {
+						return getTrans("it", titleByLang, key)
+					}
+					return getTrans("it", bodyByLang, key)
+				}, false)
 				notification := core.NewRecord(notificationsCollection)
 				notification.Set("user", perUser.UserId)
 				notification.Set("data", perUser.GetDataAsString())
@@ -235,8 +263,12 @@ func SendPushNotificationToAllUsers(app core.App, notificationData PushNotificat
 			}
 
 			for language, tokens := range tokensByLang {
-				translationTitle := getTrans(language, titleByLang, perUser.TrTag+".title")
-				translationBody := getTrans(language, bodyByLang, perUser.TrTag+".body")
+				translationTitle, translationBody := perUser.texts(func(key string) string {
+					if strings.HasSuffix(key, ".title") {
+						return getTrans(language, titleByLang, key)
+					}
+					return getTrans(language, bodyByLang, key)
+				}, true)
 				if err := sendNotification(tokens, translationTitle, translationBody, perUser.Data); err != nil {
 					app.Logger().Error("push: send FCM failed", "err", err, "user", perUser.UserId, "lang", language)
 				}

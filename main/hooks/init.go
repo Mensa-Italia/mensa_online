@@ -32,6 +32,9 @@ func Load(app core.App) {
 
 	app.OnRecordAfterUpdateSuccess("stamp").BindFunc(StampUpdateImageAsync)
 
+	app.OnRecordAfterCreateSuccess("configs").BindFunc(DeveloperMessageCreateNotifyAsync)
+	app.OnRecordAfterUpdateSuccess("configs").BindFunc(DeveloperMessageUpdateNotifyAsync)
+
 	// search index — live updates
 	app.OnRecordAfterCreateSuccess("events").BindFunc(indexEventAsync)
 	app.OnRecordAfterUpdateSuccess("events").BindFunc(indexEventAsync)
