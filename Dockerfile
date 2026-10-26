@@ -15,6 +15,9 @@
 # Solo dopo quella prova il pin e` stato liftato a 1.26.5, e poi a 1.26.6, che
 # chiude le CVE stdlib rimaste (encoding/xml, encoding/asn1, net/http via
 # x/net/idna) e fa passare govulncheck (quindi Security -> Build -> GHCR).
+# Poi 1.26.10, per le CVE stdlib di crypto/tls, crypto/x509, net/http,
+# net/textproto e html/template: e` una patch che tocca crypto/tls, quindi
+# dopo il deploy va guardato il sync soci (vedi sotto).
 #
 # Se il sync soci dovesse degradare di nuovo dopo un bump, l'ordine di indagine
 # e` questo:
@@ -26,7 +29,7 @@
 #   2. se h2 e` gia` escluso, il sospetto resta il fingerprint TLS del
 #      ClientHello, che cambia comunque fra versioni di Go. La strada e` utls,
 #      per imitare il ClientHello di un browser.
-FROM golang:1.26.6-alpine AS builder
+FROM golang:1.26.10-alpine AS builder
 
 RUN apk add --no-cache build-base
 
