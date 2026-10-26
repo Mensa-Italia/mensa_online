@@ -1,16 +1,36 @@
-# macOS
-.DS_Store
-**/.DS_Store
+# binari (niente "/main": confligge con la directory main/;
+# il binario di build va in /tmp o /dist via -o)
+*.exe
+*.test
+*.out
 
-# Segreti e configurazione locale
+# pocketbase data
+pb_data/
+pb_public/db.sqlite*
+pb_public/uploads/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# segreti e configurazione locale
 .env
 .env.*
 !.env.example
 
-# IDE
-.vscode/
+# OS
+.DS_Store
+**/.DS_Store
+Thumbs.db
 
-# Build Go
-*.exe
-*.test
-*.out
+# editor
+.idea/
+.vscode/
+*.swp
+
+# build/tooling locale
+mails.json
+/tmp
+/dist
+
+# claude / planning artefatti locali
+.claude/local/

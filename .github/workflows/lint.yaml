@@ -18,23 +18,19 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: MensaCore/go.mod
+          go-version-file: go.mod
           cache: true
-          cache-dependency-path: MensaCore/go.sum
+          cache-dependency-path: go.sum
 
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v7
         with:
           version: v2.11.4
           args: --timeout=5m
-          working-directory: MensaCore
 
   go-build:
     name: go build
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: MensaCore
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -42,9 +38,9 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: MensaCore/go.mod
+          go-version-file: go.mod
           cache: true
-          cache-dependency-path: MensaCore/go.sum
+          cache-dependency-path: go.sum
 
       - name: Build
         run: go build ./...
