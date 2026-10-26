@@ -2,7 +2,7 @@ version: "3.1"
 
 services:
   mensa_app_server:
-    image: ghcr.io/mensa-italia/mensa_app_database:main
+    image: ghcr.io/mensa-italia/mensa_online:main
     networks:
       - traefik
     volumes:
