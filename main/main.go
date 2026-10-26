@@ -99,7 +99,8 @@ func main() {
 	// in OnServe) per il bearer OIDC che manda l'app, e il loader nativo di
 	// PocketBase per i token PB. In alternativa vale un file token PocketBase
 	// in ?token=, che e` il modo in cui PocketBase stesso autentica i campi
-	// `protected`.
+	// `protected`, oppure il cookie dei superuser della dashboard (vedi
+	// superuser_files.go).
 	//
 	// Chi e` autenticato riceve il 307 verso il link S3 firmato: una capability
 	// anonima che, fino alla scadenza (S3_PRESIGN_TTL_SECONDS), scarica il file
@@ -125,6 +126,7 @@ func main() {
 
 		return e.Next()
 	})
+	bindSuperuserFileCookie(app)
 
 	// Hooks to table events
 	hooks.Load(app)
@@ -146,11 +148,14 @@ func main() {
 
 // isFileRequestAuthenticated dice se la richiesta di download di un file
 // porta un'identita`: l'header Authorization gia` risolto in e.Auth dai
-// middleware globali, oppure un file token PocketBase valido nel parametro
-// ?token= (quello di POST /api/files/token, che PocketBase usa per i campi
-// `protected`).
+// middleware globali, un file token PocketBase valido nel parametro ?token=
+// (quello di POST /api/files/token, che PocketBase usa per i campi
+// `protected`), oppure il cookie che la dashboard lascia ai superuser.
 func isFileRequestAuthenticated(e *core.FileDownloadRequestEvent) bool {
 	if e.Auth != nil {
+		return true
+	}
+	if isSuperuserFileCookieValid(e) {
 		return true
 	}
 	token := e.Request.URL.Query().Get("token")
