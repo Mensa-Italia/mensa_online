@@ -2,6 +2,7 @@ package integrity
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"net/http"
 	"path"
@@ -100,6 +101,38 @@ func (s *SessionStore) Issue(userID string) (string, time.Duration, error) {
 	}
 	s.byID[id] = session{userID: userID, expires: now.Add(s.ttl)}
 	return id, s.ttl, nil
+}
+
+// Remember segna come verificato, per la durata di una sessione, il token di
+// login con cui e` arrivata una prova Play Integrity valida (vedi AuthKey).
+func (s *SessionStore) Remember(userID, key string) {
+	if userID == "" || key == "" {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.byID[key] = session{userID: userID, expires: s.now().Add(s.ttl)}
+}
+
+// AuthKey e` la chiave con cui SessionStore ricorda un token di login:
+// l'hash dell'header Authorization, mai il token in chiaro. Vuota se
+// l'header manca.
+//
+// Perche' il token e non l'utente: chi e` "watched" puo` passare la prova una
+// volta con l'app vera e poi usare uno script. Lo script pero` fa login per
+// conto suo e ha un token diverso; per riusare quello dell'app dovrebbe
+// leggerne il traffico TLS su un dispositivo integro, cioe` lo stesso lavoro
+// che servirebbe per rubare X-Integrity-Session. Serve alle app gia`
+// installate (22.2.18), che mandano la prova completa a ogni richiesta e non
+// conoscono la sessione: con il token verificato il server non chiede a
+// Google di decodificarla.
+func AuthKey(authorization string) string {
+	a := strings.TrimSpace(authorization)
+	if a == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(a))
+	return "auth:" + base64.RawURLEncoding.EncodeToString(sum[:])
 }
 
 // Valid dice se la sessione e` stata emessa a quell'utente e non e` scaduta.

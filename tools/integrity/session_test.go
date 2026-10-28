@@ -124,3 +124,50 @@ func TestSensitivePath(t *testing.T) {
 		}
 	}
 }
+
+// App 22.2.18: niente sessione, prova completa a ogni richiesta. Dopo la
+// prima prova valida conta il token di login: le richieste con lo stesso
+// token passano senza decode, quelle con un token diverso no.
+func TestVerifiedAuthToken(t *testing.T) {
+	g := newGateEnv(t)
+	g.gate.Sessions = NewSessionStore()
+	ctx := context.Background()
+	watched := Subject{UserID: testUser, Level: LevelWatched}
+	const events = "/api/collections/events/records"
+	withAuth := func(r Request, auth string) Request {
+		r.Header.Set("Authorization", auth)
+		return r
+	}
+
+	// prima del token verificato, un token Play Integrity che non si decodifica fallisce
+	expect(t, g.gate.Authorize(ctx, watched, withAuth(g.androidReq(t, "GET", events, "boh"), "Bearer A")), 403, CodeIntegrityFailed)
+
+	expect(t, g.gate.Authorize(ctx, watched, withAuth(g.androidReq(t, "GET", events, "good"), "Bearer A")), 0, "")
+
+	t.Run("stesso token: nessuna decode", func(t *testing.T) {
+		// "boh" farebbe fallire la decode: se passa, la decode non c'e` stata
+		expect(t, g.gate.Authorize(ctx, watched, withAuth(g.androidReq(t, "GET", events, "boh"), "Bearer A")), 0, "")
+		expect(t, g.gate.Authorize(ctx, watched, withAuth(noProof("PATCH", "/api/collections/users/records/x"), "Bearer A")), 0, "")
+	})
+	t.Run("token diverso", func(t *testing.T) {
+		expect(t, g.gate.Authorize(ctx, watched, withAuth(noProof("GET", events), "Bearer B")), 428, CodeIntegrityRequire)
+	})
+	t.Run("altro utente con lo stesso token", func(t *testing.T) {
+		other := Subject{UserID: "altro", Level: LevelWatched}
+		expect(t, g.gate.Authorize(ctx, other, withAuth(noProof("GET", events), "Bearer A")), 428, CodeIntegrityRequire)
+	})
+	t.Run("timbri e medaglie vogliono sempre la prova", func(t *testing.T) {
+		expect(t, g.gate.Authorize(ctx, watched, withAuth(noProof("GET", "/api/collections/stamp/records"), "Bearer A")), 428, CodeIntegrityRequire)
+		expect(t, g.gate.Authorize(ctx, watched, withAuth(g.androidReq(t, "GET", "/api/collections/view_medals/records", "boh"), "Bearer A")), 403, CodeIntegrityFailed)
+	})
+	t.Run("ios non lo segna", func(t *testing.T) {
+		expect(t, g.gate.Authorize(ctx, watched, withAuth(g.iosReq(t, "GET", events), "Bearer C")), 0, "")
+		expect(t, g.gate.Authorize(ctx, watched, withAuth(noProof("GET", events), "Bearer C")), 428, CodeIntegrityRequire)
+	})
+	t.Run("scade con la sessione", func(t *testing.T) {
+		now := time.Now()
+		g.gate.Sessions.now = func() time.Time { return now.Add(SessionTTL) }
+		defer func() { g.gate.Sessions.now = time.Now }()
+		expect(t, g.gate.Authorize(ctx, watched, withAuth(noProof("GET", events), "Bearer A")), 428, CodeIntegrityRequire)
+	})
+}

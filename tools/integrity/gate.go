@@ -209,6 +209,15 @@ func (g *Gate) Check(ctx context.Context, sub Subject, req Request) (Grant, *Rej
 
 func (g *Gate) verifyProof(ctx context.Context, sub Subject, req Request) (Grant, *Rejection) {
 	platform := strings.ToLower(strings.TrimSpace(req.Header.Get(HeaderPlatform)))
+	authKey := AuthKey(req.Header.Get("Authorization"))
+
+	// Token di login gia` verificato con Play Integrity (vedi AuthKey): passa
+	// senza guardare la prova, che le app 22.2.18 mandano comunque. Non su
+	// timbri, medaglie e realtime.
+	if g.Sessions != nil && authKey != "" && !SensitivePath(req.Method, req.Path) &&
+		g.Sessions.Valid(sub.UserID, authKey) {
+		return Grant{}, nil
+	}
 
 	// Sessione Android: vale al posto di challenge + token, ma mai su timbri,
 	// medaglie e sottoscrizioni realtime (vedi SessionTTL). Una sessione
@@ -230,6 +239,7 @@ func (g *Gate) verifyProof(ctx context.Context, sub Subject, req Request) (Grant
 	if rej != nil || platform != PlatformAndroid || g.Sessions == nil {
 		return Grant{}, rej
 	}
+	g.Sessions.Remember(sub.UserID, authKey)
 	id, ttl, err := g.Sessions.Issue(sub.UserID)
 	if err != nil {
 		return Grant{}, nil // la richiesta resta buona: alla prossima si rifa` la prova
