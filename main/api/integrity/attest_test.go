@@ -85,6 +85,10 @@ func TestPBKeyStore(t *testing.T) {
 	if err := store.AdvanceCounter("a2V5LWlk", 5); err != nil {
 		t.Fatal(err)
 	}
+	// 4 e` arrivato dopo il 5 ma dentro la finestra: passa, una volta sola.
+	if err := store.AdvanceCounter("a2V5LWlk", 4); err != nil {
+		t.Errorf("counter 4 in ordine sparso: %v", err)
+	}
 	for _, c := range []uint32{5, 4, 0} {
 		if err := store.AdvanceCounter("a2V5LWlk", c); err != tools.ErrCounterNotAdvanced {
 			t.Errorf("counter %d: %v, atteso ErrCounterNotAdvanced", c, err)

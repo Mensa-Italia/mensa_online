@@ -17,9 +17,12 @@ type pbKeyStore struct {
 	app core.App
 
 	// mu serializza AdvanceCounter: due richieste concorrenti con la stessa
-	// asserzione non devono passare entrambe il controllo "counter > salvato".
+	// asserzione non devono passare entrambe il controllo del contatore.
 	// Il backend e` single-instance, quindi un mutex di processo basta.
 	mu sync.Mutex
+	// window ricorda i contatori gia` usati sotto il massimo salvato, per
+	// accettare le asserzioni concorrenti arrivate in ordine sparso.
+	window tools.CounterWindow
 }
 
 func newPBKeyStore(app core.App) *pbKeyStore { return &pbKeyStore{app: app} }
@@ -64,10 +67,15 @@ func (s *pbKeyStore) AdvanceCounter(keyID string, counter uint32) error {
 		}
 		return err
 	}
-	if counter <= uint32(rec.GetInt("sign_counter")) {
+	stored := uint32(rec.GetInt("sign_counter"))
+	next, ok := s.window.Accept(keyID, stored, counter)
+	if !ok {
 		return tools.ErrCounterNotAdvanced
 	}
-	rec.Set("sign_counter", int(counter))
+	if next == stored {
+		return nil // dentro la finestra: il massimo su DB non cambia
+	}
+	rec.Set("sign_counter", int(next))
 	return s.app.Save(rec)
 }
 

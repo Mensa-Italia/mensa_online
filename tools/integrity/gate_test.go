@@ -363,8 +363,16 @@ func TestAuthorizeIOSFailures(t *testing.T) {
 		replay.Header.Set(HeaderChallenge, g.challenge(t))
 		expect(t, g.gate.Authorize(ctx, watched, replay), 403, CodeIntegrityFailed)
 	})
-	t.Run("asserzione con counter vecchio", func(t *testing.T) {
-		g.counter = 0 // il prossimo counter riparte da 1, ma la chiave e` gia` avanti
+	t.Run("asserzione con counter gia` usato", func(t *testing.T) {
+		// L'ultima asserzione accettata ha usato g.counter: rigenerarne una con
+		// lo stesso contatore e` un replay anche con una challenge nuova.
+		g.counter--
+		expect(t, g.gate.Authorize(ctx, watched, g.iosReq(t, method, path)), 403, CodeIntegrityFailed)
+	})
+	t.Run("asserzione con counter fuori finestra", func(t *testing.T) {
+		g.counter += CounterWindowSize
+		expect(t, g.gate.Authorize(ctx, watched, g.iosReq(t, method, path)), 0, "")
+		g.counter -= CounterWindowSize + 1 // il prossimo e` CounterWindowSize sotto il massimo
 		expect(t, g.gate.Authorize(ctx, watched, g.iosReq(t, method, path)), 403, CodeIntegrityFailed)
 	})
 }

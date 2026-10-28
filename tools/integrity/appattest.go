@@ -48,8 +48,8 @@ const (
 // ErrKeyNotFound: la chiave App Attest non e` registrata.
 var ErrKeyNotFound = errors.New("chiave App Attest non trovata")
 
-// ErrCounterNotAdvanced: il contatore dell'asserzione non e` maggiore di
-// quello salvato (replay o richieste concorrenti con la stessa asserzione).
+// ErrCounterNotAdvanced: il contatore dell'asserzione e` gia` stato usato o
+// e` fuori dalla finestra di CounterWindowSize (replay).
 var ErrCounterNotAdvanced = errors.New("contatore App Attest non avanzato")
 
 // Key e` una chiave App Attest registrata per un utente.
@@ -67,8 +67,9 @@ type KeyStore interface {
 	// Find ritorna ErrKeyNotFound se la chiave non esiste.
 	Find(keyID string) (*Key, error)
 	Create(k *Key) error
-	// AdvanceCounter porta il contatore a `counter` solo se e` maggiore di
-	// quello salvato, in modo atomico; altrimenti ErrCounterNotAdvanced.
+	// AdvanceCounter accetta `counter` se CounterWindow lo accetta (maggiore
+	// del massimo salvato, oppure dentro la finestra e mai usato), in modo
+	// atomico, e salva il nuovo massimo; altrimenti ErrCounterNotAdvanced.
 	AdvanceCounter(keyID string, counter uint32) error
 }
 
@@ -246,10 +247,13 @@ func (a *AppAttest) VerifyAssertion(userID, keyID string, assertion, clientDataH
 		return err
 	}
 	counter := binary.BigEndian.Uint32(obj.AuthenticatorData[33:37])
-	if counter <= key.Counter {
-		return fmt.Errorf("counter %d non maggiore di %d (replay)", counter, key.Counter)
-	}
+	// Niente confronto con key.Counter qui: le asserzioni concorrenti arrivano
+	// in ordine sparso, la regola e` quella di CounterWindow e la applica
+	// AdvanceCounter sotto lock.
 	if err := a.Keys.AdvanceCounter(keyID, counter); err != nil {
+		if errors.Is(err, ErrCounterNotAdvanced) {
+			return fmt.Errorf("counter %d gia` usato o fuori finestra (salvato %d): %w", counter, key.Counter, err)
+		}
 		return err
 	}
 	return nil

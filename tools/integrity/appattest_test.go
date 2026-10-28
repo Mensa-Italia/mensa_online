@@ -26,8 +26,9 @@ const (
 // --- key store in memoria --------------------------------------------------
 
 type memKeys struct {
-	mu   sync.Mutex
-	keys map[string]*Key
+	mu     sync.Mutex
+	keys   map[string]*Key
+	window CounterWindow
 }
 
 func newMemKeys() *memKeys { return &memKeys{keys: map[string]*Key{}} }
@@ -58,10 +59,11 @@ func (m *memKeys) AdvanceCounter(id string, c uint32) error {
 	if !ok {
 		return ErrKeyNotFound
 	}
-	if c <= k.Counter {
+	next, accepted := m.window.Accept(id, k.Counter, c)
+	if !accepted {
 		return ErrCounterNotAdvanced
 	}
-	k.Counter = c
+	k.Counter = next
 	return nil
 }
 
@@ -371,16 +373,33 @@ func TestVerifyAssertion(t *testing.T) {
 		}
 	})
 
-	t.Run("replay con counter non maggiore", func(t *testing.T) {
+	t.Run("asserzioni concorrenti in ordine sparso", func(t *testing.T) {
+		aa := newAppAttest(p, "production")
+		dev := registerKey(t, aa, testUser, "k1", 0)
+		for _, c := range []uint32{3, 1, 2} {
+			if err := aa.VerifyAssertion(testUser, "k1", makeAssertion(t, dev, assertionAuthData(testAppID, c), cdh), cdh); err != nil {
+				t.Errorf("counter %d dopo uno piu` alto: %v", c, err)
+			}
+		}
+		if k, _ := aa.Keys.Find("k1"); k.Counter != 3 {
+			t.Errorf("il massimo salvato resta il piu` alto: %d", k.Counter)
+		}
+	})
+
+	t.Run("replay con counter gia` usato o troppo vecchio", func(t *testing.T) {
 		aa := newAppAttest(p, "production")
 		dev := registerKey(t, aa, testUser, "k1", 4)
-		for _, c := range []uint32{4, 3, 0} {
+		if err := aa.VerifyAssertion(testUser, "k1", makeAssertion(t, dev, assertionAuthData(testAppID, 100), cdh), cdh); err != nil {
+			t.Fatal(err)
+		}
+		// 100 appena usato; 4 e` piu` vecchio della finestra; 0 non e` mai valido.
+		for _, c := range []uint32{100, 4, 0} {
 			err := aa.VerifyAssertion(testUser, "k1", makeAssertion(t, dev, assertionAuthData(testAppID, c), cdh), cdh)
 			if err == nil || !strings.Contains(err.Error(), "counter") {
 				t.Errorf("counter %d: errore %v", c, err)
 			}
 		}
-		if k, _ := aa.Keys.Find("k1"); k.Counter != 4 {
+		if k, _ := aa.Keys.Find("k1"); k.Counter != 100 {
 			t.Errorf("il counter non deve cambiare su un rifiuto: %d", k.Counter)
 		}
 	})
@@ -508,5 +527,36 @@ func TestPublicKeyRoundTrip(t *testing.T) {
 	}
 	if _, err := ParsePublicKey([]byte("x")); err == nil {
 		t.Error("DER invalido deve fallire")
+	}
+}
+
+func TestCounterWindow(t *testing.T) {
+	var w CounterWindow
+	steps := []struct {
+		counter uint32
+		ok      bool
+		max     uint32
+	}{
+		{0, false, 10},  // mai valido
+		{10, false, 10}, // il massimo salvato e` gia` usato
+		{12, true, 12},
+		{11, true, 12}, // in ordine sparso
+		{11, false, 12},
+		{12, false, 12},
+		{12 + CounterWindowSize, true, 12 + CounterWindowSize},
+		{12, false, 12 + CounterWindowSize}, // uscito dalla finestra
+		{13, true, 12 + CounterWindowSize},  // ultimo valore ancora dentro
+	}
+	stored := uint32(10)
+	for i, s := range steps {
+		next, ok := w.Accept("k", stored, s.counter)
+		if ok != s.ok || next != s.max {
+			t.Fatalf("passo %d (counter %d): ok=%v max=%d, attesi ok=%v max=%d", i, s.counter, ok, next, s.ok, s.max)
+		}
+		stored = next
+	}
+	// Le chiavi sono indipendenti.
+	if _, ok := w.Accept("altra", 0, 1); !ok {
+		t.Error("una chiave nuova parte da zero")
 	}
 }
