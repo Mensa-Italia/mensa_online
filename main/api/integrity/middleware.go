@@ -96,7 +96,7 @@ func reject(e *core.RequestEvent, rej *tools.Rejection) error {
 // non riceve piu` eventi finche' non risottoscrive.
 func BindRealtime(app core.App) {
 	app.OnRealtimeSubscribeRequest().BindFunc(func(e *core.RealtimeSubscribeRequestEvent) error {
-		verified, _ := e.RequestEvent.Get(requestVerifiedKey).(bool)
+		verified, _ := e.Get(requestVerifiedKey).(bool)
 		e.Client.Set(clientVerifiedKey, verified)
 		return e.Next()
 	})

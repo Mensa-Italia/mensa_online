@@ -171,15 +171,14 @@ func keyIDOf(t *testing.T, pub *ecdsa.PublicKey) []byte {
 }
 
 type attestOpts struct {
-	appID       string
-	aaguid      []byte
-	counter     uint32
-	nonceFor    string // challenge usata per il nonce del certificato
-	credID      []byte // nil = keyID
-	keyIDOverr  []byte
-	notAfter    time.Time
-	signFormat  string
-	untrustedCA bool
+	appID      string
+	aaguid     []byte
+	counter    uint32
+	nonceFor   string // challenge usata per il nonce del certificato
+	credID     []byte // nil = keyID
+	keyIDOverr []byte
+	notAfter   time.Time
+	signFormat string
 }
 
 type attestResult struct {
@@ -481,7 +480,9 @@ func TestEmbeddedAppleRoot(t *testing.T) {
 	if got := hexString(sum[:]); got != strings.ReplaceAll(want, " ", "") {
 		t.Errorf("fingerprint %s", got)
 	}
-	if len(AppleRoots().Subjects()) != 1 {
+	only := x509.NewCertPool()
+	only.AddCert(cert)
+	if !AppleRoots().Equal(only) {
 		t.Error("AppleRoots deve contenere la sola root Apple")
 	}
 }

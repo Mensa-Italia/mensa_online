@@ -56,10 +56,10 @@ type AndroidVerifier struct {
 // expectedHash e` il requestHash ricalcolato dal server per QUESTA richiesta.
 func (v *AndroidVerifier) Verify(ctx context.Context, token, expectedHash string) error {
 	if v.Decoder == nil {
-		return errors.New("Play Integrity non configurato (PLAY_INTEGRITY_CREDENTIALS_JSON)")
+		return errors.New("play integrity non configurato (PLAY_INTEGRITY_CREDENTIALS_JSON)")
 	}
 	if len(v.CertDigests) == 0 {
-		return errors.New("Play Integrity non configurato (PLAY_INTEGRITY_CERT_SHA256 vuota o non valida)")
+		return errors.New("play integrity non configurato (PLAY_INTEGRITY_CERT_SHA256 vuota o non valida)")
 	}
 	verdict, err := v.Decoder.Decode(ctx, v.PackageName, token)
 	if err != nil {
