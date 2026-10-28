@@ -1,6 +1,8 @@
 package integrity
 
 import (
+	"strconv"
+
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/hook"
@@ -55,12 +57,17 @@ func Middleware(gate *tools.Gate) *hook.Handler[*core.RequestEvent] {
 				return e.Next()
 			}
 
-			rej := gate.Authorize(e.Request.Context(),
+			grant, rej := gate.Check(e.Request.Context(),
 				tools.Subject{UserID: e.Auth.Id, Level: level},
 				tools.Request{Method: e.Request.Method, Path: e.Request.URL.Path, Query: e.Request.URL.Query(), Header: e.Request.Header},
 			)
 			if rej != nil {
 				return reject(e, rej)
+			}
+			if grant.Session != "" {
+				h := e.Response.Header()
+				h.Set(tools.HeaderSession, grant.Session)
+				h.Set(tools.HeaderSessionTTL, strconv.Itoa(int(grant.TTL.Seconds())))
 			}
 			if level == tools.LevelWatched && tools.RequiresProof(e.Request.Method, e.Request.URL.Path) {
 				e.Set(requestVerifiedKey, true)

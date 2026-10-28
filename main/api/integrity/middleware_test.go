@@ -63,6 +63,7 @@ type mwResult struct {
 	reached bool
 	status  int
 	body    map[string]any
+	header  http.Header
 	event   *core.RequestEvent
 }
 
@@ -88,6 +89,7 @@ func runMiddleware(t *testing.T, gate *tools.Gate, auth *core.Record, method, pa
 		t.Fatal(err)
 	}
 	res.status = rec.Code
+	res.header = rec.Header()
 	_ = json.Unmarshal(rec.Body.Bytes(), &res.body)
 	return res
 }
@@ -350,5 +352,31 @@ func TestRealtimeSubscribeMarksClient(t *testing.T) {
 		if got != verified {
 			t.Errorf("verified=%v: client marcato %v", verified, got)
 		}
+	}
+}
+
+// Una prova Android valida torna con una sessione, e la sessione basta per le
+// richieste successive (tranne timbri e medaglie).
+func TestMiddlewareAndroidSession(t *testing.T) {
+	gate := newTestGate()
+	gate.Sessions = tools.NewSessionStore()
+	u := userRecord("u1", "watched")
+	const path = "/api/collections/events/records"
+
+	res := runMiddleware(t, gate, u, "GET", path, proofHeaders(t, gate, "u1", "GET", path))
+	if !res.reached {
+		t.Fatalf("prova valida rifiutata: %d %v", res.status, res.body)
+	}
+	s := res.header.Get(tools.HeaderSession)
+	if s == "" || res.header.Get(tools.HeaderSessionTTL) != "600" {
+		t.Fatalf("sessione assente o TTL sbagliato: %v", res.header)
+	}
+
+	withSession := map[string]string{tools.HeaderPlatform: tools.PlatformAndroid, tools.HeaderSession: s}
+	if res := runMiddleware(t, gate, u, "GET", path, withSession); !res.reached {
+		t.Fatalf("sessione rifiutata: %d %v", res.status, res.body)
+	}
+	if res := runMiddleware(t, gate, u, "GET", "/api/collections/stamp/records", withSession); res.reached || res.status != 428 {
+		t.Fatalf("la sessione non deve valere sui timbri: reached=%v status=%d", res.reached, res.status)
 	}
 }

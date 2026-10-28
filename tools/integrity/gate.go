@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"path"
 	"strings"
+	"time"
 )
 
 // Header della prova per-richiesta (contratto §5).
@@ -138,10 +139,23 @@ type Request struct {
 //
 // Android o IOS nil significano "non configurato": la verifica di quella
 // piattaforma fallisce CHIUSA (mai aperta) con il motivo nel log.
+//
+// Sessions nil spegne le sessioni Android (ogni richiesta vuole la prova
+// completa); Decodes nil toglie il tetto di decode per utente.
 type Gate struct {
 	Challenges *ChallengeStore
+	Sessions   *SessionStore
+	Decodes    *DecodeLimiter
 	Android    *AndroidVerifier
 	IOS        *AppAttest
+}
+
+// Grant e` cio` che una richiesta passata fa tornare al client: una sessione
+// di integrita` nuova, se la richiesta ha portato una prova Play Integrity
+// completa e valida.
+type Grant struct {
+	Session string
+	TTL     time.Duration
 }
 
 // Authorize ritorna nil se la richiesta puo` proseguire, altrimenti il
@@ -155,10 +169,16 @@ type Gate struct {
 //	            fuori da /api e richieste esenti: ok
 //	            altrimenti serve una prova valida (428 / 403)
 func (g *Gate) Authorize(ctx context.Context, sub Subject, req Request) *Rejection {
+	_, rej := g.Check(ctx, sub, req)
+	return rej
+}
+
+// Check e` Authorize piu` l'eventuale sessione da mandare al client.
+func (g *Gate) Check(ctx context.Context, sub Subject, req Request) (Grant, *Rejection) {
 	// Le route delle app esterne si autenticano con la loro chiave, non con
 	// un utente: passano sempre, qualunque sia il livello di chi (non) c'e`.
 	if ExternalAppRoute(req.Path) {
-		return nil
+		return Grant{}, nil
 	}
 
 	switch sub.Level {
@@ -166,12 +186,12 @@ func (g *Gate) Authorize(ctx context.Context, sub Subject, req Request) *Rejecti
 		// Allowlist minima (blocked_allowlist.go): serve a far finire il flusso
 		// di conferma delle app esterne a un socio sospeso.
 		if BlockedAllowed(sub.UserID, req.Method, req.Path, req.Query) {
-			return nil
+			return Grant{}, nil
 		}
-		return Blocked("utente con access_level=blocked")
+		return Grant{}, Blocked("utente con access_level=blocked")
 	case LevelWatched:
 	default:
-		return nil
+		return Grant{}, nil
 	}
 
 	// /mcp usa un token OAuth proprio e un client (modello, non l'app) che non
@@ -179,16 +199,45 @@ func (g *Gate) Authorize(ctx context.Context, sub Subject, req Request) *Rejecti
 	// modo valido di arrivarci. Si risponde 403 integrity_failed e non 428
 	// perche` il 428 dice "riprova con una prova", e qui riprovare e` inutile.
 	if IsMCP(req.Path) {
-		return Failed("/mcp non disponibile per utenti watched (nessuna prova possibile)")
+		return Grant{}, Failed("/mcp non disponibile per utenti watched (nessuna prova possibile)")
 	}
 	if !InAPIScope(req.Path) || Exempt(req.Method, req.Path) {
-		return nil
+		return Grant{}, nil
 	}
 	return g.verifyProof(ctx, sub, req)
 }
 
-func (g *Gate) verifyProof(ctx context.Context, sub Subject, req Request) *Rejection {
+func (g *Gate) verifyProof(ctx context.Context, sub Subject, req Request) (Grant, *Rejection) {
 	platform := strings.ToLower(strings.TrimSpace(req.Header.Get(HeaderPlatform)))
+
+	// Sessione Android: vale al posto di challenge + token, ma mai su timbri,
+	// medaglie e sottoscrizioni realtime (vedi SessionTTL). Una sessione
+	// scaduta, sconosciuta o usata dove non vale e` un 428: il client la butta
+	// e rifa` la prova completa.
+	if s := strings.TrimSpace(req.Header.Get(HeaderSession)); s != "" {
+		switch {
+		case platform != PlatformAndroid:
+			return Grant{}, required("sessione su una piattaforma diversa da android")
+		case SensitivePath(req.Method, req.Path):
+			return Grant{}, required("sessione non valida su timbri, medaglie e realtime")
+		case g.Sessions == nil || !g.Sessions.Valid(sub.UserID, s):
+			return Grant{}, required("sessione sconosciuta, scaduta o di un altro utente")
+		}
+		return Grant{}, nil
+	}
+
+	rej := g.verifyFullProof(ctx, sub, req, platform)
+	if rej != nil || platform != PlatformAndroid || g.Sessions == nil {
+		return Grant{}, rej
+	}
+	id, ttl, err := g.Sessions.Issue(sub.UserID)
+	if err != nil {
+		return Grant{}, nil // la richiesta resta buona: alla prossima si rifa` la prova
+	}
+	return Grant{Session: id, TTL: ttl}, nil
+}
+
+func (g *Gate) verifyFullProof(ctx context.Context, sub Subject, req Request, platform string) *Rejection {
 	challenge := strings.TrimSpace(req.Header.Get(HeaderChallenge))
 	if platform == "" || challenge == "" {
 		return required("prova assente (header X-Integrity-Platform / X-Integrity-Challenge)")
@@ -210,6 +259,9 @@ func (g *Gate) verifyProof(ctx context.Context, sub Subject, req Request) *Rejec
 		}
 		if g.Android == nil {
 			return Failed("Play Integrity non configurato (PLAY_INTEGRITY_*)")
+		}
+		if g.Decodes != nil && !g.Decodes.Allow(sub.UserID) {
+			return Failed("troppe decode Play Integrity per questo utente nell'ultimo minuto")
 		}
 		if err := g.Android.Verify(ctx, token, RequestHash(clientData)); err != nil {
 			return Failed("Play Integrity: " + err.Error())

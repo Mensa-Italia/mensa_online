@@ -33,6 +33,8 @@ func Init(app core.App) *tools.Gate {
 
 	gate := &tools.Gate{
 		Challenges: challenges,
+		Sessions:   tools.NewSessionStore(),
+		Decodes:    tools.NewDecodeLimiter(),
 		IOS: &tools.AppAttest{
 			AppID:       env.GetAppAttestAppID(),
 			Environment: env.GetAppAttestEnvironment(),
