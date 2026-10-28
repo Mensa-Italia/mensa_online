@@ -84,5 +84,5 @@ func Init(app core.App) http.Handler {
 	//    Proxy verso PB → rule applicate automaticamente.
 	registerCollectionTools(s, app)
 
-	return newAuthMiddleware(server.NewStreamableHTTPServer(s))
+	return newAuthMiddleware(newAccessGuard(app, server.NewStreamableHTTPServer(s)))
 }

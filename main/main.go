@@ -8,6 +8,7 @@ import (
 	"mensadb/main/cmd/searchcmd"
 	"mensadb/main/crons"
 	"mensadb/main/hooks"
+	integrityapi "mensadb/main/api/integrity"
 	"mensadb/main/api/zitadelauth"
 	"mensadb/main/links"
 	"mensadb/main/utilities"
@@ -65,6 +66,13 @@ func main() {
 		go importers.GetFullMailList()
 		tolgee.Load(env.GetTolgeeKey(), e.App)
 		e.Router.Bind(zitadelauth.LoadAuth())
+		// Gate di integrita`: DEVE stare dopo i loader di auth (Zitadel e
+		// quello nativo di PocketBase) perche' legge e.Auth. La priority del
+		// middleware (appena dopo il rate limit) garantisce l'ordine a
+		// prescindere da dove lo si binda. Va inizializzato prima di api.Load,
+		// che registra gli endpoint /api/integrity/*.
+		e.Router.Bind(integrityapi.Middleware(integrityapi.Init(e.App)))
+		integrityapi.BindRealtime(e.App)
 		api.Load(e.Router.Group("/api"))
 		e.Router.GET("/ical/{hash}", RetrieveICAL)
 		e.Router.GET("/static/{path...}", apis.Static(os.DirFS("./pb_public"), false))

@@ -120,6 +120,52 @@ type config struct {
 	// Un'immagine tirata su senza toccare la config si comporta quindi cosi':
 	// gli allegati riservati chiusi, il resto come prima.
 	FileLinkPublicCollections string `env:"FILE_LINK_PUBLIC_COLLECTIONS" envDefault:"events,stamp,podcasts,podcast_episodes,quid_articles_audio,ex_apps,addons,local_offices"`
+
+	// --- Integrita` dell'app (Play Integrity / App Attest) ---
+	//
+	// Servono solo agli utenti con users.access_level = "watched": per loro
+	// OGNI richiesta autenticata sotto /api/ deve portare la prova che arriva
+	// dall'app ufficiale su un dispositivo genuino (vedi main/api/integrity).
+	// Gli utenti "free" non toccano mai queste variabili e quelli "blocked"
+	// vengono respinti prima ancora di arrivare alla verifica.
+	//
+	// Nessuna di queste e` obbligatoria e nessuna entra in MustValidate: il
+	// backend deve partire anche su un ambiente senza credenziali Google. Se
+	// manca la config, la verifica fallisce CHIUSA (403 integrity_failed, con
+	// il motivo nei log) solo per gli utenti "watched"; mai aperta.
+
+	// PlayIntegrityPackageName e` il package Android atteso sia come
+	// requestDetails.requestPackageName che come appIntegrity.packageName, e
+	// quello su cui si chiama decodeIntegrityToken.
+	PlayIntegrityPackageName string `env:"PLAY_INTEGRITY_PACKAGE_NAME" envDefault:"it.mensa.app"`
+	// PlayIntegrityCertSHA256 elenca (separati da virgola) i digest SHA-256 dei
+	// certificati di firma ammessi, quelli che Play riporta in
+	// appIntegrity.certificateSha256Digest. Si accettano sia la forma esadecimale
+	// con i due punti che la Play Console mostra ("AB:CD:..."), sia base64 /
+	// base64url: vengono normalizzati tutti in base64url senza padding. Con la
+	// App Signing di Play il digest che conta e` quello della chiave di
+	// distribuzione di Google, non quello della chiave di upload. Vuoto = nessun
+	// binario Android passa la verifica.
+	PlayIntegrityCertSHA256 string `env:"PLAY_INTEGRITY_CERT_SHA256" envDefault:""`
+	// PlayIntegrityCredentialsJSON e` la chiave del service account Google
+	// (con accesso a Play Integrity API) per decodeIntegrityToken. Si accetta
+	// il JSON "grezzo" oppure il JSON in base64 standard, che e` il formato di
+	// FIREBASE_AUTH_KEY: il secondo e` piu` comodo da passare in un env file.
+	PlayIntegrityCredentialsJSON string `env:"PLAY_INTEGRITY_CREDENTIALS_JSON" envDefault:""`
+	// PlayIntegrityRequireLicensed, se true, pretende anche
+	// accountDetails.appLicensingVerdict == LICENSED (app installata da Play).
+	// Default false: chi installa da TestFlight-like/side-load Android o da un
+	// account non Play verrebbe altrimenti escluso.
+	PlayIntegrityRequireLicensed bool `env:"PLAY_INTEGRITY_REQUIRE_LICENSED" envDefault:"false"`
+	// AppAttestAppID e` "<TeamID>.<bundle id>" di iOS: ne si fa lo SHA-256 e
+	// deve coincidere con l'rpIdHash che l'app attesta.
+	AppAttestAppID string `env:"APP_ATTEST_APP_ID" envDefault:"6WA5D3RJBU.it.mensa.app"`
+	// AppAttestEnvironment: "production" (default) o "development". Decide
+	// l'AAGUID accettato in attestazione (appattest / appattestdevelop): le
+	// build firmate con l'entitlement di sviluppo ne producono uno diverso.
+	// In produzione va lasciato "production", altrimenti le chiavi generate
+	// su build di sviluppo passerebbero la verifica.
+	AppAttestEnvironment string `env:"APP_ATTEST_ENVIRONMENT" envDefault:"production"`
 }
 
 var cfg = config{}
@@ -384,4 +430,36 @@ func GetAndroidDebugSHA256() []string {
 		return nil
 	}
 	return out
+}
+
+// Integrita` dell'app: vedi i campi omonimi in config.
+
+func GetPlayIntegrityPackageName() string      { return cfg.PlayIntegrityPackageName }
+func GetPlayIntegrityCredentialsJSON() string  { return cfg.PlayIntegrityCredentialsJSON }
+func GetPlayIntegrityRequireLicensed() bool    { return cfg.PlayIntegrityRequireLicensed }
+func GetAppAttestAppID() string                { return cfg.AppAttestAppID }
+
+// GetPlayIntegrityCertSHA256 ritorna le voci grezze di
+// PLAY_INTEGRITY_CERT_SHA256, ripulite e senza voci vuote. La normalizzazione
+// (hex con i due punti o base64 -> base64url) la fa tools/integrity, che sa
+// anche segnalare le voci malformate.
+func GetPlayIntegrityCertSHA256() []string {
+	raw := strings.Split(cfg.PlayIntegrityCertSHA256, ",")
+	out := make([]string, 0, len(raw))
+	for _, f := range raw {
+		if f = strings.TrimSpace(f); f != "" {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// GetAppAttestEnvironment ritorna "production" o "development". Qualsiasi
+// altro valore (anche un refuso) ricade su "production": e` l'ambiente piu`
+// restrittivo, e un refuso non deve ammorbidire la verifica.
+func GetAppAttestEnvironment() string {
+	if strings.EqualFold(strings.TrimSpace(cfg.AppAttestEnvironment), "development") {
+		return "development"
+	}
+	return "production"
 }

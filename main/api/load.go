@@ -4,6 +4,7 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/router"
 	"mensadb/main/api/cs"
+	integrityapi "mensadb/main/api/integrity"
 	"mensadb/main/api/payment"
 	"mensadb/main/api/position"
 	searchapi "mensadb/main/api/search"
@@ -14,4 +15,5 @@ func Load(e *router.RouterGroup[*core.RequestEvent]) {
 	cs.Load(e.Group("/cs"))
 	payment.Load(e.Group("/payment"))
 	searchapi.Load(e.Group("/search"))
+	integrityapi.Load(e.Group("/integrity"))
 }

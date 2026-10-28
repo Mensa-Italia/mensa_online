@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"mensadb/importers"
+	"mensadb/main/api/cs/exapp"
 	"mensadb/main/cmd/searchcmd"
 	"mensadb/main/crons/eventslobackfill"
 	"mensadb/main/crons/quidnotify"
@@ -38,6 +39,21 @@ func CronTasks(app core.App) {
 		// segretari, co-segretari e assistenti al test ai rispettivi
 		// local_offices. Stesso identity key (cloud32 uid) dei members_registry.
 		localofficesync.Run(app)
+	})
+
+	// Export dati verso le app esterne: chiude le richieste di consenso scadute
+	// che nessuno ha piu` letto e toglie quelle concluse da piu' di 30 giorni.
+	// La scadenza vera e` pigra (si applica a ogni lettura), questa tiene
+	// ordinata la tabella.
+	app.Cron().MustAdd("Cleanup export requests", "*/10 * * * *", func() {
+		expired, deleted, err := exapp.CleanupExportRequests(app)
+		if err != nil {
+			app.Logger().Error("[CRON] cleanup export requests", "err", err)
+			return
+		}
+		if expired > 0 || deleted > 0 {
+			app.Logger().Info("[CRON] cleanup export requests", "expired", expired, "deleted", deleted)
+		}
 	})
 
 	app.Cron().MustAdd("Reload Tolgee Translations", "1 3 * * *", func() {
