@@ -212,23 +212,18 @@ func (g *Gate) verifyProof(ctx context.Context, sub Subject, req Request) (Grant
 	authKey := AuthKey(req.Header.Get("Authorization"))
 
 	// Token di login gia` verificato con Play Integrity (vedi AuthKey): passa
-	// senza guardare la prova, che le app 22.2.18 mandano comunque. Non su
-	// timbri, medaglie e realtime.
-	if g.Sessions != nil && authKey != "" && !SensitivePath(req.Method, req.Path) &&
-		g.Sessions.Valid(sub.UserID, authKey) {
+	// senza guardare la prova, che le app 22.2.18 mandano comunque.
+	if g.Sessions != nil && authKey != "" && g.Sessions.Valid(sub.UserID, authKey) {
 		return Grant{}, nil
 	}
 
-	// Sessione Android: vale al posto di challenge + token, ma mai su timbri,
-	// medaglie e sottoscrizioni realtime (vedi SessionTTL). Una sessione
-	// scaduta, sconosciuta o usata dove non vale e` un 428: il client la butta
-	// e rifa` la prova completa.
+	// Sessione Android: vale al posto di challenge + token (vedi SessionTTL).
+	// Una sessione scaduta o sconosciuta e` un 428: il client la butta e rifa`
+	// la prova completa.
 	if s := strings.TrimSpace(req.Header.Get(HeaderSession)); s != "" {
 		switch {
 		case platform != PlatformAndroid:
 			return Grant{}, required("sessione su una piattaforma diversa da android")
-		case SensitivePath(req.Method, req.Path):
-			return Grant{}, required("sessione non valida su timbri, medaglie e realtime")
 		case g.Sessions == nil || !g.Sessions.Valid(sub.UserID, s):
 			return Grant{}, required("sessione sconosciuta, scaduta o di un altro utente")
 		}

@@ -4,8 +4,6 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
-	"net/http"
-	"path"
 	"strings"
 	"sync"
 	"time"
@@ -25,14 +23,14 @@ const (
 	// al minuto di default) e una schermata dell'app parte con 10-20
 	// richieste in parallelo. Con una decode per richiesta bastava un
 	// telefono "watched" per esaurire la quota di tutti. Con la sessione si
-	// fa una decode ogni SessionTTL, e la prova per-richiesta resta solo su
-	// SensitivePath, cioe` su timbri e medaglie.
+	// fa una decode ogni SessionTTL.
 	//
-	// Cosa costa: per SessionTTL la sessione vale come prova su tutto il
-	// resto, e chi la estrae dall'app la puo` riusare. Estrarla vuol dire
-	// leggere il traffico TLS dell'app su un dispositivo che passa
-	// MEETS_DEVICE_INTEGRITY, e la stessa sessione non apre comunque timbri e
-	// medaglie.
+	// Cosa costa: per SessionTTL la sessione vale come prova su tutto,
+	// timbri e medaglie compresi, e chi la estrae dall'app la puo` riusare.
+	// Estrarla vuol dire leggere il traffico TLS o la memoria dell'app su un
+	// dispositivo che passa MEETS_DEVICE_INTEGRITY: senza root un'altra app
+	// non ci arriva, e l'app non si fida dei certificati installati
+	// dall'utente.
 	SessionTTL = 10 * time.Minute
 
 	sessionBytes = 32
@@ -43,25 +41,6 @@ const (
 	// potrebbe bruciare da solo la quota del progetto.
 	DecodesPerMinutePerUser = 8
 )
-
-// SensitivePath dice se (method, path) tocca i dati di timbri e medaglie, o
-// apre sottoscrizioni realtime (che possono portarli): li` la sessione non
-// basta e serve sempre la prova per-richiesta.
-func SensitivePath(method, p string) bool {
-	if path.Clean(p) != p {
-		return true // il router lo normalizza: nel dubbio, sensibile
-	}
-	if strings.ToUpper(method) == http.MethodPost && p == "/api/realtime" {
-		return true
-	}
-	for _, c := range []string{"stamp", "stamp_users", "view_medals"} {
-		prefix := "/api/collections/" + c + "/"
-		if strings.HasPrefix(p, prefix) || p == strings.TrimSuffix(prefix, "/") {
-			return true
-		}
-	}
-	return false
-}
 
 // SessionStore conserva in memoria le sessioni di integrita` emesse, legate
 // all'utente. In memoria per lo stesso motivo delle challenge: una sessione

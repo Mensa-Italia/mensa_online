@@ -356,7 +356,7 @@ func TestRealtimeSubscribeMarksClient(t *testing.T) {
 }
 
 // Una prova Android valida torna con una sessione, e la sessione basta per le
-// richieste successive (tranne timbri e medaglie).
+// richieste successive, timbri e medaglie compresi.
 func TestMiddlewareAndroidSession(t *testing.T) {
 	gate := newTestGate()
 	gate.Sessions = tools.NewSessionStore()
@@ -376,7 +376,7 @@ func TestMiddlewareAndroidSession(t *testing.T) {
 	if res := runMiddleware(t, gate, u, "GET", path, withSession); !res.reached {
 		t.Fatalf("sessione rifiutata: %d %v", res.status, res.body)
 	}
-	if res := runMiddleware(t, gate, u, "GET", "/api/collections/stamp/records", withSession); res.reached || res.status != 428 {
-		t.Fatalf("la sessione non deve valere sui timbri: reached=%v status=%d", res.reached, res.status)
+	if res := runMiddleware(t, gate, u, "GET", "/api/collections/stamp/records", withSession); !res.reached {
+		t.Fatalf("la sessione deve valere anche sui timbri: %d %v", res.status, res.body)
 	}
 }
