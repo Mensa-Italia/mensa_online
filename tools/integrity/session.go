@@ -10,9 +10,9 @@ import (
 )
 
 const (
-	// HeaderSession porta la sessione di integrita` Android: il server la
-	// manda in risposta a una prova Play Integrity riuscita, il client la
-	// rimanda al posto di challenge + token finche' non scade.
+	// HeaderSession porta la sessione di integrita`: il server la manda in
+	// risposta a una prova completa riuscita (Play Integrity o App Attest), il
+	// client la rimanda al posto di challenge + prova finche' non scade.
 	HeaderSession = "X-Integrity-Session"
 	// HeaderSessionTTL accompagna HeaderSession in risposta: secondi di vita.
 	HeaderSessionTTL = "X-Integrity-Session-Ttl"
@@ -23,7 +23,9 @@ const (
 	// al minuto di default) e una schermata dell'app parte con 10-20
 	// richieste in parallelo. Con una decode per richiesta bastava un
 	// telefono "watched" per esaurire la quota di tutti. Con la sessione si
-	// fa una decode ogni SessionTTL.
+	// fa una decode ogni SessionTTL. Vale anche per iOS: App Attest non ha
+	// quote, ma venti asserzioni in parallelo con la stessa chiave falliscono
+	// sul telefono o arrivano con i contatori in disordine.
 	//
 	// Cosa costa: per SessionTTL la sessione vale come prova su tutto,
 	// timbri e medaglie compresi, e chi la estrae dall'app la puo` riusare.

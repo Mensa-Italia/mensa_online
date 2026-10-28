@@ -14,7 +14,7 @@ func sessionReq(method, path, session, platform string) Request {
 	return Request{Method: method, Path: path, Header: h}
 }
 
-func TestAndroidSession(t *testing.T) {
+func TestSession(t *testing.T) {
 	g := newGateEnv(t)
 	g.gate.Sessions = NewSessionStore()
 	ctx := context.Background()
@@ -52,9 +52,9 @@ func TestAndroidSession(t *testing.T) {
 		other := Subject{UserID: "altro", Level: LevelWatched}
 		expect(t, g.gate.Authorize(ctx, other, sessionReq("GET", events, s, PlatformAndroid)), 428, CodeIntegrityRequire)
 	})
-	t.Run("inventata o su ios", func(t *testing.T) {
+	t.Run("inventata", func(t *testing.T) {
 		expect(t, g.gate.Authorize(ctx, watched, sessionReq("GET", events, "boh", PlatformAndroid)), 428, CodeIntegrityRequire)
-		expect(t, g.gate.Authorize(ctx, watched, sessionReq("GET", events, s, PlatformIOS)), 428, CodeIntegrityRequire)
+		expect(t, g.gate.Authorize(ctx, watched, sessionReq("GET", events, "boh", PlatformIOS)), 428, CodeIntegrityRequire)
 	})
 	t.Run("scaduta", func(t *testing.T) {
 		now := time.Now()
@@ -62,12 +62,13 @@ func TestAndroidSession(t *testing.T) {
 		defer func() { g.gate.Sessions.now = time.Now }()
 		expect(t, g.gate.Authorize(ctx, watched, sessionReq("GET", events, s, PlatformAndroid)), 428, CodeIntegrityRequire)
 	})
-	t.Run("ios non riceve sessioni", func(t *testing.T) {
+	t.Run("anche ios riceve una sessione", func(t *testing.T) {
 		grant, rej := g.gate.Check(ctx, watched, g.iosReq(t, "GET", events))
 		expect(t, rej, 0, "")
-		if grant.Session != "" {
-			t.Fatal("sessione emessa a iOS")
+		if grant.Session == "" {
+			t.Fatal("attesa una sessione dopo un'asserzione App Attest valida")
 		}
+		expect(t, g.gate.Authorize(ctx, watched, sessionReq("GET", "/api/collections/stamp/records", grant.Session, PlatformIOS)), 0, "")
 	})
 	t.Run("senza store nessuna sessione", func(t *testing.T) {
 		g.gate.Sessions = nil
@@ -103,4 +104,26 @@ func TestDecodeLimiter(t *testing.T) {
 
 	now = now.Add(time.Minute)
 	expect(t, g.gate.Authorize(ctx, watched, g.androidReq(t, "GET", path, "good")), 0, "")
+}
+
+// Le app iOS 22.2.18 mandano la prova completa a ogni richiesta, e venti
+// asserzioni generate in parallelo con la stessa chiave in parte falliscono.
+// Dopo la prima buona il token di login basta, come su Android.
+func TestIOSVerifiedToken(t *testing.T) {
+	g := newGateEnv(t)
+	g.gate.Sessions = NewSessionStore()
+	ctx := context.Background()
+	watched := Subject{UserID: testUser, Level: LevelWatched}
+	const events = "/api/collections/events/records"
+
+	withAuth := func(r Request, tok string) Request {
+		r.Header.Set("Authorization", tok)
+		return r
+	}
+
+	expect(t, g.gate.Authorize(ctx, watched, withAuth(noProof("GET", events), "tok-app")), 428, CodeIntegrityRequire)
+	expect(t, g.gate.Authorize(ctx, watched, withAuth(g.iosReq(t, "GET", events), "tok-app")), 0, "")
+
+	expect(t, g.gate.Authorize(ctx, watched, withAuth(noProof("GET", "/api/collections/stamp/records"), "tok-app")), 0, "")
+	expect(t, g.gate.Authorize(ctx, watched, withAuth(noProof("GET", events), "tok-script")), 428, CodeIntegrityRequire)
 }

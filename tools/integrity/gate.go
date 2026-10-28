@@ -140,8 +140,7 @@ type Request struct {
 // Android o IOS nil significano "non configurato": la verifica di quella
 // piattaforma fallisce CHIUSA (mai aperta) con il motivo nel log.
 //
-// Sessions nil spegne le sessioni Android (ogni richiesta vuole la prova
-// completa); Decodes nil toglie il tetto di decode per utente.
+// Sessions nil spegne le sessioni (ogni richiesta vuole la prova completa); Decodes nil toglie il tetto di decode per utente.
 type Gate struct {
 	Challenges *ChallengeStore
 	Sessions   *SessionStore
@@ -151,8 +150,8 @@ type Gate struct {
 }
 
 // Grant e` cio` che una richiesta passata fa tornare al client: una sessione
-// di integrita` nuova, se la richiesta ha portato una prova Play Integrity
-// completa e valida.
+// di integrita` nuova, se la richiesta ha portato una prova completa e
+// valida (Play Integrity o App Attest).
 type Grant struct {
 	Session string
 	TTL     time.Duration
@@ -211,27 +210,26 @@ func (g *Gate) verifyProof(ctx context.Context, sub Subject, req Request) (Grant
 	platform := strings.ToLower(strings.TrimSpace(req.Header.Get(HeaderPlatform)))
 	authKey := AuthKey(req.Header.Get("Authorization"))
 
-	// Token di login gia` verificato con Play Integrity (vedi AuthKey): passa
-	// senza guardare la prova, che le app 22.2.18 mandano comunque.
+	// Token di login gia` verificato con una prova completa (vedi AuthKey):
+	// passa senza guardare la prova, che le app 22.2.18 mandano comunque. Su
+	// iOS evita anche di confrontare i contatori di asserzioni generate in
+	// parallelo, che arrivano in disordine e si rifiuterebbero a vicenda.
 	if g.Sessions != nil && authKey != "" && g.Sessions.Valid(sub.UserID, authKey) {
 		return Grant{}, nil
 	}
 
-	// Sessione Android: vale al posto di challenge + token (vedi SessionTTL).
-	// Una sessione scaduta o sconosciuta e` un 428: il client la butta e rifa`
-	// la prova completa.
+	// Sessione: vale al posto di challenge + prova (vedi SessionTTL). Una
+	// sessione scaduta o sconosciuta e` un 428: il client la butta e rifa` la
+	// prova completa.
 	if s := strings.TrimSpace(req.Header.Get(HeaderSession)); s != "" {
-		switch {
-		case platform != PlatformAndroid:
-			return Grant{}, required("sessione su una piattaforma diversa da android")
-		case g.Sessions == nil || !g.Sessions.Valid(sub.UserID, s):
+		if g.Sessions == nil || !g.Sessions.Valid(sub.UserID, s) {
 			return Grant{}, required("sessione sconosciuta, scaduta o di un altro utente")
 		}
 		return Grant{}, nil
 	}
 
 	rej := g.verifyFullProof(ctx, sub, req, platform)
-	if rej != nil || platform != PlatformAndroid || g.Sessions == nil {
+	if rej != nil || g.Sessions == nil {
 		return Grant{}, rej
 	}
 	g.Sessions.Remember(sub.UserID, authKey)
