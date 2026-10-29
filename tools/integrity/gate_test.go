@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"testing"
+	"time"
 )
 
 type decoderFunc func(token string) (*Verdict, error)
@@ -130,10 +131,15 @@ func TestAuthorizeDecisionTable(t *testing.T) {
 		{"sottoscrizioni realtime", "POST", "/api/realtime", false},
 		{"file token", "POST", "/api/files/token", false},
 		{"challenge con metodo sbagliato", "GET", "/api/integrity/challenge", false},
+		{"report con metodo sbagliato", "GET", "/api/integrity/report", false},
+		{"report con path non pulito", "POST", "/api/integrity//report", false},
+		{"report con path che sale", "POST", "/api/integrity/report/../x", false},
+		{"report con path che somiglia", "POST", "/api/integrity/report/x", false},
 		{"path non pulito non e` esente", "GET", "/api/files/../collections/stamp/records", false},
 
 		{"challenge", "POST", "/api/integrity/challenge", true},
 		{"attest", "POST", "/api/integrity/ios/attest", true},
+		{"report", "POST", "/api/integrity/report", true},
 		{"download file", "GET", "/api/files/stamp/abc/img.png", true},
 		{"download file HEAD", "HEAD", "/api/files/stamp/abc/img.png", true},
 		{"apertura SSE", "GET", "/api/realtime", true},
@@ -448,6 +454,8 @@ func TestRequiresProof(t *testing.T) {
 		{"POST", "/api/realtime", true},
 		{"GET", "/api/realtime", false},
 		{"POST", "/api/integrity/challenge", false},
+		{"POST", "/api/integrity/report", false},
+		{"GET", "/api/integrity/report", true},
 		{"POST", "/api/cs/exapp/valid", false},
 		{"GET", "/ical/x", false},
 		{"POST", "/mcp", false},
@@ -565,4 +573,120 @@ func TestAuthorizeBlockedAllowlist(t *testing.T) {
 	if BlockedAllowed("", "GET", "/api/cs/me", nil) {
 		t.Error("senza userID non si autorizza niente")
 	}
+}
+
+// Il report e` esente dalla prova (un client che non sa attestare deve poter
+// dire perche'), ma solo per POST e solo sul path esatto: il router normalizza
+// i path "sporchi" prima di scegliere la route, quindi un'esenzione concessa sul
+// testo grezzo potrebbe coprirne un'altra.
+func TestExemptReport(t *testing.T) {
+	const report = "/api/integrity/report"
+	if !Exempt("POST", report) || !Exempt("post", report) {
+		t.Error("POST /api/integrity/report deve essere esente")
+	}
+	for _, m := range []string{"GET", "HEAD", "PUT", "PATCH", "DELETE"} {
+		if Exempt(m, report) {
+			t.Errorf("%s %s non e` esente", m, report)
+		}
+	}
+	for _, p := range []string{
+		"/api/integrity/report/../x",
+		"/api/integrity/report/..",
+		"/api/integrity/report/",
+		"/api/integrity/report/./",
+		"/api/integrity//report",
+		"//api/integrity/report",
+		"/api/integrity/../integrity/report",
+		"/api/integrity/report/x",
+		"/api/integrity/reports",
+		"/api/integrity/Report",
+		"/api/integrity/ios/report",
+		"/api/integrity/report?x=1", // r.URL.Path non porta mai la query: sarebbe un path diverso
+	} {
+		if Exempt("POST", p) {
+			t.Errorf("POST %q non deve essere esente", p)
+		}
+	}
+	// Le esenzioni di prima restano com'erano.
+	for _, p := range []string{"/api/integrity/challenge", "/api/integrity/ios/attest"} {
+		if !Exempt("POST", p) || Exempt("GET", p) {
+			t.Errorf("%s: esenzione cambiata", p)
+		}
+	}
+}
+
+// IL REPORT DESCRIVE E NON CONCEDE. Qualunque numero di report, anche di un
+// client che dichiara "unsupported" a ripetizione, non cambia la decisione per
+// un utente watched: niente sessione, niente token ricordato, nessuna sfida
+// consumata o emessa, e senza prova le route dei dati restano 428. Un client
+// che non sa attestare e uno script dichiarano la stessa cosa: se l'uno
+// guadagnasse qualcosa lo guadagnerebbe anche l'altro.
+func TestReportNeverChangesAuthorization(t *testing.T) {
+	g := newGateEnv(t)
+	g.gate.Sessions = NewSessionStore()
+	g.gate.Reports = NewUserLimiter(ReportsPerHourPerUser, time.Hour)
+	ctx := context.Background()
+	watched := Subject{UserID: testUser, Level: LevelWatched}
+	const (
+		report = "/api/integrity/report"
+		data   = "/api/collections/events/records"
+		script = "Bearer tok-script"
+	)
+
+	// Una challenge emessa prima dei report: non deve essere toccata.
+	pending := g.challenge(t)
+
+	reportReq := func(i int) Request {
+		r := noProof("POST", report)
+		r.Header.Set("Authorization", script)
+		r.Header.Set(HeaderPlatform, []string{PlatformIOS, PlatformAndroid, "unsupported", ""}[i%4])
+		// il report non e` una prova: nemmeno se ne porta una finta
+		r.Header.Set(HeaderSession, "sessione-inventata")
+		r.Header.Set(HeaderChallenge, pending)
+		r.Header.Set(HeaderKeyID, "key1")
+		return r
+	}
+	for i := range 3 * ReportsPerHourPerUser {
+		grant, rej := g.gate.Check(ctx, watched, reportReq(i))
+		expect(t, rej, 0, "")
+		if grant != (Grant{}) {
+			t.Fatalf("il report %d ha fatto emettere %+v", i, grant)
+		}
+	}
+
+	// La challenge pendente c'e` ancora e vale una volta, come prima.
+	if !g.gate.Challenges.Consume(testUser, pending) {
+		t.Fatal("un report ha consumato una challenge")
+	}
+	if g.gate.Sessions.Valid(testUser, "sessione-inventata") || g.gate.Sessions.Valid(testUser, AuthKey(script)) {
+		t.Fatal("un report ha creato una sessione o ricordato il token di login")
+	}
+	if len(g.gate.Sessions.byID) != 0 {
+		t.Fatalf("lo store delle sessioni non e` vuoto: %d voci", len(g.gate.Sessions.byID))
+	}
+
+	// Senza prova le route dei dati restano chiuse, con o senza il token che ha
+	// mandato i report e con o senza una sessione inventata.
+	for _, p := range []string{data, "/api/collections/stamp/records", "/api/cs/me", "/api/batch"} {
+		expect(t, g.gate.Authorize(ctx, watched, withAuthorization(noProof("GET", p), script)), 428, CodeIntegrityRequire)
+		expect(t, g.gate.Authorize(ctx, watched, sessionReq("GET", p, "sessione-inventata", PlatformIOS)), 428, CodeIntegrityRequire)
+	}
+
+	// E la prova vera funziona come prima, per chi ce l'ha.
+	grant, rej := g.gate.Check(ctx, watched, g.iosReq(t, "GET", data))
+	expect(t, rej, 0, "")
+	if grant.Session == "" {
+		t.Fatal("la prova vera deve continuare a emettere la sessione")
+	}
+	// ...e la sessione di chi ha la prova non e` finita al token dei report.
+	expect(t, g.gate.Authorize(ctx, watched, withAuthorization(noProof("GET", data), script)), 428, CodeIntegrityRequire)
+
+	// Un blocked non scrive report: 403 come per challenge e attest.
+	blocked := Subject{UserID: testUser, Level: LevelBlocked}
+	expect(t, g.gate.Authorize(ctx, blocked, noProof("POST", report)), 403, CodeAccountBlocked)
+}
+
+func withAuthorization(r Request, tok string) Request {
+	r.Header.Set("Authorization", tok)
+	return r
 }

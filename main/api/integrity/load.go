@@ -14,10 +14,11 @@ import (
 
 // Load registra gli endpoint del gruppo /api/integrity. Richiedono auth; sono
 // esenti dalla prova per-richiesta (vedi tools.Exempt) perche' servono proprio
-// a ottenerla.
+// a ottenerla, o a raccontare perche' non ci si riesce (report).
 func Load(e *router.RouterGroup[*core.RequestEvent]) {
 	e.POST("/challenge", challengeHandler).Bind(apis.RequireAuth())
 	e.POST("/ios/attest", iosAttestHandler).Bind(apis.RequireAuth())
+	e.POST("/report", reportHandler).Bind(apis.RequireAuth())
 }
 
 // challengeHandler emette una challenge monouso legata all'utente.

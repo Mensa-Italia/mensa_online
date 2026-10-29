@@ -127,3 +127,58 @@ func TestIOSVerifiedToken(t *testing.T) {
 	expect(t, g.gate.Authorize(ctx, watched, withAuth(noProof("GET", "/api/collections/stamp/records"), "tok-app")), 0, "")
 	expect(t, g.gate.Authorize(ctx, watched, withAuth(noProof("GET", events), "tok-script")), 428, CodeIntegrityRequire)
 }
+
+// Il limitatore e` lo stesso per le decode (un minuto) e per i report (un'ora):
+// finestra fissa, tetto per utente. Che DecodeLimiter resti un alias lo prova
+// TestDecodeLimiter, che usa NewDecodeLimiter() come Gate.Decodes.
+func TestUserLimiter(t *testing.T) {
+	if l := NewDecodeLimiter(); l.max != DecodesPerMinutePerUser || l.per != time.Minute {
+		t.Fatalf("NewDecodeLimiter: %d ogni %v", l.max, l.per)
+	}
+
+	l := NewUserLimiter(ReportsPerHourPerUser, time.Hour)
+	now := time.Now()
+	l.now = func() time.Time { return now }
+
+	for i := range ReportsPerHourPerUser {
+		if !l.Allow("u1") {
+			t.Fatalf("la richiesta %d doveva passare", i+1)
+		}
+	}
+	if l.Allow("u1") {
+		t.Fatal("oltre il tetto orario deve dire no")
+	}
+	// altri utenti, altri tetti
+	if !l.Allow("u2") {
+		t.Fatal("il tetto di un utente non deve toccare gli altri")
+	}
+	// dentro l'ora la finestra non scorre
+	now = now.Add(59 * time.Minute)
+	if l.Allow("u1") {
+		t.Fatal("a 59 minuti la finestra e` ancora la stessa")
+	}
+	// a un'ora si riparte
+	now = now.Add(time.Minute)
+	if !l.Allow("u1") {
+		t.Fatal("a un'ora la finestra e` nuova")
+	}
+}
+
+// Le finestre scadute degli altri utenti si buttano: la mappa non cresce per
+// sempre (con finestre da un'ora conta).
+func TestUserLimiterForgetsExpiredWindows(t *testing.T) {
+	l := NewUserLimiter(1, time.Hour)
+	now := time.Now()
+	l.now = func() time.Time { return now }
+	for _, u := range []string{"a", "b", "c"} {
+		l.Allow(u)
+	}
+	if len(l.byUsr) != 3 {
+		t.Fatalf("attese 3 finestre, %d", len(l.byUsr))
+	}
+	now = now.Add(time.Hour)
+	l.Allow("d")
+	if len(l.byUsr) != 1 {
+		t.Fatalf("le finestre scadute andavano buttate: %d", len(l.byUsr))
+	}
+}

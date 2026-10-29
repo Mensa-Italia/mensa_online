@@ -134,13 +134,15 @@ func (s *SessionStore) Valid(userID, id string) bool {
 	return v.userID == userID
 }
 
-// DecodeLimiter conta le decodeIntegrityToken per utente, a finestre di un
-// minuto.
-type DecodeLimiter struct {
+// UserLimiter conta le azioni per utente a finestre fisse: al massimo max ogni
+// per. Serve a due tetti: le decodeIntegrityToken (DecodeLimiter, 8 al minuto)
+// e le segnalazioni dei client (Gate.Reports, 20 all'ora).
+type UserLimiter struct {
 	mu    sync.Mutex
 	byUsr map[string]window
 	now   func() time.Time
 	max   int
+	per   time.Duration
 }
 
 type window struct {
@@ -148,18 +150,34 @@ type window struct {
 	count int
 }
 
-// NewDecodeLimiter crea un limitatore con il tetto di default.
-func NewDecodeLimiter() *DecodeLimiter {
-	return &DecodeLimiter{byUsr: make(map[string]window), now: time.Now, max: DecodesPerMinutePerUser}
+// DecodeLimiter e` il limitatore delle decodeIntegrityToken: un UserLimiter a
+// finestre di un minuto.
+type DecodeLimiter = UserLimiter
+
+// NewUserLimiter crea un limitatore con max azioni per utente ogni per.
+func NewUserLimiter(max int, per time.Duration) *UserLimiter {
+	return &UserLimiter{byUsr: make(map[string]window), now: time.Now, max: max, per: per}
 }
 
-// Allow dice se l'utente puo` fare un'altra decode adesso, e se si' la conta.
-func (l *DecodeLimiter) Allow(userID string) bool {
+// NewDecodeLimiter crea un limitatore con il tetto di default.
+func NewDecodeLimiter() *DecodeLimiter {
+	return NewUserLimiter(DecodesPerMinutePerUser, time.Minute)
+}
+
+// Allow dice se l'utente puo` fare un'altra azione adesso, e se si' la conta.
+func (l *UserLimiter) Allow(userID string) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	now := l.now()
 	w := l.byUsr[userID]
-	if now.Sub(w.start) >= time.Minute {
+	if now.Sub(w.start) >= l.per {
+		// Finestra nuova: le scadute degli altri utenti si buttano qui, cosi'
+		// la mappa non cresce per sempre (con finestre da un'ora conta).
+		for k, v := range l.byUsr {
+			if now.Sub(v.start) >= l.per {
+				delete(l.byUsr, k)
+			}
+		}
 		w = window{start: now}
 	}
 	if w.count >= l.max {

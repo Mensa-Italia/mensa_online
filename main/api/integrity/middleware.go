@@ -77,7 +77,10 @@ func Middleware(gate *tools.Gate) *hook.Handler[*core.RequestEvent] {
 	}
 }
 
-// reject logga il motivo preciso e risponde con il JSON del contratto.
+// reject logga il motivo preciso e risponde con il JSON del contratto. Nel log
+// va anche la piattaforma dichiarata dal client (X-Integrity-Platform, ripulita:
+// e` scritta dal client): lo userAgent e` sempre quello di ktor e i request log
+// non hanno gli header, quindi iOS e Android si dedurrebbero dagli intervalli IP.
 func reject(e *core.RequestEvent, rej *tools.Rejection) error {
 	userID := ""
 	if e.Auth != nil {
@@ -87,6 +90,7 @@ func reject(e *core.RequestEvent, rej *tools.Rejection) error {
 		"user", userID,
 		"method", e.Request.Method,
 		"path", e.Request.URL.Path,
+		"platform", tools.CleanText(e.Request.Header.Get(tools.HeaderPlatform), 32),
 		"code", rej.Code,
 		"reason", rej.Reason,
 	)

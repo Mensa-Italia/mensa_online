@@ -123,6 +123,8 @@ func TestMiddlewareDecisionTable(t *testing.T) {
 		{"route custom", "GET", "/api/cs/file-link", false},
 		{"sottoscrizioni realtime", "POST", "/api/realtime", false},
 		{"challenge", "POST", "/api/integrity/challenge", true},
+		{"report", "POST", "/api/integrity/report", true},
+		{"report con GET", "GET", "/api/integrity/report", false},
 		{"download file", "GET", "/api/files/stamp/a/b.png", true},
 		{"apertura SSE", "GET", "/api/realtime", true},
 		{"health", "GET", "/api/health", true},

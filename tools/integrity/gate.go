@@ -54,10 +54,17 @@ func IsMCP(p string) bool { return p == "/mcp" || strings.HasPrefix(p, "/mcp/") 
 func InAPIScope(p string) bool { return p == "/api" || strings.HasPrefix(p, "/api/") }
 
 // Exempt elenca le richieste di un utente "watched" che NON richiedono la
-// prova: servono a far funzionare il flusso stesso (challenge e attest) o non
+// prova: servono a far funzionare il flusso stesso (challenge e attest), a
+// raccontare perche' la prova non si riesce a produrre (report: se la
+// pretendesse, il client che non sa attestare non potrebbe nemmeno dirlo) o non
 // passano dal client HTTP che sa allegarla (immagini dei loader nativi, apertura
 // dell'SSE, health check). Le sottoscrizioni realtime (POST /api/realtime)
 // restano invece protette.
+//
+// L'esenzione del report non concede niente: l'handler descrive e basta (vedi
+// main/api/integrity/report.go), non emette sessioni e non ricorda token, e
+// Check lo lascia passare senza toccare lo stato. Lo prova
+// TestReportNeverChangesAuthorization.
 //
 // Un path non "pulito" (con "..", "//" o "/./") non e` mai esente: il router
 // lo normalizza prima di scegliere la route, quindi un'esenzione concessa sul
@@ -72,7 +79,7 @@ func Exempt(method, p string) bool {
 	}
 	read := method == http.MethodGet || method == http.MethodHead
 	switch {
-	case method == http.MethodPost && (p == "/api/integrity/challenge" || p == "/api/integrity/ios/attest"):
+	case method == http.MethodPost && (p == "/api/integrity/challenge" || p == "/api/integrity/ios/attest" || p == "/api/integrity/report"):
 		return true
 	case read && strings.HasPrefix(p, "/api/files/"):
 		return true
@@ -140,11 +147,14 @@ type Request struct {
 // Android o IOS nil significano "non configurato": la verifica di quella
 // piattaforma fallisce CHIUSA (mai aperta) con il motivo nel log.
 //
-// Sessions nil spegne le sessioni (ogni richiesta vuole la prova completa); Decodes nil toglie il tetto di decode per utente.
+// Sessions nil spegne le sessioni (ogni richiesta vuole la prova completa); Decodes nil toglie il tetto di decode per utente;
+// Reports nil toglie il tetto di segnalazioni per utente (lo usa l'handler del
+// report, non Check: la decisione per un utente watched non lo guarda mai).
 type Gate struct {
 	Challenges *ChallengeStore
 	Sessions   *SessionStore
 	Decodes    *DecodeLimiter
+	Reports    *UserLimiter
 	Android    *AndroidVerifier
 	IOS        *AppAttest
 }
