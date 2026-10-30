@@ -11,10 +11,20 @@ import (
 )
 
 // production_schema.json e` l'export delle collection di produzione
-// (Dashboard -> Settings -> Export collections) al 26/10/2026. Sostituisce
+// (Dashboard -> Settings -> Export collections) al 30/10/2026. Sostituisce
 // la vecchia baseline e le migrazioni incrementali che ci stavano sopra:
 // in produzione erano gia` tutte applicate, e le righe che restano in
 // _migrations per file che non esistono piu` vengono ignorate dal runner.
+//
+// Il 30/10 l'export e` stato riallineato a produzione dopo le modifiche
+// fatte a mano dalla dashboard: view_medals (timbri validi = quelli che in
+// classifica valgono almeno un punto) e le tre viste nuove della
+// classifica, view_leaderboard, view_leaderboard_regioni e
+// view_leaderboard_segretari, con le loro regole; le regole di stamp e
+// stamp_users; e cio` che le migrazioni successive a questa creano
+// (users.access_level, app_attest_keys, ex_export_requests), che restano
+// idempotenti. Le query delle viste sono anche in Work/view_*.sql, fuori
+// dal repo, con i commenti sul calcolo.
 //
 // Su un DB nuovo crea tutto lo schema; su produzione e` un no-op, perche`
 // lo schema e` gia` quello. deleteMissing=false: una collection che non
@@ -76,7 +86,62 @@ func collectionsToImport(app core.App, schema []byte) ([]map[string]any, error) 
 		}
 		toImport = append(toImport, c)
 	}
-	return toImport, nil
+	return orderViewsByDependency(toImport), nil
+}
+
+// orderViewsByDependency sposta ogni view dopo le view che la sua query
+// nomina. L'export della dashboard e` in ordine alfabetico, e salvare una
+// view la valida eseguendone la query: su un DB nuovo view_leaderboard
+// (che legge view_medals e view_leaderboard_regioni) importata prima di
+// view_medals si fermava con "no such table". Le collection base e auth
+// restano dove sono, prima delle view che le usano.
+func orderViewsByDependency(collections []map[string]any) []map[string]any {
+	names := make(map[string]int, len(collections))
+	for i, c := range collections {
+		if c["type"] == core.CollectionTypeView {
+			if name, _ := c["name"].(string); name != "" {
+				names[name] = i
+			}
+		}
+	}
+	if len(names) == 0 {
+		return collections
+	}
+
+	dependsOn := func(c map[string]any, name string) bool {
+		query, _ := c["viewQuery"].(string)
+		for _, token := range strings.FieldsFunc(query, func(r rune) bool {
+			return !(r == '_' || r >= '0' && r <= '9' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z')
+		}) {
+			if token == name {
+				return true
+			}
+		}
+		return false
+	}
+
+	ordered := make([]map[string]any, 0, len(collections))
+	placed := make(map[string]bool, len(names))
+	var place func(c map[string]any, depth int)
+	place = func(c map[string]any, depth int) {
+		name, _ := c["name"].(string)
+		if placed[name] {
+			return
+		}
+		placed[name] = true
+		if c["type"] == core.CollectionTypeView && depth < len(names) {
+			for other, i := range names {
+				if other != name && dependsOn(c, other) {
+					place(collections[i], depth+1)
+				}
+			}
+		}
+		ordered = append(ordered, c)
+	}
+	for _, c := range collections {
+		place(c, 0)
+	}
+	return ordered
 }
 
 func sameView(existing *core.Collection, imported map[string]any) bool {

@@ -1,6 +1,8 @@
 package migrations
 
 import (
+	"strings"
+
 	"github.com/pocketbase/pocketbase/core"
 	m "github.com/pocketbase/pocketbase/migrations"
 )
@@ -94,9 +96,26 @@ func downAccessLevelAndAppAttest(app core.App) error {
 	if err != nil {
 		return nil // niente collection users: niente campo da togliere
 	}
-	if users.Fields.GetByName(accessLevelField) != nil {
+	if users.Fields.GetByName(accessLevelField) != nil && !readByAView(app, accessLevelField) {
 		users.Fields.RemoveByName(accessLevelField)
 		return app.Save(users)
 	}
 	return nil
+}
+
+// readByAView dice se una view legge la colonna: SQLite non lascia togliere
+// una colonna che una view usa (view_leaderboard esclude gli utenti
+// "blocked" leggendo users.access_level), e dal 30/10/2026 quella view sta
+// nello schema di produzione, quindi la down lascia il campo dov'e`.
+func readByAView(app core.App, column string) bool {
+	views, err := app.FindAllCollections(core.CollectionTypeView)
+	if err != nil {
+		return true // nel dubbio non si tocca
+	}
+	for _, v := range views {
+		if strings.Contains(v.ViewQuery, column) {
+			return true
+		}
+	}
+	return false
 }

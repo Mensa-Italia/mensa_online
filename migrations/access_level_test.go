@@ -74,9 +74,11 @@ func TestAccessLevelAndAppAttestIdempotentAndDown(t *testing.T) {
 		t.Fatalf("seconda down: %v", err)
 	}
 
+	// access_level resta: view_leaderboard, nello schema di produzione, lo
+	// legge, e SQLite non lascia togliere una colonna usata da una view.
 	users, _ := app.FindCollectionByNameOrId("users")
-	if users.Fields.GetByName(accessLevelField) != nil {
-		t.Error("access_level ancora presente dopo la down")
+	if users.Fields.GetByName(accessLevelField) == nil {
+		t.Error("access_level tolto dalla down nonostante una view lo legga")
 	}
 	if c, _ := app.FindCollectionByNameOrId(appAttestKeysTable); c != nil {
 		t.Error("app_attest_keys ancora presente dopo la down")
