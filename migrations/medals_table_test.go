@@ -258,7 +258,8 @@ func TestMedalsRefreshTracksTiers(t *testing.T) {
 		t.Fatalf("avanzamenti: %+v, atteso solo %+v", c, want)
 	}
 
-	// Il contatore scende: si salva il metallo piu' basso, nessun avviso...
+	// Il contatore scende: lo stato tiene il metallo piu' alto raggiunto,
+	// nessun avviso...
 	if err := app.Delete(second); err != nil {
 		t.Fatal(err)
 	}
@@ -268,16 +269,16 @@ func TestMedalsRefreshTracksTiers(t *testing.T) {
 	if c := take(); len(c) != 0 {
 		t.Fatalf("un contatore che scende non avvisa: %+v", c)
 	}
-	if tier, _ := stateTier(t, app, "1001", "multiscreen"); tier != "none" {
-		t.Errorf("stato dopo il calo: %q, atteso none", tier)
+	if tier, _ := stateTier(t, app, "1001", "multiscreen"); tier != "platinum" {
+		t.Errorf("stato dopo il calo: %q, atteso platinum (il massimo non scende)", tier)
 	}
-	// ...e se risale avvisa di nuovo.
+	// ...e se risale non si annuncia una seconda volta.
 	addDevice(t, app, "1001", "tok-3")
 	if err := medals.Refresh(app); err != nil {
 		t.Fatal(err)
 	}
-	if c := take(); len(c) != 1 || c[0] != want {
-		t.Fatalf("risalita: %+v", c)
+	if c := take(); len(c) != 0 {
+		t.Fatalf("risalita a un metallo gia' annunciato: %+v", c)
 	}
 
 	// Un timbro che conta (un solo socio attivo nella regione, un solo

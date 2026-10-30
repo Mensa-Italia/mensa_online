@@ -310,9 +310,12 @@ func loadState(tx core.App) (*stateIndex, error) {
 	return idx, nil
 }
 
-// track confronta il metallo di ogni medaglia con l'ultimo visto per il
+// track confronta il metallo di ogni medaglia con il massimo visto per il
 // socio, aggiorna lo stato e ritorna gli avanzamenti. Le righe senza stato
-// si scrivono in silenzio.
+// si scrivono in silenzio. Lo stato tiene il metallo piu' alto raggiunto e
+// non scende mai: i contatori possono calare (tessera scaduta e rinnovata,
+// timbri che smettono di valere quando cambia la quota della regione) e
+// risalire, e una medaglia gia' annunciata non si annuncia due volte.
 func track(tx core.App, state *stateIndex, user string, stats Stats, now time.Time) ([]Change, error) {
 	var changes []Change
 	known := state.byUser[user]
@@ -329,13 +332,10 @@ func track(tx core.App, state *stateIndex, user string, stats Stats, now time.Ti
 			if err != nil {
 				return nil, err
 			}
-		case ParseTier(old.Tier) == tier:
+		case tier <= ParseTier(old.Tier):
 		default:
-			params := dbx.Params{"tier": tier.String(), "updated": stamp}
-			if tier > ParseTier(old.Tier) {
-				params["sent_at"] = stamp
-				changes = append(changes, Change{UserID: user, Medal: rule.ID, Title: rule.Title, From: ParseTier(old.Tier), To: tier})
-			}
+			params := dbx.Params{"tier": tier.String(), "updated": stamp, "sent_at": stamp}
+			changes = append(changes, Change{UserID: user, Medal: rule.ID, Title: rule.Title, From: ParseTier(old.Tier), To: tier})
 			if _, err := tx.DB().Update(StateTable, params, dbx.HashExp{"id": old.ID}).Execute(); err != nil {
 				return nil, err
 			}
