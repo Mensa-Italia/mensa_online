@@ -239,6 +239,35 @@ func Snapshot(app core.App) error {
 	})
 }
 
+// RequestRefresh accoda un ricalcolo in sottofondo, con debounce: la prima
+// richiesta fa partire un timer di [refreshDelay], le successive nel
+// frattempo non aggiungono niente. Cosi' chi si toglie e si rimette cento
+// volte di fila, per dispetto, ottiene un ricalcolo solo, e il ricalcolo
+// vede comunque lo stato finale perche' legge il DB quando parte.
+func RequestRefresh(app core.App) {
+	pendingMu.Lock()
+	defer pendingMu.Unlock()
+	if pending {
+		return
+	}
+	pending = true
+	time.AfterFunc(refreshDelay, func() {
+		pendingMu.Lock()
+		pending = false
+		pendingMu.Unlock()
+		if err := Refresh(app); err != nil {
+			app.Logger().Error("[leaderboard] refresh richiesto", "err", err)
+		}
+	})
+}
+
+const refreshDelay = 10 * time.Second
+
+var (
+	pendingMu sync.Mutex
+	pending   bool
+)
+
 // Hide toglie subito la riga di un socio dalla classifica dei soci: chi
 // sceglie di non apparire non deve aspettare il cron. Le posizioni degli
 // altri restano quelle di prima fino al ricalcolo, che l'hook fa partire

@@ -16,7 +16,8 @@ const leaderboardHiddenKey = "leaderboard_hidden"
 // d'ora, quindi senza questo chi si nasconde resterebbe visibile fino al
 // ricalcolo successivo: qui la sua riga sparisce subito, e il ricalcolo
 // (che ridistribuisce le posizioni, o lo fa rientrare se ha scelto di
-// tornare) parte in sottofondo senza far aspettare la risposta.
+// tornare) parte in sottofondo pochi secondi dopo, uno solo anche se i
+// cambi sono tanti, senza far aspettare la risposta.
 func LeaderboardHiddenChanged(e *core.RecordEvent) error {
 	if e.Record.GetString("key") != leaderboardHiddenKey {
 		return e.Next()
@@ -27,10 +28,7 @@ func LeaderboardHiddenChanged(e *core.RecordEvent) error {
 			e.App.Logger().Error("[leaderboard] hide", "user", userID, "err", err)
 		}
 	}
-	go func() {
-		if err := leaderboard.Refresh(e.App); err != nil {
-			e.App.Logger().Error("[leaderboard] refresh after opt-out change", "err", err)
-		}
-	}()
+	// Con debounce: cento toggle di fila sono un ricalcolo solo.
+	leaderboard.RequestRefresh(e.App)
 	return e.Next()
 }
