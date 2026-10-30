@@ -31,6 +31,8 @@
   "leaderboard.notify.down_noevent.7.title": "Peccato",
   "leaderboard.notify.down_noevent.8.body": "Quindici giorni fa eri più in alto: oggi {position}° con {score} punti, {lost} in meno. Guarda cosa c'è in calendario.",
   "leaderboard.notify.down_noevent.8.title": "Un timbro e si riparte",
+  "leaderboard.notify.region_medal.body": "{medal}: {tier}. Guardalo nel medagliere.",
+  "leaderboard.notify.region_medal.title": "La tua regione ha un nuovo traguardo",
   "leaderboard.notify.region_top10.body": "La tua regione è entrata nei primi dieci della classifica delle regioni: {position}° posto con {score} punti.",
   "leaderboard.notify.region_top10.title": "La tua regione è nella top 10",
   "leaderboard.notify.region_top3.body": "La tua regione è entrata nei primi tre della classifica delle regioni: {position}° posto con {score} punti.",

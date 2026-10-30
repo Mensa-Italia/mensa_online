@@ -18,6 +18,7 @@ import (
 	"mensadb/tools/localofficesync"
 	"mensadb/tools/podcastsync"
 	"mensadb/tools/quidsync"
+	"mensadb/tools/regionmedals"
 
 	"github.com/pocketbase/pocketbase/core"
 )
@@ -120,9 +121,21 @@ func CronTasks(app core.App) {
 		}
 	})
 
-	// Dopo ogni ricalcolo (cron o opt-out) le notifiche di soglia: "sei
-	// entrato nei primi dieci" e simili, vedi tools/leaderboardnotify.
-	leaderboard.AfterRefresh = leaderboardnotify.Thresholds
+	// Dopo ogni ricalcolo (cron o opt-out) prima le medaglie di regione
+	// (tools/regionmedals), poi le notifiche: quelle di soglia, "sei entrato
+	// nei primi dieci" e simili, e quelle dei metalli appena sbloccati, vedi
+	// tools/leaderboardnotify. Un errore delle medaglie finisce nel log e
+	// non ferma niente, il ricalcolo delle classifiche e' gia' fatto.
+	leaderboard.AfterRefresh = func(app core.App) {
+		unlocks, err := regionmedals.RefreshUnlocks(app)
+		if err != nil {
+			app.Logger().Error("[regionmedals] ricalcolo dopo le classifiche", "err", err)
+		}
+		leaderboardnotify.Thresholds(app)
+		for _, u := range unlocks {
+			leaderboardnotify.RegionMedalUnlocked(app, u.LocalOffice, u.RegionKey, u.Medal, u.Tier)
+		}
+	}
 
 	// Le tre classifiche (soci, regioni, segretari) sono tabelle riempite
 	// qui, non viste: vedi tools/leaderboard. Un quarto d'ora di ritardo

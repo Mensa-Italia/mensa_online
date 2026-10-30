@@ -8,7 +8,7 @@ import (
 )
 
 // I testi italiani delle notifiche, chiave Tolgee -> testo, con i
-// segnaposto {position}, {score}, {gained}, {lost}, {event}, {date}. Sono
+// segnaposto {position}, {score}, {gained}, {lost}, {event}, {date}, {medal}, {tier}. Sono
 // la riserva di dbtools.PushNotification (Title/Body) quando Tolgee non ha
 // ancora la chiave, e il sorgente da caricare su Tolgee. Il file sta qui
 // perche' ci siano un posto solo in cui cambiare una frase.

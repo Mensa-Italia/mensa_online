@@ -91,7 +91,7 @@ func newFixture(t *testing.T) *fixture {
 	}
 	c = core.NewBaseCollection("members_registry")
 	freeID(c)
-	c.Fields.Add(&core.TextField{Name: "area"})
+	c.Fields.Add(&core.TextField{Name: "area"}, &core.BoolField{Name: "is_active"})
 	save(c)
 
 	if err := EnsureStateCollection(app); err != nil {

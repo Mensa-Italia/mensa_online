@@ -10,7 +10,11 @@
 //     quando il giorno dell'anno della sua iscrizione (users.created) e'
 //     congruo a oggi modulo 15, e riceve posizione e punti di oggi contro
 //     lo snapshot di quindici giorni fa (leaderboard_history), con il
-//     prossimo evento nella sua regione se e' sceso o fermo.
+//     prossimo evento nella sua regione se e' sceso o fermo;
+//   - le medaglie di regione (tools/regionmedals): quando una regione prende
+//     un metallo nuovo, lo sanno tutti i soci attivi di quella regione
+//     (registro soci, area), non solo i segretari. Chiamata dall'hook che
+//     segue ogni ricalcolo, vedi RegionMedalUnlocked.
 //
 // Chi non riceve mai niente: chi non ha nemmeno un timbro (non gioca), chi
 // ha scelto di non apparire (users_metadata leaderboard_hidden = true), chi
@@ -19,11 +23,13 @@
 // assente), e nessuno riceve notifiche di una classifica spenta in configs
 // (leaderboard_members_enabled, leaderboard_regions_enabled).
 //
-// Due interruttori generali in configs, spenti finche' non valgono "true":
-// leaderboard_notify_thresholds_enabled per le soglie e
-// leaderboard_notify_fortnightly_enabled per il quindicinale. Da spenti lo
-// stato si aggiorna lo stesso, cosi' accenderli non fa partire una raffica
-// per ingressi vecchi.
+// Tre interruttori generali in configs, spenti finche' non valgono "true":
+// leaderboard_notify_thresholds_enabled per le soglie,
+// leaderboard_notify_fortnightly_enabled per il quindicinale e
+// leaderboard_notify_region_medals_enabled per le medaglie di regione (che
+// chiedono acceso anche leaderboard_regions_enabled). Da spenti lo stato
+// si aggiorna lo stesso, cosi' accenderli non fa partire una raffica per
+// ingressi vecchi.
 //
 // I testi non nominano altri soci ne' regioni: solo i numeri del
 // destinatario. Stanno in Tolgee (chiavi leaderboard.notify.*), con una
@@ -61,8 +67,9 @@ const (
 	regionsEnabledKey = "leaderboard_regions_enabled"
 
 	// Interruttori generali delle notifiche, in configs: "true" per mandare.
-	thresholdsEnabledKey  = "leaderboard_notify_thresholds_enabled"
-	fortnightlyEnabledKey = "leaderboard_notify_fortnightly_enabled"
+	thresholdsEnabledKey   = "leaderboard_notify_thresholds_enabled"
+	fortnightlyEnabledKey  = "leaderboard_notify_fortnightly_enabled"
+	regionMedalsEnabledKey = "leaderboard_notify_region_medals_enabled"
 )
 
 // send e' il punto di invio, sostituibile nei test.
