@@ -111,7 +111,7 @@ func orderViewsByDependency(collections []map[string]any) []map[string]any {
 	dependsOn := func(c map[string]any, name string) bool {
 		query, _ := c["viewQuery"].(string)
 		for _, token := range strings.FieldsFunc(query, func(r rune) bool {
-			return !(r == '_' || r >= '0' && r <= '9' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z')
+			return r != '_' && (r < '0' || r > '9') && (r < 'a' || r > 'z') && (r < 'A' || r > 'Z')
 		}) {
 			if token == name {
 				return true
