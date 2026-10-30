@@ -84,7 +84,8 @@ func collectionsToImport(app core.App, schema []byte) ([]map[string]any, error) 
 				continue
 			}
 			// Una vista dell'export che una migrazione successiva ha
-			// trasformato in tabella (1793600000_leaderboard_tables): su un
+			// trasformato in tabella (1793600000_leaderboard_tables per le tre
+			// classifiche, 1793900000_medals_table per view_medals): su un
 			// DB gia' migrato c'e' una collection base con quel nome, e
 			// reimportare la vista la rimetterebbe al posto della tabella.
 			name, _ := c["name"].(string)

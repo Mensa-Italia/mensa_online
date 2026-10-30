@@ -11,6 +11,7 @@ import (
 
 	_ "mensadb/migrations"
 	"mensadb/tools/dbtools"
+	"mensadb/tools/medals"
 
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
@@ -398,6 +399,11 @@ func TestExportStampsFlow(t *testing.T) {
 
 func TestExportMedalsFlow(t *testing.T) {
 	f := newFixture(t)
+	// view_medals e' una tabella riempita dal cron: i soci della fixture
+	// ci sono dopo il primo ricalcolo.
+	if err := medals.Refresh(f.app); err != nil {
+		t.Fatalf("ricalcolo medagliere: %v", err)
+	}
 	id := f.newApproved(t, "medals", f.keyAMedals)
 
 	// la chiave dei timbri non ritira le medaglie

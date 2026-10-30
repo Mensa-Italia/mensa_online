@@ -90,5 +90,11 @@
   "leaderboard.notify.up.7.body": "Hai guadagnato {gained} e sei a quota {score} punti, {position}° in classifica.",
   "leaderboard.notify.up.7.title": "Stai andando bene",
   "leaderboard.notify.up.8.body": "Quindici giorni fa eri più indietro: ora sei {position}° con {score} punti, {gained} in più.",
-  "leaderboard.notify.up.8.title": "In risalita"
+  "leaderboard.notify.up.8.title": "In risalita",
+  "medals.notify.earned.body": "{medal}: {tier}. È nel tuo medagliere.",
+  "medals.notify.earned.title": "Nuova medaglia",
+  "medals.notify.many.body": "{count} medaglie nuove o salite di livello.",
+  "medals.notify.many.title": "Medagliere aggiornato",
+  "medals.notify.upgraded.body": "{medal} è ora {tier}.",
+  "medals.notify.upgraded.title": "Medaglia salita di livello"
 }

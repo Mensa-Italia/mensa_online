@@ -14,7 +14,9 @@
 //   - le medaglie di regione (tools/regionmedals): quando una regione prende
 //     un metallo nuovo, lo sanno tutti i soci attivi di quella regione
 //     (registro soci, area), non solo i segretari. Chiamata dall'hook che
-//     segue ogni ricalcolo, vedi RegionMedalUnlocked.
+//     segue ogni ricalcolo, vedi RegionMedalUnlocked;
+//   - le medaglie personali (tools/medals): medaglia nuova o metallo piu'
+//     alto, dal ricalcolo del medagliere, vedi MedalsChanged.
 //
 // Chi non riceve mai niente: chi non ha nemmeno un timbro (non gioca), chi
 // ha scelto di non apparire (users_metadata leaderboard_hidden = true), chi
@@ -31,8 +33,14 @@
 // si aggiorna lo stesso, cosi' accenderli non fa partire una raffica per
 // ingressi vecchi.
 //
+// Le medaglie personali (tools/medals) hanno il loro interruttore,
+// medals_notify_enabled, indipendente dalle classifiche: quando un socio
+// prende una medaglia o la vede salire di livello riceve un push (vedi
+// MedalsChanged). Stesso filtro dei destinatari, stesso comportamento da
+// spento: lo stato di tools/medals si aggiorna comunque.
+//
 // I testi non nominano altri soci ne' regioni: solo i numeri del
-// destinatario. Stanno in Tolgee (chiavi leaderboard.notify.*), con una
+// destinatario. Stanno in Tolgee (chiavi leaderboard.notify.* e medals.notify.*), con una
 // copia italiana in texts.it.json come riserva finche' le chiavi non sono
 // caricate.
 //
@@ -70,6 +78,11 @@ const (
 	thresholdsEnabledKey   = "leaderboard_notify_thresholds_enabled"
 	fortnightlyEnabledKey  = "leaderboard_notify_fortnightly_enabled"
 	regionMedalsEnabledKey = "leaderboard_notify_region_medals_enabled"
+
+	// Interruttore delle notifiche del medagliere personale (medaglia nuova
+	// o salita di livello, vedi medals.go): "true" per mandare. Non dipende
+	// dagli interruttori delle classifiche.
+	medalsEnabledKey = "medals_notify_enabled"
 )
 
 // send e' il punto di invio, sostituibile nei test.

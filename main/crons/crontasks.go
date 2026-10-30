@@ -16,6 +16,7 @@ import (
 	"mensadb/tools/leaderboard"
 	"mensadb/tools/leaderboardnotify"
 	"mensadb/tools/localofficesync"
+	"mensadb/tools/medals"
 	"mensadb/tools/podcastsync"
 	"mensadb/tools/quidsync"
 	"mensadb/tools/regionmedals"
@@ -137,11 +138,23 @@ func CronTasks(app core.App) {
 		}
 	}
 
-	// Le tre classifiche (soci, regioni, segretari) sono tabelle riempite
-	// qui, non viste: vedi tools/leaderboard. Un quarto d'ora di ritardo
-	// non si vede (il decadimento e' giornaliero) e il calcolo pesante
-	// gira una volta, non a ogni apertura dell'app.
+	// Gli avanzamenti del medagliere (medaglia nuova, metallo piu' alto)
+	// diventano push in tools/leaderboardnotify, con il suo interruttore.
+	medals.AfterRefresh = func(app core.App, changes []medals.Change) {
+		leaderboardnotify.MedalsChanged(app, changes)
+	}
+
+	// Il medagliere (view_medals) e le tre classifiche (soci, regioni,
+	// segretari) sono tabelle riempite qui, non viste: vedi tools/medals e
+	// tools/leaderboard. Prima i contatori delle medaglie, perche' la
+	// classifica soci li legge; se il loro ricalcolo fallisce si va avanti
+	// con i contatori di prima. Un quarto d'ora di ritardo non si vede (il
+	// decadimento e' giornaliero) e il calcolo pesante gira una volta, non
+	// a ogni apertura dell'app.
 	app.Cron().MustAdd("Leaderboard refresh", "*/15 * * * *", func() {
+		if err := medals.Refresh(app); err != nil {
+			app.Logger().Error("[CRON] medals refresh", "err", err)
+		}
 		if err := leaderboard.Refresh(app); err != nil {
 			app.Logger().Error("[CRON] leaderboard refresh", "err", err)
 		}

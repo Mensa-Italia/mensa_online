@@ -55,10 +55,11 @@ func buildStampsExport(app core.App, userID string, now time.Time) (map[string]a
 	}, nil
 }
 
-// buildMedalsExport ritorna la riga di view_medals del socio. La view espone
-// SOLO contatori (stamps_total, stamps_night, ...): le medaglie vere sono
-// calcolate dal client (regole MedalRules in Kotlin) a partire da questi, e
-// qui non sono riprodotte. Un socio senza riga ha un oggetto vuoto.
+// buildMedalsExport ritorna la riga di view_medals del socio (una tabella
+// riempita dal cron, tools/medals). Espone SOLO contatori (stamps_total,
+// stamps_night, ...): le medaglie vere sono calcolate dal client (regole
+// MedalRules in Kotlin) a partire da questi, e qui non sono riprodotte. Un
+// socio senza riga ha un oggetto vuoto.
 func buildMedalsExport(app core.App, userID string, now time.Time) (map[string]any, error) {
 	medals := map[string]any{}
 	rec, err := app.FindRecordById("view_medals", userID)
