@@ -12,6 +12,7 @@ import (
 	"mensadb/tolgee"
 	"mensadb/tools/dbtools"
 	"mensadb/tools/env"
+	"mensadb/tools/leaderboard"
 	"mensadb/tools/localofficesync"
 	"mensadb/tools/podcastsync"
 	"mensadb/tools/quidsync"
@@ -114,6 +115,23 @@ func CronTasks(app core.App) {
 			if err := app.Save(newRecord); err != nil {
 				app.Logger().Error("save record failed", "collection", newRecord.Collection().Name, "stamp", record.Id, "err", err)
 			}
+		}
+	})
+
+	// Le tre classifiche (soci, regioni, segretari) sono tabelle riempite
+	// qui, non viste: vedi tools/leaderboard. Un quarto d'ora di ritardo
+	// non si vede (il decadimento e' giornaliero) e il calcolo pesante
+	// gira una volta, non a ogni apertura dell'app.
+	app.Cron().MustAdd("Leaderboard refresh", "*/15 * * * *", func() {
+		if err := leaderboard.Refresh(app); err != nil {
+			app.Logger().Error("[CRON] leaderboard refresh", "err", err)
+		}
+	})
+	// Fine giornata: posizione e punti di oggi nello storico, da cui il
+	// ricalcolo successivo prende previous_position per le frecce.
+	app.Cron().MustAdd("Leaderboard snapshot", "55 23 * * *", func() {
+		if err := leaderboard.Snapshot(app); err != nil {
+			app.Logger().Error("[CRON] leaderboard snapshot", "err", err)
 		}
 	})
 

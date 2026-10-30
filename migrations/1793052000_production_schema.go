@@ -83,6 +83,14 @@ func collectionsToImport(app core.App, schema []byte) ([]map[string]any, error) 
 			if err == nil && sameView(existing, c) {
 				continue
 			}
+			// Una vista dell'export che una migrazione successiva ha
+			// trasformato in tabella (1793600000_leaderboard_tables): su un
+			// DB gia' migrato c'e' una collection base con quel nome, e
+			// reimportare la vista la rimetterebbe al posto della tabella.
+			name, _ := c["name"].(string)
+			if byName, err := app.FindCollectionByNameOrId(name); err == nil && !byName.IsView() {
+				continue
+			}
 		}
 		toImport = append(toImport, c)
 	}
