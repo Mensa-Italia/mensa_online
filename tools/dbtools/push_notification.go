@@ -36,14 +36,29 @@ type PushNotification struct {
 // texts ritorna titolo e corpo della notifica: dalle traduzioni Tolgee se
 // c'e` TrTag, altrimenti Title e Body. Con push=true il corpo e` quello da
 // mandare al device.
+//
+// Con TrTag e una chiave senza traduzione (tolgee.GetTranslation ritorna la
+// chiave stessa), Title e Body, se ci sono, fanno da testo di riserva: cosi`
+// una notifica con chiavi nuove non ancora caricate su Tolgee arriva
+// leggibile, e l'app, che salva anche `tr`, la ritraduce da sola appena ha
+// la chiave.
 func (p PushNotification) texts(translate func(key string) string, push bool) (string, string) {
-	if p.TrTag != "" {
-		return translate(p.TrTag + ".title"), translate(p.TrTag + ".body")
-	}
+	title, body := p.Title, p.Body
 	if push && p.PushBody != "" {
-		return p.Title, p.PushBody
+		body = p.PushBody
 	}
-	return p.Title, p.Body
+	if p.TrTag == "" {
+		return title, body
+	}
+	titleKey, bodyKey := p.TrTag+".title", p.TrTag+".body"
+	trTitle, trBody := translate(titleKey), translate(bodyKey)
+	if trTitle == titleKey && title != "" {
+		trTitle = title
+	}
+	if trBody == bodyKey && body != "" {
+		trBody = body
+	}
+	return trTitle, trBody
 }
 
 func (p PushNotification) GetDataAsString() string {

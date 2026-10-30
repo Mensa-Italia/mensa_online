@@ -78,6 +78,22 @@ var refreshMu sync.Mutex
 // nuova, mai una a meta'. Le righe esistenti si aggiornano per id, quelle
 // sparite (un socio uscito, una sede senza punti) si cancellano.
 func Refresh(app core.App) error {
+	if err := refresh(app); err != nil {
+		return err
+	}
+	if AfterRefresh != nil {
+		AfterRefresh(app)
+	}
+	return nil
+}
+
+// AfterRefresh, se impostato, viene chiamato dopo ogni ricalcolo riuscito,
+// a transazione chiusa e fuori dal mutex: ci si agganciano le notifiche di
+// soglia (tools/leaderboardnotify), che leggono le tabelle appena
+// riscritte. Lo imposta main/crons all'avvio.
+var AfterRefresh func(app core.App)
+
+func refresh(app core.App) error {
 	refreshMu.Lock()
 	defer refreshMu.Unlock()
 	started := time.Now()

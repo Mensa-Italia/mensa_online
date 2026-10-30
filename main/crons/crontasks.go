@@ -2,6 +2,7 @@ package crons
 
 import (
 	"context"
+	"time"
 
 	"mensadb/importers"
 	"mensadb/main/api/cs/exapp"
@@ -13,6 +14,7 @@ import (
 	"mensadb/tools/dbtools"
 	"mensadb/tools/env"
 	"mensadb/tools/leaderboard"
+	"mensadb/tools/leaderboardnotify"
 	"mensadb/tools/localofficesync"
 	"mensadb/tools/podcastsync"
 	"mensadb/tools/quidsync"
@@ -118,6 +120,10 @@ func CronTasks(app core.App) {
 		}
 	})
 
+	// Dopo ogni ricalcolo (cron o opt-out) le notifiche di soglia: "sei
+	// entrato nei primi dieci" e simili, vedi tools/leaderboardnotify.
+	leaderboard.AfterRefresh = leaderboardnotify.Thresholds
+
 	// Le tre classifiche (soci, regioni, segretari) sono tabelle riempite
 	// qui, non viste: vedi tools/leaderboard. Un quarto d'ora di ritardo
 	// non si vede (il decadimento e' giornaliero) e il calcolo pesante
@@ -132,6 +138,15 @@ func CronTasks(app core.App) {
 	app.Cron().MustAdd("Leaderboard snapshot", "55 23 * * *", func() {
 		if err := leaderboard.Snapshot(app); err != nil {
 			app.Logger().Error("[CRON] leaderboard snapshot", "err", err)
+		}
+	})
+
+	// Il messaggio quindicinale della classifica: ogni sera alle 18 tocca
+	// ai soci con il giorno di iscrizione congruo a oggi modulo 15, posizione
+	// e punti di oggi contro quelli di quindici giorni fa.
+	app.Cron().MustAdd("Leaderboard fortnightly notify", "0 18 * * *", func() {
+		if _, err := leaderboardnotify.Fortnightly(app, time.Now()); err != nil {
+			app.Logger().Error("[CRON] leaderboard fortnightly notify", "err", err)
 		}
 	})
 
