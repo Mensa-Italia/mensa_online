@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pocketbase/dbx"
@@ -67,11 +68,18 @@ var textColumns = map[string]bool{
 	"id": true, "name": true, "region": true, "region_key": true, "local_office": true,
 }
 
+// Un ricalcolo alla volta: il cron e l'hook dell'opt-out possono
+// sovrapporsi, e due transazioni che riscrivono le stesse righe si
+// bloccherebbero a vicenda.
+var refreshMu sync.Mutex
+
 // Refresh ricalcola le tre classifiche e riscrive le tabelle in una sola
 // transazione: chi legge vede sempre o la classifica di prima o quella
 // nuova, mai una a meta'. Le righe esistenti si aggiornano per id, quelle
 // sparite (un socio uscito, una sede senza punti) si cancellano.
 func Refresh(app core.App) error {
+	refreshMu.Lock()
+	defer refreshMu.Unlock()
 	started := time.Now()
 	return app.RunInTransaction(func(tx core.App) error {
 		for _, board := range Boards {
@@ -229,4 +237,16 @@ func Snapshot(app core.App) error {
 		app.Logger().Info("[leaderboard] snapshot salvato", "day", day)
 		return nil
 	})
+}
+
+// Hide toglie subito la riga di un socio dalla classifica dei soci: chi
+// sceglie di non apparire non deve aspettare il cron. Le posizioni degli
+// altri restano quelle di prima fino al ricalcolo, che l'hook fa partire
+// subito dopo in sottofondo. Nessun errore se la riga non c'e'.
+func Hide(app core.App, userID string) error {
+	record, err := app.FindRecordById(MembersTable, userID)
+	if err != nil {
+		return nil
+	}
+	return app.Delete(record)
 }

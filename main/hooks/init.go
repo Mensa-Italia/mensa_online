@@ -96,6 +96,10 @@ func Load(app core.App) {
 	app.OnRecordAfterUpdateSuccess("local_offices").BindFunc(indexLocalOfficeAsync)
 	app.OnRecordAfterDeleteSuccess("local_offices").BindFunc(unindexAsync)
 
+	// Opt-out dalla classifica: effetto immediato, poi ricalcolo.
+	app.OnRecordAfterCreateSuccess("users_metadata").BindFunc(LeaderboardHiddenChanged)
+	app.OnRecordAfterUpdateSuccess("users_metadata").BindFunc(LeaderboardHiddenChanged)
+
 	app.OnRecordAfterCreateSuccess("local_offices_admins").BindFunc(indexLocalOfficeAdminAsync)
 	app.OnRecordAfterUpdateSuccess("local_offices_admins").BindFunc(indexLocalOfficeAdminAsync)
 	app.OnRecordAfterDeleteSuccess("local_offices_admins").BindFunc(unindexAsync)

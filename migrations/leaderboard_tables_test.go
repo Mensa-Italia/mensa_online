@@ -63,6 +63,10 @@ func TestLeaderboardTablesReplaceViews(t *testing.T) {
 	if err := upLeaderboardTables(app); err != nil {
 		t.Fatalf("seconda up: %v", err)
 	}
+	// L'opt-out immediato non deve fallire su un socio senza riga.
+	if err := leaderboard.Hide(app, "0000"); err != nil {
+		t.Fatalf("hide senza riga: %v", err)
+	}
 }
 
 // Lo schema di produzione contiene ancora le tre viste: su un DB migrato
