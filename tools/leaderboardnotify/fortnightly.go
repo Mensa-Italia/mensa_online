@@ -33,7 +33,7 @@ func Fortnightly(app core.App, now time.Time) (int, error) {
 	if now.Before(FortnightlyStart) {
 		return 0, nil
 	}
-	if !boardEnabled(app, membersEnabledKey) {
+	if !boardEnabled(app, membersEnabledKey) || !boardEnabled(app, fortnightlyEnabledKey) {
 		return 0, nil
 	}
 	if err := EnsureStateCollection(app); err != nil {

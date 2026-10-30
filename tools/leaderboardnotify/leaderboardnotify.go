@@ -19,6 +19,12 @@
 // assente), e nessuno riceve notifiche di una classifica spenta in configs
 // (leaderboard_members_enabled, leaderboard_regions_enabled).
 //
+// Due interruttori generali in configs, spenti finche' non valgono "true":
+// leaderboard_notify_thresholds_enabled per le soglie e
+// leaderboard_notify_fortnightly_enabled per il quindicinale. Da spenti lo
+// stato si aggiorna lo stesso, cosi' accenderli non fa partire una raffica
+// per ingressi vecchi.
+//
 // I testi non nominano altri soci ne' regioni: solo i numeri del
 // destinatario. Stanno in Tolgee (chiavi leaderboard.notify.*), con una
 // copia italiana in texts.it.json come riserva finche' le chiavi non sono
@@ -53,6 +59,10 @@ const (
 	// Chiavi di configs con cui l'app accende le classifiche.
 	membersEnabledKey = "leaderboard_members_enabled"
 	regionsEnabledKey = "leaderboard_regions_enabled"
+
+	// Interruttori generali delle notifiche, in configs: "true" per mandare.
+	thresholdsEnabledKey  = "leaderboard_notify_thresholds_enabled"
+	fortnightlyEnabledKey = "leaderboard_notify_fortnightly_enabled"
 )
 
 // send e' il punto di invio, sostituibile nei test.

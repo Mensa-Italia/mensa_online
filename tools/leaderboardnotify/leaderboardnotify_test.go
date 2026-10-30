@@ -103,6 +103,8 @@ func newFixture(t *testing.T) *fixture {
 	}
 	f.config(membersEnabledKey, "true")
 	f.config(regionsEnabledKey, "true")
+	f.config(thresholdsEnabledKey, "true")
+	f.config(fortnightlyEnabledKey, "true")
 	return f
 }
 
@@ -396,6 +398,33 @@ func TestThresholdsBoardDisabledStillTracks(t *testing.T) {
 		t.Errorf("stato non aggiornato a classifica spenta")
 	}
 	// Riaccesa: l'ingresso e' gia' passato, niente raffica.
+	cfg.Set("value", "true")
+	if err := f.app.SaveNoValidate(cfg); err != nil {
+		t.Fatal(err)
+	}
+	if sent := f.run(noon); len(sent) != 0 {
+		t.Fatalf("riaccendere non manda: %+v", sent)
+	}
+}
+
+// L'interruttore generale delle soglie spento: niente invii, ma lo stato
+// si aggiorna, e riaccenderlo non fa partire una raffica.
+func TestThresholdsMasterSwitchOff(t *testing.T) {
+	f := newFixture(t)
+	f.member("500", 12, 40, noon)
+	f.run(noon)
+	cfg, _ := f.app.FindFirstRecordByData("configs", "key", thresholdsEnabledKey)
+	cfg.Set("value", "false")
+	if err := f.app.SaveNoValidate(cfg); err != nil {
+		t.Fatal(err)
+	}
+	f.board(leaderboard.MembersTable, "500", 5, 80, 3)
+	if sent := f.run(noon); len(sent) != 0 {
+		t.Fatalf("interruttore spento: %+v", sent)
+	}
+	if s := f.state("members", "500"); s.GetFloat("last_position") != 5 {
+		t.Errorf("stato non aggiornato a interruttore spento")
+	}
 	cfg.Set("value", "true")
 	if err := f.app.SaveNoValidate(cfg); err != nil {
 		t.Fatal(err)

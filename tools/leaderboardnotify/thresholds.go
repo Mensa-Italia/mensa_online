@@ -129,7 +129,9 @@ func evaluateBoard(app core.App, now time.Time, rec *recipients, board notifyBoa
 	if err != nil {
 		return err
 	}
-	enabled := boardEnabled(app, board.enabledKey)
+	// Si manda solo con la classifica accesa e l'interruttore generale delle
+	// soglie a "true"; lo stato si aggiorna comunque.
+	enabled := boardEnabled(app, board.enabledKey) && boardEnabled(app, thresholdsEnabledKey)
 	var toSend []pending
 
 	err = app.RunInTransaction(func(tx core.App) error {
