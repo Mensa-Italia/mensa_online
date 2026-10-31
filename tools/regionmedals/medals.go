@@ -72,7 +72,7 @@ type definition struct {
 	measure func(m *metrics) (value, count, extra float64)
 }
 
-// PodiumKey e' la medaglia che decide lo snapshot di fine anno.
+// PodiumKey e' la medaglia che decide lo snapshot di fine stagione.
 const PodiumKey = "podium"
 
 // Medals nell'ordine in cui l'app le mostra. Le soglie e i minimi sono

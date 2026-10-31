@@ -673,3 +673,24 @@ func TestRegionKey(t *testing.T) {
 		}
 	}
 }
+
+// Nelle prime due settimane della stagione lo storico che si confronta e'
+// solo quello della stagione in corso: la classifica della stagione chiusa
+// (ultimo snapshot del 30 settembre) non fa da "quindici giorni fa".
+func TestHistoryRowStaysInsideSeason(t *testing.T) {
+	f := newFixture(t)
+	f.snapshot("members", "900", "2026-09-30", 2, 120) // stagione chiusa
+	f.snapshot("members", "900", "2026-10-02", 8, 5)   // stagione in corso
+
+	now := time.Date(2026, time.October, 18, 12, 0, 0, 0, time.UTC)
+	row, ok, err := historyRow(f.app, "900", now)
+	if err != nil || !ok || row.Day != "2026-10-02" {
+		t.Fatalf("storico della stagione in corso: %+v %v %v", row, ok, err)
+	}
+	// Troppo presto per avere 14 giorni nella stagione nuova: niente, e non
+	// si ripiega sulla stagione scorsa.
+	early := time.Date(2026, time.October, 10, 12, 0, 0, 0, time.UTC)
+	if row, ok, _ := historyRow(f.app, "900", early); ok {
+		t.Fatalf("storico di un'altra stagione: %+v", row)
+	}
+}

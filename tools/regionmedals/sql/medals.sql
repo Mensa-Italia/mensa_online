@@ -1,13 +1,14 @@
--- Medaglie di regione, una riga per sede (local_offices), per l'anno dato
--- dal parametro year. Definizioni e soglie in medals.go: qui solo i
+-- Medaglie di regione, una riga per sede (local_offices), per la stagione
+-- data dai parametri start e end (istanti UTC, vedi tools/season: dal 1
+-- ottobre al 30 settembre, ora di Roma). Definizioni e soglie in medals.go: qui solo i
 -- numeri grezzi, il metallo lo decide il codice con le soglie, cosi' le
 -- soglie stanno in un posto solo. Il Podio non e' qui: lo decide lo
--- snapshot di fine anno (leaderboard_history), qui c'e' solo la posizione
--- di adesso in view_leaderboard_regioni.
+-- snapshot di fine stagione (leaderboard_history), qui c'e' solo la posizione
+-- di adesso in view_leaderboard_regioni (stagione in corso).
 --
 -- Socio "visto": ogni timbro preso va all'edizione con quel nome piu' vicina
 -- nel tempo; fuori l'organizzatore di quell'edizione e 5366. Contano gli
--- eventi dell'anno (when_start). Chi compare a un solo evento nell'anno e'
+-- eventi della stagione (when_start). Chi compare a un solo evento nella stagione e'
 -- di passaggio: non conta in Tutti presenti, Casa aperta e In trasferta
 -- (Zoccolo duro lo pesa gia' poco per costruzione, Benvenuto misura proprio
 -- il primo contatto).
@@ -28,31 +29,31 @@ SELECT
   CAST(COALESCE(reg.active, 0) AS INTEGER) AS members_active,
 
   -- 1 Tutti presenti: soci della regione visti ad almeno due eventi diversi
-  -- nell'anno (ovunque, anche nazionali); present_once e' chi compare una
+  -- nella stagione (ovunque, anche nazionali); present_once e' chi compare una
   -- volta sola, solo per vedere quanti sono
   CAST(COALESCE(pr.members, 0) AS INTEGER) AS present_members,
   CAST(COALESCE(pr.once, 0) AS INTEGER) AS present_once,
   CAST(COALESCE(100.0 * COALESCE(pr.members, 0) / COALESCE(reg.den, nb.avg_active), 0) AS REAL) AS present_pct,
 
   -- 2 Casa aperta: regioni diverse da cui arrivano agli eventi regionali i soci
-  -- visti almeno due volte nell'anno
+  -- visti almeno due volte nella stagione
   CAST(COALESCE(ho.regions, 0) AS INTEGER) AS host_regions,
   CAST(COALESCE(ho.visitors, 0) AS INTEGER) AS host_visitors,
 
   -- 3 In trasferta: regioni diverse dove i soci della regione visti almeno due
-  -- volte nell'anno hanno timbrato (eventi regionali altrui)
+  -- volte nella stagione hanno timbrato (eventi regionali altrui)
   CAST(COALESCE(aw.regions, 0) AS INTEGER) AS away_regions,
   CAST(COALESCE(aw.members, 0) AS INTEGER) AS away_members,
 
-  -- 4 Senza pause: mesi dell'anno con almeno un evento regionale timbrato
+  -- 4 Senza pause: mesi della stagione con almeno un evento regionale timbrato
   CAST(COALESCE(hm.months, 0) AS INTEGER) AS active_months,
 
-  -- 5 Benvenuto: iscritti all'app nell'anno (users.created) con un timbro entro 60 giorni
+  -- 5 Benvenuto: iscritti all'app nella stagione (users.created) con un timbro entro 60 giorni
   CAST(COALESCE(nw.newcomers, 0) AS INTEGER) AS newcomers,
   CAST(COALESCE(nw.stamped, 0) AS INTEGER) AS newcomers_stamped,
   CAST(100.0 * COALESCE(nw.stamped, 0) / MAX(COALESCE(nw.newcomers, 0), 1) AS REAL) AS newcomers_pct,
 
-  -- 6 Sala piena: miglior evento regionale dell'anno, timbratori
+  -- 6 Sala piena: miglior evento regionale della stagione, timbratori
   CAST(COALESCE(be.claimers, 0) AS INTEGER) AS best_event_claimers,
   CAST(COALESCE(100.0 * COALESCE(be.claimers, 0) / COALESCE(reg.den, nb.avg_active), 0) AS REAL) AS best_event_pct,
 
@@ -93,7 +94,7 @@ LEFT JOIN (
 ) reg ON reg.region = CASE lo.region WHEN 'Basilicata e Puglia' THEN 'Puglia' WHEN 'Piemonte e Val d''Aosta' THEN 'Piemonte' WHEN 'Emilia Romagna' THEN 'Emilia-Romagna' WHEN 'Friuli Venezia Giulia' THEN 'Friuli-Venezia Giulia' WHEN 'Trentino Alto Adige' THEN 'Trentino-Alto Adige' ELSE lo.region END
 LEFT JOIN (
   -- 1: soci della regione per numero di eventi diversi a cui sono stati visti
-  -- nell'anno: almeno due = presenti, uno solo = di passaggio
+  -- nella stagione: almeno due = presenti, uno solo = di passaggio
   SELECT region, SUM(events >= 2) AS members, SUM(events = 1) AS once
   FROM (
     SELECT user_region AS region, user, COUNT(DISTINCT event_id) AS events
@@ -112,7 +113,7 @@ LEFT JOIN (
       LEFT JOIN positions p ON p.id = x.position
       LEFT JOIN members_registry mr ON mr.id = x.user
       WHERE x.nearest = 1 AND x.owner != x.user AND x.when_start != ''
-        AND STRFTIME('%Y', x.when_start) = {:year}
+        AND x.when_start >= {:start} AND x.when_start < {:end}
     ) a
     WHERE a.user_region IS NOT NULL
     GROUP BY 1, 2
@@ -121,7 +122,7 @@ LEFT JOIN (
 ) pr ON pr.region = CASE lo.region WHEN 'Basilicata e Puglia' THEN 'Puglia' WHEN 'Piemonte e Val d''Aosta' THEN 'Piemonte' WHEN 'Emilia Romagna' THEN 'Emilia-Romagna' WHEN 'Friuli Venezia Giulia' THEN 'Friuli-Venezia Giulia' WHEN 'Trentino Alto Adige' THEN 'Trentino-Alto Adige' ELSE lo.region END
 LEFT JOIN (
   -- 2: visitatori da altre regioni agli eventi regionali, solo soci visti
-  -- almeno due volte nell'anno (ovunque)
+  -- almeno due volte nella stagione (ovunque)
   SELECT ev_region AS region, COUNT(DISTINCT user_region) AS regions, COUNT(DISTINCT user) AS visitors
   FROM (
       SELECT x.user, x.event_id, x.owner, x.is_national, x.when_start, x.su_created,
@@ -138,7 +139,7 @@ LEFT JOIN (
       LEFT JOIN positions p ON p.id = x.position
       LEFT JOIN members_registry mr ON mr.id = x.user
       WHERE x.nearest = 1 AND x.owner != x.user AND x.when_start != ''
-        AND STRFTIME('%Y', x.when_start) = {:year}
+        AND x.when_start >= {:start} AND x.when_start < {:end}
     ) a
   WHERE NOT a.is_national AND a.ev_region IS NOT NULL AND a.user_region IS NOT NULL AND a.user_region != a.ev_region
     AND a.user IN (SELECT user FROM (
@@ -156,12 +157,12 @@ LEFT JOIN (
       LEFT JOIN positions p ON p.id = x.position
       LEFT JOIN members_registry mr ON mr.id = x.user
       WHERE x.nearest = 1 AND x.owner != x.user AND x.when_start != ''
-        AND STRFTIME('%Y', x.when_start) = {:year}
+        AND x.when_start >= {:start} AND x.when_start < {:end}
     ) k GROUP BY user HAVING COUNT(DISTINCT event_id) >= 2)
   GROUP BY 1
 ) ho ON ho.region = CASE lo.region WHEN 'Basilicata e Puglia' THEN 'Puglia' WHEN 'Piemonte e Val d''Aosta' THEN 'Piemonte' WHEN 'Emilia Romagna' THEN 'Emilia-Romagna' WHEN 'Friuli Venezia Giulia' THEN 'Friuli-Venezia Giulia' WHEN 'Trentino Alto Adige' THEN 'Trentino-Alto Adige' ELSE lo.region END
 LEFT JOIN (
-  -- 3: soci della regione visti almeno due volte nell'anno a eventi regionali
+  -- 3: soci della regione visti almeno due volte nella stagione a eventi regionali
   -- di altre regioni
   SELECT user_region AS region, COUNT(DISTINCT ev_region) AS regions, COUNT(DISTINCT user) AS members
   FROM (
@@ -179,7 +180,7 @@ LEFT JOIN (
       LEFT JOIN positions p ON p.id = x.position
       LEFT JOIN members_registry mr ON mr.id = x.user
       WHERE x.nearest = 1 AND x.owner != x.user AND x.when_start != ''
-        AND STRFTIME('%Y', x.when_start) = {:year}
+        AND x.when_start >= {:start} AND x.when_start < {:end}
     ) a
   WHERE NOT a.is_national AND a.ev_region IS NOT NULL AND a.user_region IS NOT NULL AND a.user_region != a.ev_region
     AND a.user IN (SELECT user FROM (
@@ -197,7 +198,7 @@ LEFT JOIN (
       LEFT JOIN positions p ON p.id = x.position
       LEFT JOIN members_registry mr ON mr.id = x.user
       WHERE x.nearest = 1 AND x.owner != x.user AND x.when_start != ''
-        AND STRFTIME('%Y', x.when_start) = {:year}
+        AND x.when_start >= {:start} AND x.when_start < {:end}
     ) k GROUP BY user HAVING COUNT(DISTINCT event_id) >= 2)
   GROUP BY 1
 ) aw ON aw.region = CASE lo.region WHEN 'Basilicata e Puglia' THEN 'Puglia' WHEN 'Piemonte e Val d''Aosta' THEN 'Piemonte' WHEN 'Emilia Romagna' THEN 'Emilia-Romagna' WHEN 'Friuli Venezia Giulia' THEN 'Friuli-Venezia Giulia' WHEN 'Trentino Alto Adige' THEN 'Trentino-Alto Adige' ELSE lo.region END
@@ -222,24 +223,24 @@ LEFT JOIN (
       LEFT JOIN positions p ON p.id = x.position
       LEFT JOIN members_registry mr ON mr.id = x.user
       WHERE x.nearest = 1 AND x.owner != x.user AND x.when_start != ''
-        AND STRFTIME('%Y', x.when_start) = {:year}
+        AND x.when_start >= {:start} AND x.when_start < {:end}
     ) a
   WHERE NOT a.is_national AND a.ev_region IS NOT NULL
   GROUP BY 1
 ) hm ON hm.region = CASE lo.region WHEN 'Basilicata e Puglia' THEN 'Puglia' WHEN 'Piemonte e Val d''Aosta' THEN 'Piemonte' WHEN 'Emilia Romagna' THEN 'Emilia-Romagna' WHEN 'Friuli Venezia Giulia' THEN 'Friuli-Venezia Giulia' WHEN 'Trentino Alto Adige' THEN 'Trentino-Alto Adige' ELSE lo.region END
 LEFT JOIN (
-  -- 5: iscritti all'app nell'anno, per regione, e quanti hanno un timbro entro 60 giorni
+  -- 5: iscritti all'app nella stagione, per regione, e quanti hanno un timbro entro 60 giorni
   SELECT CASE mr.area WHEN 'Trentino-Alto Adige/Südtirol' THEN 'Trentino-Alto Adige' WHEN 'Valle d''Aosta' THEN 'Piemonte' WHEN 'Basilicata' THEN 'Puglia' ELSE mr.area END AS region,
          COUNT(*) AS newcomers,
          SUM(EXISTS (SELECT 1 FROM stamp_users su WHERE su.user = u.id AND su.user != '5366'
                      AND julianday(su.created) - julianday(u.created) <= 60)) AS stamped
   FROM users u
   JOIN members_registry mr ON mr.id = u.id
-  WHERE mr.area NOT IN ('', 'NaN') AND STRFTIME('%Y', u.created) = {:year}
+  WHERE mr.area NOT IN ('', 'NaN') AND u.created >= {:start} AND u.created < {:end}
   GROUP BY 1
 ) nw ON nw.region = CASE lo.region WHEN 'Basilicata e Puglia' THEN 'Puglia' WHEN 'Piemonte e Val d''Aosta' THEN 'Piemonte' WHEN 'Emilia Romagna' THEN 'Emilia-Romagna' WHEN 'Friuli Venezia Giulia' THEN 'Friuli-Venezia Giulia' WHEN 'Trentino Alto Adige' THEN 'Trentino-Alto Adige' ELSE lo.region END
 LEFT JOIN (
-  -- 6: l'evento regionale dell'anno con piu' timbratori
+  -- 6: l'evento regionale della stagione con piu' timbratori
   SELECT region, MAX(claimers) AS claimers
   FROM (
     SELECT ev_region AS region, event_id, COUNT(*) AS claimers
@@ -258,7 +259,7 @@ LEFT JOIN (
       LEFT JOIN positions p ON p.id = x.position
       LEFT JOIN members_registry mr ON mr.id = x.user
       WHERE x.nearest = 1 AND x.owner != x.user AND x.when_start != ''
-        AND STRFTIME('%Y', x.when_start) = {:year}
+        AND x.when_start >= {:start} AND x.when_start < {:end}
     ) a
     WHERE NOT a.is_national AND a.ev_region IS NOT NULL
     GROUP BY 1, 2
@@ -266,7 +267,7 @@ LEFT JOIN (
   GROUP BY 1
 ) be ON be.region = CASE lo.region WHEN 'Basilicata e Puglia' THEN 'Puglia' WHEN 'Piemonte e Val d''Aosta' THEN 'Piemonte' WHEN 'Emilia Romagna' THEN 'Emilia-Romagna' WHEN 'Friuli Venezia Giulia' THEN 'Friuli-Venezia Giulia' WHEN 'Trentino Alto Adige' THEN 'Trentino-Alto Adige' ELSE lo.region END
 LEFT JOIN (
-  -- 7: soci effettivi agli eventi regionali dell'anno
+  -- 7: soci effettivi agli eventi regionali della stagione
   SELECT region, COUNT(*) AS persons, (SUM(n) * SUM(n) * 1.0) / SUM(n * n) AS effective
   FROM (
     SELECT ev_region AS region, user, COUNT(*) AS n
@@ -285,7 +286,7 @@ LEFT JOIN (
       LEFT JOIN positions p ON p.id = x.position
       LEFT JOIN members_registry mr ON mr.id = x.user
       WHERE x.nearest = 1 AND x.owner != x.user AND x.when_start != ''
-        AND STRFTIME('%Y', x.when_start) = {:year}
+        AND x.when_start >= {:start} AND x.when_start < {:end}
     ) a
     WHERE NOT a.is_national AND a.ev_region IS NOT NULL
     GROUP BY 1, 2
@@ -310,7 +311,7 @@ LEFT JOIN (
       LEFT JOIN positions p ON p.id = x.position
       LEFT JOIN members_registry mr ON mr.id = x.user
       WHERE x.nearest = 1 AND x.owner != x.user AND x.when_start != ''
-        AND STRFTIME('%Y', x.when_start) = {:year}
+        AND x.when_start >= {:start} AND x.when_start < {:end}
     ) a
   WHERE a.is_national AND a.ev_region IS NOT NULL
   GROUP BY 1

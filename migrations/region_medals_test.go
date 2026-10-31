@@ -36,7 +36,7 @@ func TestRegionMedalsCollection(t *testing.T) {
 		t.Error("scrittura solo superuser")
 	}
 
-	for _, name := range []string{"local_office", "region", "region_key", "year", "medal", "value", "count", "extra",
+	for _, name := range []string{"local_office", "region", "region_key", "season", "medal", "value", "count", "extra",
 		"levels", "minimum", "eligible", "current_tier", "tier", "unlocked", "witnesses", "created", "updated"} {
 		if c.Fields.GetByName(name) == nil {
 			t.Errorf("campo %s mancante", name)
@@ -74,12 +74,12 @@ func TestRegionMedalsCollection(t *testing.T) {
 
 	unique := false
 	for _, idx := range c.Indexes {
-		if strings.Contains(idx, "UNIQUE") && strings.Contains(idx, "local_office") && strings.Contains(idx, "year") && strings.Contains(idx, "medal") {
+		if strings.Contains(idx, "UNIQUE") && strings.Contains(idx, "local_office") && strings.Contains(idx, "season") && strings.Contains(idx, "medal") {
 			unique = true
 		}
 	}
 	if !unique {
-		t.Errorf("indice unico (local_office, year, medal) mancante: %v", c.Indexes)
+		t.Errorf("indice unico (local_office, season, medal) mancante: %v", c.Indexes)
 	}
 
 	if err := upRegionMedals(app); err != nil {
@@ -92,7 +92,7 @@ func TestRegionMedalsCollection(t *testing.T) {
 
 // medalFixture e' una piccola Italia: tre sedi (la terza e' una sede
 // accorpata, con un nome diverso da quello del registro), qualche socio e
-// qualche evento del 2026.
+// qualche evento del 2026 (che e' la stagione 2025/26).
 type medalFixture struct {
 	t   *testing.T
 	app core.App
@@ -109,6 +109,12 @@ func (f *medalFixture) save(collection, id string, values map[string]any) {
 		r.Id = id
 	}
 	for k, v := range values {
+		// created e' un autodate: Set lo riscriverebbe con l'ora di adesso,
+		// con SetRaw la data del fixture resta quella.
+		if dt, ok := v.(types.DateTime); ok && k == "created" {
+			r.SetRaw(k, dt.String())
+			continue
+		}
 		r.Set(k, v)
 	}
 	if err := f.app.SaveNoValidate(r); err != nil {
@@ -151,12 +157,12 @@ func (f *medalFixture) unstamp(event, user string) {
 	}
 }
 
-func (f *medalFixture) row(office, medal string, year int) *core.Record {
+func (f *medalFixture) row(office, medal string, s int) *core.Record {
 	f.t.Helper()
-	r, err := f.app.FindFirstRecordByFilter(regionmedals.Table, "local_office = {:o} && medal = {:m} && year = {:y}",
-		dbx.Params{"o": office, "m": medal, "y": year})
+	r, err := f.app.FindFirstRecordByFilter(regionmedals.Table, "local_office = {:o} && medal = {:m} && season = {:y}",
+		dbx.Params{"o": office, "m": medal, "y": s})
 	if err != nil {
-		f.t.Fatalf("riga %s/%s/%d: %v", office, medal, year, err)
+		f.t.Fatalf("riga %s/%s/%d: %v", office, medal, s, err)
 	}
 	return r
 }
@@ -190,7 +196,7 @@ func newMedalFixture(t *testing.T) *medalFixture {
 	// La sede C raccoglie un'area che il registro chiama in un altro modo.
 	f.member("3001", "Valle d'Aosta", true)
 
-	// Iscritti all'app quest'anno: Benvenuto.
+	// Iscritti all'app nella stagione: Benvenuto.
 	for _, id := range []string{"1001", "1002", "1003"} {
 		f.save("users", id, map[string]any{"email": id + "@example.test", "created": day(time.January, 5)})
 	}
@@ -221,7 +227,11 @@ func newMedalFixture(t *testing.T) *medalFixture {
 	return f
 }
 
+// L'estate del 2026 e' ancora la stagione 2025 (dal 1/10/2025 al 30/9/2026):
+// gli eventi di gennaio-maggio del fixture sono tutti suoi.
 var summer2026 = time.Date(2026, time.July, 1, 12, 0, 0, 0, time.UTC)
+
+const fixtureSeason = 2025
 
 // Un ricalcolo su una piccola fotografia produce i metalli attesi, con i
 // numeri di contorno, le soglie e chi c'era; la prima volta non sblocca
@@ -259,7 +269,7 @@ func TestRegionMedalsRefresh(t *testing.T) {
 		"podium":    {tier: "none", value: 1, count: 40, eligible: true},
 	}
 	for medal, w := range expect {
-		r := f.row("loA", medal, 2026)
+		r := f.row("loA", medal, fixtureSeason)
 		if r.GetString("tier") != w.tier || r.GetString("current_tier") != w.tier {
 			t.Errorf("%s: tier %q / current %q, atteso %q", medal, r.GetString("tier"), r.GetString("current_tier"), w.tier)
 		}
@@ -273,28 +283,28 @@ func TestRegionMedalsRefresh(t *testing.T) {
 			t.Errorf("%s: regione %q / %q", medal, r.GetString("region"), r.GetString("region_key"))
 		}
 	}
-	if r := f.row("loA", "present", 2026); r.GetFloat("extra") != 1 || r.GetFloat("value") <= 15 {
+	if r := f.row("loA", "present", fixtureSeason); r.GetFloat("extra") != 1 || r.GetFloat("value") <= 15 {
 		t.Errorf("present: extra=%v value=%v", r.GetFloat("extra"), r.GetFloat("value"))
 	}
-	if r := f.row("loA", "welcome", 2026); r.GetFloat("extra") != 3 || r.GetFloat("minimum") != 3 {
+	if r := f.row("loA", "welcome", fixtureSeason); r.GetFloat("extra") != 3 || r.GetFloat("minimum") != 3 {
 		t.Errorf("welcome: extra=%v minimum=%v", r.GetFloat("extra"), r.GetFloat("minimum"))
 	}
-	if r := f.row("loA", "core", 2026); r.GetFloat("extra") < 7 || r.GetFloat("extra") > 8 {
+	if r := f.row("loA", "core", fixtureSeason); r.GetFloat("extra") < 7 || r.GetFloat("extra") > 8 {
 		t.Errorf("core: persone effettive %v", r.GetFloat("extra"))
 	}
 
 	// Soglie nel formato del contratto.
-	levels := jsonOf[map[string]float64](t, f.row("loA", "fullhouse", 2026), "levels")
+	levels := jsonOf[map[string]float64](t, f.row("loA", "fullhouse", fixtureSeason), "levels")
 	if levels["bronze"] != 8.5 || levels["silver"] != 15 || levels["gold"] != 25 {
 		t.Errorf("soglie sala piena: %v", levels)
 	}
-	levels = jsonOf[map[string]float64](t, f.row("loA", "podium", 2026), "levels")
+	levels = jsonOf[map[string]float64](t, f.row("loA", "podium", fixtureSeason), "levels")
 	if levels["bronze"] != 3 || levels["silver"] != 2 || levels["gold"] != 1 {
 		t.Errorf("soglie podio: %v", levels)
 	}
 
 	// Sblocchi e testimoni: oro include bronzo e argento, con i soci attivi.
-	relay := f.row("loA", "relay", 2026)
+	relay := f.row("loA", "relay", fixtureSeason)
 	unlocked := jsonOf[map[string]string](t, relay, "unlocked")
 	if _, ok := unlocked["bronze"]; !ok || len(unlocked) != 1 {
 		t.Errorf("relay unlocked: %v", unlocked)
@@ -303,7 +313,7 @@ func TestRegionMedalsRefresh(t *testing.T) {
 	if !slices.Equal(witnesses["bronze"], []string{"1001", "1002", "1003", "1004", "1005", "1006"}) {
 		t.Errorf("testimoni (solo attivi, 1007 escluso): %v", witnesses)
 	}
-	present := f.row("loA", "present", 2026)
+	present := f.row("loA", "present", fixtureSeason)
 	if u := jsonOf[map[string]string](t, present, "unlocked"); len(u) != 3 {
 		t.Errorf("oro al primo colpo: bronzo, argento e oro tutti sbloccati: %v", u)
 	}
@@ -313,7 +323,7 @@ func TestRegionMedalsRefresh(t *testing.T) {
 
 	// La sede accorpata prende i soci dell'area che il registro chiama in
 	// modo diverso, e la sua regione normalizzata.
-	c := f.row("loC", "months", 2026)
+	c := f.row("loC", "months", fixtureSeason)
 	if c.GetString("region") != "Piemonte e Val d'Aosta" || c.GetString("region_key") != "Piemonte" {
 		t.Errorf("sede accorpata: %q / %q", c.GetString("region"), c.GetString("region_key"))
 	}
@@ -327,12 +337,12 @@ func TestRegionMedalsRefresh(t *testing.T) {
 	if unlocks, err := regionmedals.RefreshUnlocksAt(f.app, summer2026.Add(time.Hour)); err != nil || len(unlocks) != 0 {
 		t.Fatalf("secondo ricalcolo: %v %+v", err, unlocks)
 	}
-	if after := f.row("loA", "present", 2026).GetString("updated"); after != before {
+	if after := f.row("loA", "present", fixtureSeason).GetString("updated"); after != before {
 		t.Errorf("riga invariata riscritta: %s -> %s", before, after)
 	}
 }
 
-// Il metallo massimo dell'anno non scende mai; i testimoni restano quelli
+// Il metallo massimo della stagione non scende mai; i testimoni restano quelli
 // del momento dello sblocco; un metallo nuovo su una riga che c'era
 // ritorna come sblocco, con i soci di quel momento.
 func TestRegionMedalsNeverDecrease(t *testing.T) {
@@ -340,7 +350,7 @@ func TestRegionMedalsNeverDecrease(t *testing.T) {
 	if _, err := regionmedals.RefreshUnlocksAt(f.app, summer2026); err != nil {
 		t.Fatal(err)
 	}
-	firstUnlocked := f.row("loA", "present", 2026).GetString("unlocked")
+	firstUnlocked := f.row("loA", "present", fixtureSeason).GetString("unlocked")
 
 	// Meno dati: restano a Tutti presenti solo due soci, sotto il minimo.
 	f.unstamp("e2", "1003")
@@ -354,7 +364,7 @@ func TestRegionMedalsNeverDecrease(t *testing.T) {
 	if len(unlocks) != 0 {
 		t.Errorf("nessun metallo nuovo: %+v", unlocks)
 	}
-	present := f.row("loA", "present", 2026)
+	present := f.row("loA", "present", fixtureSeason)
 	if present.GetString("current_tier") != "none" || present.GetBool("eligible") {
 		t.Errorf("adesso dovrebbe essere sotto il minimo: current=%q eligible=%v", present.GetString("current_tier"), present.GetBool("eligible"))
 	}
@@ -375,56 +385,57 @@ func TestRegionMedalsNeverDecrease(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(unlocks) != 1 || unlocks[0] != (regionmedals.Unlock{LocalOffice: "loA", RegionKey: "Regione A", Medal: "relay", Tier: "silver", Year: 2026}) {
+	if len(unlocks) != 1 || unlocks[0] != (regionmedals.Unlock{LocalOffice: "loA", RegionKey: "Regione A", Medal: "relay", Tier: "silver", Season: fixtureSeason}) {
 		t.Fatalf("sblocchi: %+v", unlocks)
 	}
-	relay := f.row("loA", "relay", 2026)
+	relay := f.row("loA", "relay", fixtureSeason)
 	w := jsonOf[map[string][]string](t, relay, "witnesses")
 	if slices.Contains(w["bronze"], "1008") || !slices.Contains(w["silver"], "1008") {
 		t.Errorf("testimoni al momento di ogni sblocco: %v", w)
 	}
 
-	// Altri anni e altre sedi non si toccano: un ricalcolo del 2027 lascia
-	// stare le righe 2026 (a parte il Podio, qui senza snapshot).
+	// Altre stagioni e altre sedi non si toccano: un ricalcolo della stagione
+	// dopo lascia stare le righe della 2025 (a parte il Podio, qui senza
+	// snapshot).
 	if _, err := regionmedals.RefreshUnlocksAt(f.app, time.Date(2027, time.February, 1, 12, 0, 0, 0, time.UTC)); err != nil {
 		t.Fatal(err)
 	}
-	if got := f.row("loA", "relay", 2026).GetString("tier"); got != "silver" {
-		t.Errorf("riga 2026 toccata: %q", got)
+	if got := f.row("loA", "relay", fixtureSeason).GetString("tier"); got != "silver" {
+		t.Errorf("riga della stagione scorsa toccata: %q", got)
 	}
-	if got := f.row("loA", "relay", 2027).GetString("tier"); got != "none" {
-		t.Errorf("riga 2027: %q", got)
+	if got := f.row("loA", "relay", fixtureSeason+1).GetString("tier"); got != "none" {
+		t.Errorf("riga della stagione nuova: %q", got)
 	}
 	if n, _ := f.app.CountRecords(regionmedals.Table); n != 60 {
 		t.Errorf("righe: %d, attese 60", n)
 	}
 }
 
-// Il Podio resta senza metallo finche' non c'e' lo snapshot del 31/12,
-// poi segue la posizione di quel giorno; il value e' sempre quello di
-// adesso. Il primo ricalcolo dell'anno dopo assegna il Podio dell'anno
-// chiuso se lo snapshot e' arrivato dopo l'ultimo ricalcolo.
+// Il Podio resta senza metallo finche' non c'e' lo snapshot del 30/9, poi
+// segue la posizione di quel giorno; il value e' sempre quello di adesso. Il
+// primo ricalcolo della stagione dopo assegna il Podio della stagione chiusa
+// se lo snapshot e' arrivato dopo l'ultimo ricalcolo.
 func TestRegionMedalsPodium(t *testing.T) {
 	f := newMedalFixture(t)
 	if _, err := regionmedals.RefreshUnlocksAt(f.app, summer2026); err != nil {
 		t.Fatal(err)
 	}
-	podium := f.row("loA", "podium", 2026)
+	podium := f.row("loA", "podium", fixtureSeason)
 	if podium.GetString("tier") != "none" || podium.GetString("current_tier") != "none" || podium.GetFloat("value") != 1 {
 		t.Fatalf("senza snapshot: tier=%q current=%q value=%v", podium.GetString("tier"), podium.GetString("current_tier"), podium.GetFloat("value"))
 	}
 
-	// Snapshot del 31/12: A prima, B seconda, C quarta.
+	// Snapshot del 30/9: A prima, B seconda, C quarta.
 	for _, s := range []struct {
 		office   string
 		position int
 	}{{"loA", 1}, {"loB", 2}, {"loC", 4}} {
-		f.save(leaderboard.HistoryTable, "", map[string]any{"board": "regions", "subject": s.office, "day": "2026-12-31", "position": s.position})
+		f.save(leaderboard.HistoryTable, "", map[string]any{"board": "regions", "subject": s.office, "day": "2026-09-30", "position": s.position})
 	}
 	// Uno snapshot di un'altra classifica o di un altro giorno non conta.
-	f.save(leaderboard.HistoryTable, "", map[string]any{"board": "members", "subject": "loC", "day": "2026-12-31", "position": 1})
+	f.save(leaderboard.HistoryTable, "", map[string]any{"board": "members", "subject": "loC", "day": "2026-09-30", "position": 1})
 
-	// Il 31/12 sera, anno ancora 2026.
+	// Il 30/9 sera (21:58 a Roma), stagione ancora la 2025.
 	regionA, err := f.app.FindRecordById(leaderboard.RegionsTable, "loA")
 	if err != nil {
 		t.Fatal(err)
@@ -434,17 +445,17 @@ func TestRegionMedalsPodium(t *testing.T) {
 	if err := f.app.SaveNoValidate(regionA); err != nil {
 		t.Fatal(err)
 	}
-	unlocks, err := regionmedals.RefreshUnlocksAt(f.app, time.Date(2026, time.December, 31, 22, 58, 0, 0, time.UTC))
+	unlocks, err := regionmedals.RefreshUnlocksAt(f.app, time.Date(2026, time.September, 30, 19, 58, 0, 0, time.UTC))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := f.row("loA", "podium", 2026); got.GetString("tier") != "gold" || got.GetString("current_tier") != "gold" || got.GetFloat("value") != 3 {
+	if got := f.row("loA", "podium", fixtureSeason); got.GetString("tier") != "gold" || got.GetString("current_tier") != "gold" || got.GetFloat("value") != 3 {
 		t.Errorf("podio A: tier=%q current=%q value=%v (value e' la posizione di adesso)", got.GetString("tier"), got.GetString("current_tier"), got.GetFloat("value"))
 	}
-	if got := f.row("loB", "podium", 2026).GetString("tier"); got != "silver" {
+	if got := f.row("loB", "podium", fixtureSeason).GetString("tier"); got != "silver" {
 		t.Errorf("podio B: %q", got)
 	}
-	if got := f.row("loC", "podium", 2026).GetString("tier"); got != "none" {
+	if got := f.row("loC", "podium", fixtureSeason).GetString("tier"); got != "none" {
 		t.Errorf("podio C: %q", got)
 	}
 	podiumUnlocks := 0
@@ -458,37 +469,37 @@ func TestRegionMedalsPodium(t *testing.T) {
 	}
 }
 
-func TestRegionMedalsPodiumSettledNextYear(t *testing.T) {
+func TestRegionMedalsPodiumSettledNextSeason(t *testing.T) {
 	f := newMedalFixture(t)
-	if _, err := regionmedals.RefreshUnlocksAt(f.app, time.Date(2026, time.December, 31, 18, 0, 0, 0, time.UTC)); err != nil {
+	if _, err := regionmedals.RefreshUnlocksAt(f.app, time.Date(2026, time.September, 30, 16, 0, 0, 0, time.UTC)); err != nil {
 		t.Fatal(err)
 	}
-	f.save(leaderboard.HistoryTable, "", map[string]any{"board": "regions", "subject": "loB", "day": "2026-12-31", "position": 1})
-	f.save(leaderboard.HistoryTable, "", map[string]any{"board": "regions", "subject": "loA", "day": "2026-12-31", "position": 3})
+	f.save(leaderboard.HistoryTable, "", map[string]any{"board": "regions", "subject": "loB", "day": "2026-09-30", "position": 1})
+	f.save(leaderboard.HistoryTable, "", map[string]any{"board": "regions", "subject": "loA", "day": "2026-09-30", "position": 3})
 
-	unlocks, err := regionmedals.RefreshUnlocksAt(f.app, time.Date(2027, time.January, 1, 0, 15, 0, 0, time.UTC))
+	unlocks, err := regionmedals.RefreshUnlocksAt(f.app, time.Date(2026, time.October, 1, 0, 15, 0, 0, time.UTC))
 	if err != nil {
 		t.Fatal(err)
 	}
-	b := f.row("loB", "podium", 2026)
+	b := f.row("loB", "podium", fixtureSeason)
 	if b.GetString("tier") != "gold" || b.GetFloat("value") != 1 {
-		t.Errorf("podio 2026 di B: tier=%q value=%v", b.GetString("tier"), b.GetFloat("value"))
+		t.Errorf("podio 2025 di B: tier=%q value=%v", b.GetString("tier"), b.GetFloat("value"))
 	}
-	if got := f.row("loA", "podium", 2026).GetString("tier"); got != "bronze" {
-		t.Errorf("podio 2026 di A: %q", got)
+	if got := f.row("loA", "podium", fixtureSeason).GetString("tier"); got != "bronze" {
+		t.Errorf("podio 2025 di A: %q", got)
 	}
 	if len(jsonOf[map[string][]string](t, b, "witnesses")["gold"]) != 3 {
 		t.Errorf("testimoni del podio: %v", b.GetString("witnesses"))
 	}
-	if got := f.row("loB", "podium", 2027).GetString("tier"); got != "none" {
-		t.Errorf("il 2027 riparte da zero: %q", got)
+	if got := f.row("loB", "podium", fixtureSeason+1).GetString("tier"); got != "none" {
+		t.Errorf("la stagione nuova riparte da zero: %q", got)
 	}
-	if len(unlocks) != 2 || unlocks[0].Medal != "podium" || unlocks[0].Year != 2026 {
+	if len(unlocks) != 2 || unlocks[0].Medal != "podium" || unlocks[0].Season != fixtureSeason {
 		t.Errorf("sblocchi: %+v", unlocks)
 	}
 
 	// Una volta assegnato non si riassegna.
-	unlocks, err = regionmedals.RefreshUnlocksAt(f.app, time.Date(2027, time.January, 1, 0, 30, 0, 0, time.UTC))
+	unlocks, err = regionmedals.RefreshUnlocksAt(f.app, time.Date(2026, time.October, 1, 0, 30, 0, 0, time.UTC))
 	if err != nil || len(unlocks) != 0 {
 		t.Errorf("secondo giro: %v %+v", err, unlocks)
 	}

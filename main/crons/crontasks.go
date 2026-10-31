@@ -20,6 +20,8 @@ import (
 	"mensadb/tools/podcastsync"
 	"mensadb/tools/quidsync"
 	"mensadb/tools/regionmedals"
+	"mensadb/tools/rollover"
+	"mensadb/tools/season"
 
 	"github.com/pocketbase/pocketbase/core"
 )
@@ -146,12 +148,22 @@ func CronTasks(app core.App) {
 
 	// Il medagliere (view_medals) e le tre classifiche (soci, regioni,
 	// segretari) sono tabelle riempite qui, non viste: vedi tools/medals e
-	// tools/leaderboard. Prima i contatori delle medaglie, perche' la
-	// classifica soci li legge; se il loro ricalcolo fallisce si va avanti
-	// con i contatori di prima. Un quarto d'ora di ritardo non si vede (il
-	// decadimento e' giornaliero) e il calcolo pesante gira una volta, non
-	// a ogni apertura dell'app.
+	// tools/leaderboard. Contano la stagione in corso (dal 1 ottobre, vedi
+	// tools/season). Prima di tutto il controllo del cambio di stagione: se
+	// e' cambiata, si archivia quella chiusa (albo d'oro, annata delle
+	// medaglie, Podio delle regioni, tools/rollover) e si avvisano le regioni
+	// del Podio. Poi i contatori delle medaglie, perche' la classifica soci li
+	// legge; se il loro ricalcolo fallisce si va avanti con i contatori di
+	// prima. Un quarto d'ora di ritardo non si vede e il calcolo pesante gira
+	// una volta, non a ogni apertura dell'app.
 	app.Cron().MustAdd("Leaderboard refresh", "*/15 * * * *", func() {
+		unlocks, err := rollover.Run(app, time.Now())
+		if err != nil {
+			app.Logger().Error("[CRON] season rollover", "err", err)
+		}
+		for _, u := range unlocks {
+			leaderboardnotify.RegionMedalUnlocked(app, u.LocalOffice, u.RegionKey, u.Medal, u.Tier)
+		}
 		if err := medals.Refresh(app); err != nil {
 			app.Logger().Error("[CRON] medals refresh", "err", err)
 		}
@@ -160,8 +172,14 @@ func CronTasks(app core.App) {
 		}
 	})
 	// Fine giornata: posizione e punti di oggi nello storico, da cui il
-	// ricalcolo successivo prende previous_position per le frecce.
-	app.Cron().MustAdd("Leaderboard snapshot", "55 23 * * *", func() {
+	// ricalcolo successivo prende previous_position per le frecce. Il cron
+	// gira ogni ora e agisce solo nell'ultima ora del giorno di Roma, qualunque
+	// sia il fuso del server: lo snapshot del 30 settembre e' quello finale
+	// della stagione e deve essere preso prima che cominci la nuova.
+	app.Cron().MustAdd("Leaderboard snapshot", "55 * * * *", func() {
+		if !season.LastHour(time.Now()) {
+			return
+		}
 		if err := leaderboard.Snapshot(app); err != nil {
 			app.Logger().Error("[CRON] leaderboard snapshot", "err", err)
 		}

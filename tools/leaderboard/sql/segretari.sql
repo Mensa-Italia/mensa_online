@@ -1,6 +1,7 @@
 -- Classifica dei segretari regionali (local_offices_admins.is_the_officer):
 -- ogni segretario vale quanto la sua regione in view_leaderboard_regioni
--- (partecipazione x comunita' + nazionali ospitati, vedi li'). Dove una sede ha due
+-- (partecipazione x comunita' + nazionali ospitati, vedi li', stagione
+-- compresa). Dove una sede ha due
 -- segretari, hanno lo stesso punteggio e la stessa posizione. Va creata dopo
 -- view_leaderboard_regioni.
 SELECT

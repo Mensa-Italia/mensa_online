@@ -11,6 +11,14 @@
 // prima: l'app non cambia. Una lettura e' una SELECT su qualche centinaio
 // di righe gia' pronte.
 //
+// Stagione: le classifiche contano la stagione in corso, dal 1 ottobre al 30
+// settembre ora di Roma (tools/season). Le query prendono i parametri start e
+// end, nessun decadimento: dentro la stagione vale pieno, fuori zero. In
+// classifica dei soci compare solo chi ha almeno un timbro valido nella
+// stagione, e i punti delle medaglie vengono solo dalle stagionali. Ogni riga
+// porta il campo season. Alla chiusura di una stagione Finalize ne scrive
+// l'ordine finale in leaderboard_seasons, l'albo d'oro.
+//
 // Storico: leaderboard_history prende una riga per soggetto a ogni
 // snapshot giornaliero (posizione e punti di fine giornata), e ogni
 // ricalcolo copia nelle righe vive previous_position e previous_score
@@ -29,6 +37,10 @@ import (
 
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
+	"github.com/pocketbase/pocketbase/tools/types"
+
+	"mensadb/tools/medals"
+	"mensadb/tools/season"
 )
 
 const (
@@ -36,6 +48,8 @@ const (
 	RegionsTable     = "view_leaderboard_regioni"
 	SecretariesTable = "view_leaderboard_segretari"
 	HistoryTable     = "leaderboard_history"
+	// SeasonsTable e' l'albo d'oro: l'ordine finale di ogni stagione chiusa.
+	SeasonsTable = "leaderboard_seasons"
 )
 
 //go:embed sql/regioni.sql
@@ -73,12 +87,19 @@ var textColumns = map[string]bool{
 // bloccherebbero a vicenda.
 var refreshMu sync.Mutex
 
-// Refresh ricalcola le tre classifiche e riscrive le tabelle in una sola
-// transazione: chi legge vede sempre o la classifica di prima o quella
-// nuova, mai una a meta'. Le righe esistenti si aggiornano per id, quelle
-// sparite (un socio uscito, una sede senza punti) si cancellano.
+// Refresh ricalcola le tre classifiche per la stagione in corso e riscrive le
+// tabelle in una sola transazione: chi legge vede sempre o la classifica di
+// prima o quella nuova, mai una a meta'. Le righe esistenti si aggiornano per
+// id, quelle sparite (un socio uscito, una sede senza punti, uno senza
+// timbri nella stagione) si cancellano.
 func Refresh(app core.App) error {
-	if err := refresh(app); err != nil {
+	return RefreshAt(app, time.Now())
+}
+
+// RefreshAt e' Refresh con l'orologio passato da fuori: la stagione e' quella
+// di now.
+func RefreshAt(app core.App, now time.Time) error {
+	if err := refresh(app, now); err != nil {
 		return err
 	}
 	if AfterRefresh != nil {
@@ -87,42 +108,50 @@ func Refresh(app core.App) error {
 	return nil
 }
 
+// RecomputeAt ricalcola come RefreshAt ma senza AfterRefresh, cioe' senza
+// notifiche: serve ai riempimenti di una migrazione.
+func RecomputeAt(app core.App, now time.Time) error {
+	return refresh(app, now)
+}
+
 // AfterRefresh, se impostato, viene chiamato dopo ogni ricalcolo riuscito,
 // a transazione chiusa e fuori dal mutex: ci si agganciano le notifiche di
 // soglia (tools/leaderboardnotify), che leggono le tabelle appena
 // riscritte. Lo imposta main/crons all'avvio.
 var AfterRefresh func(app core.App)
 
-func refresh(app core.App) error {
+func refresh(app core.App, now time.Time) error {
 	refreshMu.Lock()
 	defer refreshMu.Unlock()
 	started := time.Now()
+	current := season.Current(now)
 	return app.RunInTransaction(func(tx core.App) error {
 		for _, board := range Boards {
-			if err := refreshBoard(tx, board); err != nil {
+			if err := refreshBoard(tx, board, current); err != nil {
 				return fmt.Errorf("%s: %w", board.Table, err)
 			}
 		}
-		app.Logger().Info("[leaderboard] classifiche ricalcolate", "in", time.Since(started).String())
+		app.Logger().Info("[leaderboard] classifiche ricalcolate", "season", season.Label(current), "in", time.Since(started).String())
 		return nil
 	})
 }
 
-func refreshBoard(tx core.App, board Board) error {
+func refreshBoard(tx core.App, board Board, current int) error {
 	collection, err := tx.FindCollectionByNameOrId(board.Table)
 	if err != nil {
 		return err
 	}
 
 	var rows []dbx.NullStringMap
-	if err := tx.DB().NewQuery(board.sql).All(&rows); err != nil {
+	if err := tx.DB().NewQuery(board.sql).Bind(season.Params(current)).All(&rows); err != nil {
 		return fmt.Errorf("query: %w", err)
 	}
 
-	previous, err := lastSnapshot(tx, board.Key)
+	previous, err := lastSnapshot(tx, board.Key, season.FirstDay(current))
 	if err != nil {
 		return err
 	}
+	hasSeason := collection.Fields.GetByName("season") != nil
 
 	seen := make(map[string]bool, len(rows))
 	for _, row := range rows {
@@ -144,6 +173,9 @@ func refreshBoard(tx core.App, board Board) error {
 				continue
 			}
 			record.Set(column, cellValue(column, value))
+		}
+		if hasSeason {
+			record.Set("season", current)
 		}
 		if snap, ok := previous[id]; ok {
 			record.Set("previous_position", snap.position)
@@ -194,8 +226,10 @@ type snapshot struct {
 }
 
 // lastSnapshot ritorna, per ogni soggetto della classifica, posizione e
-// punti dell'ultimo snapshot salvato (ieri sera, normalmente).
-func lastSnapshot(tx core.App, board string) (map[string]snapshot, error) {
+// punti dell'ultimo snapshot salvato (ieri sera, normalmente), purche' sia
+// della stagione in corso (day >= since): a ottobre la freccia non confronta
+// con la classifica della stagione chiusa.
+func lastSnapshot(tx core.App, board, since string) (map[string]snapshot, error) {
 	var rows []struct {
 		Subject  string  `db:"subject"`
 		Position float64 `db:"position"`
@@ -205,8 +239,8 @@ func lastSnapshot(tx core.App, board string) (map[string]snapshot, error) {
 		SELECT h.subject, h.position, h.score
 		FROM ` + HistoryTable + ` h
 		WHERE h.board = {:board}
-		  AND h.day = (SELECT MAX(day) FROM ` + HistoryTable + ` WHERE board = {:board})
-	`).Bind(dbx.Params{"board": board}).All(&rows)
+		  AND h.day = (SELECT MAX(day) FROM ` + HistoryTable + ` WHERE board = {:board} AND day >= {:since})
+	`).Bind(dbx.Params{"board": board, "since": since}).All(&rows)
 	if err != nil {
 		return nil, fmt.Errorf("history: %w", err)
 	}
@@ -218,10 +252,16 @@ func lastSnapshot(tx core.App, board string) (map[string]snapshot, error) {
 }
 
 // Snapshot salva nello storico posizione e punti di oggi per ogni riga delle
-// tre classifiche. Va chiamato a fine giornata: il giorno e' la chiave, e
-// una seconda chiamata nello stesso giorno sovrascrive la prima.
+// tre classifiche. Va chiamato a fine giornata: il giorno (di Roma) e' la
+// chiave, e una seconda chiamata nello stesso giorno sovrascrive la prima.
+// Quello del 30 settembre e' lo snapshot finale della stagione.
 func Snapshot(app core.App) error {
-	day := time.Now().Format("2006-01-02")
+	return SnapshotAt(app, time.Now())
+}
+
+// SnapshotAt e' Snapshot con l'orologio passato da fuori.
+func SnapshotAt(app core.App, now time.Time) error {
+	day := season.Day(now)
 	return app.RunInTransaction(func(tx core.App) error {
 		history, err := tx.FindCollectionByNameOrId(HistoryTable)
 		if err != nil {
@@ -253,6 +293,126 @@ func Snapshot(app core.App) error {
 		app.Logger().Info("[leaderboard] snapshot salvato", "day", day)
 		return nil
 	})
+}
+
+// Finalize scrive in leaderboard_seasons l'ordine finale della stagione s
+// (l'albo d'oro): per ogni classifica tutte le righe che la query da' con la
+// finestra di quella stagione, le regioni tutte e diciotto, i soci e i
+// segretari tutti. Rifa' il calcolo da zero: le query dei segretari e dei soci
+// leggono view_leaderboard_regioni e view_medals, che sono della stagione in
+// corso, e per una stagione chiusa vengono sostituite, per la durata della
+// transazione, da tabelle temporanee calcolate con la finestra di s. Le
+// righe di quella stagione gia' presenti si sostituiscono, quindi chiamarla
+// due volte da' lo stesso risultato. I soci sono quelli con la tessera
+// attiva adesso.
+func Finalize(app core.App, s int) error {
+	refreshMu.Lock()
+	defer refreshMu.Unlock()
+	started := time.Now()
+	counts := map[string]int{}
+	err := app.RunInTransaction(func(tx core.App) error {
+		params := season.Params(s)
+		dropMedals, err := medals.ShadowSeason(tx, s)
+		if err != nil {
+			return err
+		}
+		defer dropMedals()
+		defer func() { _, _ = tx.DB().NewQuery(`DROP TABLE IF EXISTS temp.` + RegionsTable).Execute() }()
+		_, _ = tx.DB().NewQuery(`DROP TABLE IF EXISTS temp.` + RegionsTable).Execute()
+
+		for _, board := range Boards {
+			var rows []dbx.NullStringMap
+			if board.Key == "regions" {
+				if _, err := tx.DB().NewQuery("CREATE TEMP TABLE " + RegionsTable + " AS\n" + board.sql).Bind(params).Execute(); err != nil {
+					return fmt.Errorf("%s: %w", board.Key, err)
+				}
+				if err := tx.DB().NewQuery("SELECT * FROM temp." + RegionsTable).All(&rows); err != nil {
+					return fmt.Errorf("%s: %w", board.Key, err)
+				}
+			} else if err := tx.DB().NewQuery(board.sql).Bind(params).All(&rows); err != nil {
+				return fmt.Errorf("%s: %w", board.Key, err)
+			}
+			if err := storeSeason(tx, board.Key, s, rows); err != nil {
+				return fmt.Errorf("%s: %w", board.Key, err)
+			}
+			counts[board.Key] = len(rows)
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	app.Logger().Info("[leaderboard] albo d'oro archiviato", "season", season.Label(s),
+		"members", counts["members"], "regions", counts["regions"], "secretaries", counts["secretaries"],
+		"in", time.Since(started).String())
+	return nil
+}
+
+// storeSeason sostituisce le righe dell'albo di una classifica e stagione.
+func storeSeason(tx core.App, board string, s int, rows []dbx.NullStringMap) error {
+	if _, err := tx.DB().NewQuery(`DELETE FROM ` + SeasonsTable + ` WHERE board = {:b} AND season = {:s}`).
+		Bind(dbx.Params{"b": board, "s": s}).Execute(); err != nil {
+		return err
+	}
+	stamp := types.NowDateTime().String()
+	for _, row := range rows {
+		subject := row["id"].String
+		if subject == "" {
+			continue
+		}
+		params := dbx.Params{
+			"id": core.GenerateDefaultRandomId(), "board": board, "season": s, "subject": subject,
+			"name":       cellValue("name", row["name"]),
+			"position":   cellValue("position", row["position"]),
+			"score":      cellValue("score", row["score"]),
+			"region_key": "", "local_office": "", "created": stamp,
+		}
+		switch board {
+		case "regions":
+			params["region_key"] = cellValue("region_key", row["region_key"])
+			params["local_office"] = subject
+		case "secretaries":
+			params["local_office"] = cellValue("local_office", row["local_office"])
+		}
+		if _, err := tx.DB().Insert(SeasonsTable, params).Execute(); err != nil {
+			return fmt.Errorf("%s: %w", subject, err)
+		}
+	}
+	return nil
+}
+
+// EnsureSeasonsCollection crea leaderboard_seasons se manca. Lettura per i
+// soci autenticati: i primi dieci di ogni stagione e la riga di chi legge.
+// Scrittura solo superuser.
+func EnsureSeasonsCollection(app core.App) error {
+	if existing, _ := app.FindCollectionByNameOrId(SeasonsTable); existing != nil {
+		return nil
+	}
+	c := core.NewBaseCollection(SeasonsTable)
+	rule := `@request.auth.id != "" && (position <= 10 || subject = @request.auth.id)`
+	c.ListRule = &rule
+	c.ViewRule = &rule
+	c.Fields.Add(
+		&core.SelectField{Name: "board", Values: []string{"members", "regions", "secretaries"}, MaxSelect: 1, Required: true},
+		&core.NumberField{Name: "season", OnlyInt: true, Required: true},
+		// Chi e': numero tessera dei soci e dei segretari, id della sede
+		// per le regioni.
+		&core.TextField{Name: "subject", Required: true},
+		&core.TextField{Name: "name"},
+		&core.NumberField{Name: "position"},
+		&core.NumberField{Name: "score"},
+		// Solo per le regioni: la regione come in view_leaderboard_regioni.region_key.
+		&core.TextField{Name: "region_key"},
+		// Per regioni e segretari: l'id della sede.
+		&core.TextField{Name: "local_office"},
+		&core.AutodateField{Name: "created", OnCreate: true},
+	)
+	c.AddIndex("idx_leaderboard_seasons_key", true, "board, season, subject", "")
+	c.AddIndex("idx_leaderboard_seasons_rank", false, "board, season, position", "")
+	if err := app.Save(c); err != nil {
+		return fmt.Errorf("creazione %s: %w", SeasonsTable, err)
+	}
+	return nil
 }
 
 // RequestRefresh accoda un ricalcolo in sottofondo, con debounce: la prima

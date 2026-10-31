@@ -1,28 +1,32 @@
 -- Classifica delle regioni (una riga per sede, local_offices).
 -- Punteggio = partecipazione x comunita' + nazionali ospitati.
--- Partecipazione: gli eventi non nazionali degli ultimi 12 mesi che si sono
+-- Stagione: tutto si conta dentro la stagione corrente, dal 1 ottobre al 30
+-- settembre ora di Roma (parametri start e end, istanti UTC), senza decadimento:
+-- un evento o un timbro della stagione vale pieno, fuori dalla stagione zero.
+-- Partecipazione: gli eventi non nazionali della stagione che si sono
 -- svolti nella regione, da chiunque organizzati, con la stessa S della
 -- classifica soci sulla quota di soci timbratori (s = timbratori /
 -- (N_r^0,7 * Nmedia^0,3), con N_r i soci attivi del registro nella regione e
 -- Nmedia quelli di una regione media: zero sotto il 2%, meta' all'8,5%,
--- tutto dal 15%) e la stessa scadenza lineare a 12 mesi. Ogni evento vale
--- fino a 10 punti, come la E della classifica soci.
+-- tutto dal 15%). Ogni evento vale fino a 10 punti, come la E della
+-- classifica soci.
 -- Comunita': quanto e' ampia, rispetto ai soci della regione, la comunita'
 -- che timbra ai suoi eventi. I soci "effettivi" sono
 -- (somma timbri)^2 / somma(timbri^2): quanti sarebbero se tutti timbrassero
 -- lo stesso numero di volte (vale il numero dei timbratori se ognuno timbra
 -- una volta, tende a 1 se timbra sempre uno solo). La loro quota sulla
 -- regione passa nella stessa S, con lo stesso denominatore: c = 1 dal 15%.
--- Nazionali ospitati: gli eventi nazionali che si sono svolti nella regione
--- negli ultimi 24 mesi, con la stessa formula (10 punti max, stessa S sui
--- timbratori, scadenza a 24 mesi come nella classifica soci) ma fuori dal
--- fattore comunita': un convegno porta gente da tutta Italia, e la curva
--- satura da sola (56-103 timbratori).
+-- Nazionali ospitati: gli eventi nazionali della stagione che si sono svolti
+-- nella regione, con la stessa formula (10 punti max, stessa S sui
+-- timbratori, stessa finestra della classifica soci) ma fuori dal fattore
+-- comunita': un convegno porta gente da tutta Italia, e la curva satura da
+-- sola.
 -- La classifica soci legge community_pct da qui per pesare i timbri e gli
 -- eventi organizzati di ogni regione, region_key e' il nome della regione
 -- come in positions.state (accorpato), per quel join.
--- Timbratori: timbro -> edizione piu' vicina nel tempo, senza l'organizzatore
--- di quell'edizione e senza 5366, l'account che prende ogni timbro.
+-- Timbratori: timbro (preso dentro la stagione) -> edizione piu' vicina nel
+-- tempo, senza l'organizzatore di quell'edizione e senza 5366, l'account che
+-- prende ogni timbro.
 -- Le sedi che coprono due regioni contano come una (vedi i CASE), i nomi
 -- delle sedi (local_offices.region) non coincidono con positions.state e
 -- vengono mappati. avg_share_pct e' la quota vera, timbratori / soci della
@@ -75,7 +79,7 @@ LEFT JOIN (
       MIN(1.0, MAX(0.0, (x.share_eff - 0.02) / 0.13)) AS t
     FROM (
       SELECT CASE p.state WHEN 'Valle d''Aosta' THEN 'Piemonte' WHEN 'Basilicata' THEN 'Puglia' ELSE p.state END AS region,
-        1 - (julianday('now') - julianday(e.when_start)) / 365 AS decay,
+        1.0 AS decay,
         COALESCE(cnt.claimers, 0) AS claimers,
         COALESCE(cnt.claimers, 0) / reg.active AS share,
         COALESCE(cnt.claimers, 0) / (POWER(reg.active, 0.7) * POWER(nb.avg_active, 0.3)) AS share_eff
@@ -108,20 +112,21 @@ LEFT JOIN (
           JOIN stamp st ON st.id = su.stamp
           JOIN events e ON e.name = st.description
           WHERE su.user != '' AND su.user != '5366'
+            AND su.created >= {:start} AND su.created < {:end}
         )
         WHERE nearest = 1 AND owner != user
         GROUP BY event_id
       ) cnt ON cnt.event_id = e.id
       WHERE NOT e.is_national
         AND e.when_start != ''
+        AND e.when_start >= {:start} AND e.when_start < {:end}
         AND julianday(e.when_start) <= julianday('now')
-        AND julianday(e.when_start) > julianday('now', '-365 days')
     ) x
   )
   GROUP BY region
 ) r ON r.region = CASE lo.region WHEN 'Basilicata e Puglia' THEN 'Puglia' WHEN 'Piemonte e Val d''Aosta' THEN 'Piemonte' WHEN 'Emilia Romagna' THEN 'Emilia-Romagna' WHEN 'Friuli Venezia Giulia' THEN 'Friuli-Venezia Giulia' WHEN 'Trentino Alto Adige' THEN 'Trentino-Alto Adige' ELSE lo.region END
 LEFT JOIN (
-  -- Nazionali ospitati: 10 x decay a 24 mesi x S sui timbratori, senza comunita'.
+  -- Nazionali ospitati: 10 x S sui timbratori, senza comunita'.
   SELECT region,
     SUM(10.0 * decay * t * t * (3 - 2 * t)) AS score,
     COUNT(*) AS events_total
@@ -130,7 +135,7 @@ LEFT JOIN (
       MIN(1.0, MAX(0.0, (x.share_eff - 0.02) / 0.13)) AS t
     FROM (
       SELECT CASE p.state WHEN 'Valle d''Aosta' THEN 'Piemonte' WHEN 'Basilicata' THEN 'Puglia' ELSE p.state END AS region,
-        1 - (julianday('now') - julianday(e.when_start)) / 730 AS decay,
+        1.0 AS decay,
         COALESCE(cnt.claimers, 0) / (POWER(reg.active, 0.7) * POWER(nb.avg_active, 0.3)) AS share_eff
       FROM events e
       JOIN positions p ON p.id = e.position
@@ -157,14 +162,15 @@ LEFT JOIN (
           JOIN stamp st ON st.id = su.stamp
           JOIN events e ON e.name = st.description
           WHERE su.user != '' AND su.user != '5366'
+            AND su.created >= {:start} AND su.created < {:end}
         )
         WHERE nearest = 1 AND owner != user
         GROUP BY event_id
       ) cnt ON cnt.event_id = e.id
       WHERE e.is_national
         AND e.when_start != ''
+        AND e.when_start >= {:start} AND e.when_start < {:end}
         AND julianday(e.when_start) <= julianday('now')
-        AND julianday(e.when_start) > julianday('now', '-730 days')
     ) x
   )
   GROUP BY region
@@ -183,7 +189,7 @@ LEFT JOIN (
         reg.active,
         nb.avg_active
       FROM (
-        -- timbri per persona agli eventi regionali degli ultimi 12 mesi
+        -- timbri per persona agli eventi regionali della stagione
         SELECT region, user, COUNT(*) AS n
         FROM (
           SELECT x.user, CASE p.state WHEN 'Valle d''Aosta' THEN 'Piemonte' WHEN 'Basilicata' THEN 'Puglia' ELSE p.state END AS region
@@ -195,12 +201,13 @@ LEFT JOIN (
             JOIN stamp st ON st.id = su.stamp
             JOIN events e ON e.name = st.description
             WHERE su.user != '' AND su.user != '5366'
+              AND su.created >= {:start} AND su.created < {:end}
           ) x
           JOIN positions p ON p.id = x.position
           WHERE x.nearest = 1 AND x.owner != x.user AND NOT x.is_national
             AND x.when_start != ''
+            AND x.when_start >= {:start} AND x.when_start < {:end}
             AND julianday(x.when_start) <= julianday('now')
-            AND julianday(x.when_start) > julianday('now', '-365 days')
         )
         GROUP BY region, user
       ) a

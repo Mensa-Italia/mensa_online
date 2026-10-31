@@ -7,41 +7,43 @@ import (
 
 // Le soglie di ogni medaglia, fissate qui apposta: sono la copia di
 // MedalRules.kt dell'app, e una modifica fatta da una parte sola deve far
-// fallire questo test. Se cambia una soglia (o nasce una medaglia) si
-// cambia MedalRules.kt, soci.sql e questa tabella insieme.
+// fallire questo test. Se cambia una soglia (o nasce una medaglia, o una
+// medaglia cambia famiglia) si cambia MedalRules.kt, soci.sql e questa
+// tabella insieme.
 var pinnedRules = []struct {
 	id     string
 	title  string
+	family Family
 	secret bool
 	// Soglie di bronzo, argento, oro, platino; a livello unico solo il platino.
 	levels []int
 }{
-	{"collector", "Collezionista", false, []int{1, 25, 100, 250}},
-	{"steady", "Costante", false, []int{3, 6, 12, 24}},
-	{"unstoppable", "Inarrestabile", false, []int{3, 6, 12, 24}},
-	{"marathon", "Maratoneta", false, []int{2, 3, 5, 8}},
-	{"four_seasons", "Quattro stagioni", false, []int{4}},
-	{"pioneer", "Pioniere", false, []int{1, 5, 15, 30}},
-	{"globetrotter", "Giramondo", false, []int{2, 5, 10, 20}},
-	{"traveller", "Trasfertista", false, []int{1, 5, 15, 30}},
-	{"national_rally", "Raduno nazionale", false, []int{1, 3, 5, 10}},
-	{"night_owl", "Nottambulo", false, []int{1}},
-	{"early_bird", "Mattiniero", false, []int{1}},
-	{"halloween", "Dolcetto o scherzetto", true, []int{1}},
-	{"new_year", "Brindisi di mezzanotte", true, []int{1}},
-	{"valentine", "Cuore razionale", true, []int{1}},
-	{"pi_day", "3,14159…", true, []int{1}},
-	{"birthday", "Festeggiato", true, []int{1}},
-	{"front_row", "Prima fila", false, []int{1}},
-	{"better_late", "Meglio tardi", false, []int{1}},
-	{"always_there", "Sempre presente", false, []int{1, 10, 25, 50}},
-	{"organizer", "Organizzatore", false, []int{1, 5, 15, 30}},
-	{"national_director", "Regista nazionale", false, []int{1}},
-	{"active_member", "Socio attivo", false, []int{1}},
-	{"early_adopter", "Della prima ora", false, []int{1, 2, 3, 5}},
-	{"up_to_date", "Sempre aggiornato", false, []int{1}},
-	{"cartographer", "Cartografo", false, []int{1, 3, 5, 10}},
-	{"multiscreen", "Multischermo", false, []int{2}},
+	{"collector", "Collezionista", Stagionale, false, []int{1, 3, 6, 10}},
+	{"steady", "Costante", Stagionale, false, []int{1, 3, 5, 7}},
+	{"unstoppable", "Inarrestabile", Stagionale, false, []int{2, 3, 4, 6}},
+	{"marathon", "Maratoneta", Stagionale, false, []int{2, 3, 4, 5}},
+	{"four_seasons", "Quattro stagioni", Stagionale, false, []int{4}},
+	{"pioneer", "Pioniere", Stagionale, false, []int{1, 2, 4, 6}},
+	{"globetrotter", "Giramondo", Stagionale, false, []int{2, 3, 4, 5}},
+	{"traveller", "Trasfertista", Stagionale, false, []int{1, 3, 6, 10}},
+	{"national_rally", "Raduno nazionale", Stagionale, false, []int{1, 2, 3, 4}},
+	{"night_owl", "Nottambulo", Stagionale, false, []int{1}},
+	{"early_bird", "Mattiniero", Stagionale, false, []int{1}},
+	{"halloween", "Dolcetto o scherzetto", Stagionale, true, []int{1}},
+	{"new_year", "Brindisi di mezzanotte", Stagionale, true, []int{1}},
+	{"valentine", "Cuore razionale", Stagionale, true, []int{1}},
+	{"pi_day", "3,14159…", Stagionale, true, []int{1}},
+	{"birthday", "Festeggiato", Stagionale, true, []int{1}},
+	{"front_row", "Prima fila", Stagionale, false, []int{1}},
+	{"better_late", "Meglio tardi", Stagionale, false, []int{1}},
+	{"always_there", "Sempre presente", Stagionale, false, []int{1, 3, 6, 10}},
+	{"organizer", "Organizzatore", Stagionale, false, []int{1, 3, 8, 15}},
+	{"national_director", "Regista nazionale", Stagionale, false, []int{1}},
+	{"active_member", "Socio attivo", Permanente, false, []int{1}},
+	{"early_adopter", "Della prima ora", Permanente, false, []int{1, 2, 3, 5}},
+	{"up_to_date", "Sempre aggiornato", Permanente, false, []int{1}},
+	{"cartographer", "Cartografo", Permanente, false, []int{1, 3, 5, 10}},
+	{"multiscreen", "Multischermo", Permanente, false, []int{2}},
 }
 
 // setCounter porta a n il contatore da cui si guadagna la medaglia id.
@@ -81,8 +83,8 @@ func TestRulesArePinned(t *testing.T) {
 	}
 	for i, want := range pinnedRules {
 		got := Rules[i]
-		if got.ID != want.id || got.Title != want.title || got.Secret != want.secret {
-			t.Errorf("regola %d: %s/%q/%v, attesa %s/%q/%v", i, got.ID, got.Title, got.Secret, want.id, want.title, want.secret)
+		if got.ID != want.id || got.Title != want.title || got.Secret != want.secret || got.Family != want.family {
+			t.Errorf("regola %d: %s/%q/%v/%v, attesa %s/%q/%v/%v", i, got.ID, got.Title, got.Secret, got.Family, want.id, want.title, want.secret, want.family)
 		}
 		if len(got.Levels) != len(want.levels) {
 			t.Errorf("%s: %d livelli, attesi %d", want.id, len(got.Levels), len(want.levels))
@@ -187,5 +189,23 @@ func TestTierNames(t *testing.T) {
 	}
 	if ParseTier("boh") != TierNone {
 		t.Error("valore sconosciuto")
+	}
+}
+
+// Le permanenti sono cinque e hanno stagione 0 nello stato; le altre
+// seguono la stagione in corso.
+func TestFamilies(t *testing.T) {
+	permanent := map[string]bool{"active_member": true, "early_adopter": true, "up_to_date": true, "cartographer": true, "multiscreen": true}
+	for _, rule := range Rules {
+		wantFamily, wantSeason := Stagionale, 2026
+		if permanent[rule.ID] {
+			wantFamily, wantSeason = Permanente, 0
+		}
+		if rule.Family != wantFamily || rule.StateSeason(2026) != wantSeason {
+			t.Errorf("%s: famiglia %v, stagione di stato %d", rule.ID, rule.Family, rule.StateSeason(2026))
+		}
+	}
+	if Permanente.String() != "permanente" || Stagionale.String() != "stagionale" {
+		t.Error("nomi delle famiglie")
 	}
 }

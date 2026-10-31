@@ -1,3 +1,16 @@
+-- Contatori del medagliere, una riga per socio. Due famiglie (vedi
+-- tools/medals/rules.go):
+--   * stagionali: timbri, eventi organizzati, iscrizioni agli eventi e
+--     biglietti, limitati alla stagione dei parametri start e end (istanti
+--     UTC, vedi tools/season): i timbri del socio con created nella
+--     finestra, gli eventi con when_start, iscrizioni e biglietti con
+--     created. Il filtro su quali timbri valgono (organizzatori, staff
+--     regionale, quota di soci timbratori) resta a vita: guarda tutti i
+--     timbri di quell'edizione, non solo quelli della stagione. Il Pioniere
+--     usa la graduatoria a vita e conta solo i timbri della stagione;
+--   * permanenti: app_since, expire_membership, is_membership_active,
+--     renewed_ahead, devices, calendar_linked, calendar_regions, payments,
+--     donations, boutique_orders, sempre a vita.
 SELECT
   u.id AS id,
 
@@ -29,10 +42,14 @@ SELECT
   CAST(COALESCE(g.stamps_national, 0) AS INTEGER) AS stamps_national,
   CAST(COALESCE(g.stamps_out_of_region, 0) AS INTEGER) AS stamps_out_of_region,
 
-  CAST((SELECT COUNT(*) FROM tickets t WHERE t.user_id = u.id) AS INTEGER) AS tickets_total,
-  CAST((SELECT COUNT(*) FROM events e WHERE e.owner = u.id) AS INTEGER) AS events_created,
-  CAST((SELECT COUNT(*) FROM events e WHERE e.owner = u.id AND e.is_national) AS INTEGER) AS events_created_national,
-  CAST((SELECT COUNT(*) FROM events_schedule_subscribers es WHERE es.user = u.id) AS INTEGER) AS event_registrations,
+  CAST((SELECT COUNT(*) FROM tickets t WHERE t.user_id = u.id
+          AND t.created >= {:start} AND t.created < {:end}) AS INTEGER) AS tickets_total,
+  CAST((SELECT COUNT(*) FROM events e WHERE e.owner = u.id
+          AND e.when_start >= {:start} AND e.when_start < {:end}) AS INTEGER) AS events_created,
+  CAST((SELECT COUNT(*) FROM events e WHERE e.owner = u.id AND e.is_national
+          AND e.when_start >= {:start} AND e.when_start < {:end}) AS INTEGER) AS events_created_national,
+  CAST((SELECT COUNT(*) FROM events_schedule_subscribers es WHERE es.user = u.id
+          AND es.created >= {:start} AND es.created < {:end}) AS INTEGER) AS event_registrations,
   CAST((SELECT COUNT(*) FROM payments pa WHERE pa.user = u.id AND pa.status = 'succeeded') AS INTEGER) AS payments_succeeded,
   CAST((SELECT COUNT(*) FROM payments pa WHERE pa.user = u.id AND pa.status = 'succeeded'
           AND LOWER(pa.description) LIKE '%donazion%') AS INTEGER) AS donations,
@@ -65,7 +82,8 @@ LEFT JOIN (
     FROM (SELECT su0.id, su0.stamp, su0.user, su0.created FROM stamp_users su0
     -- fuori il timbro di chi ha organizzato l'edizione piu' vicina nel tempo
     -- al timbro, le edizioni di altri, prima o dopo la sua, contano
-    WHERE NOT EXISTS (SELECT 1 FROM stamp st0 JOIN events e0 ON e0.name = st0.description WHERE st0.id = su0.stamp AND e0.owner = su0.user
+    WHERE su0.created >= {:start} AND su0.created < {:end}
+      AND NOT EXISTS (SELECT 1 FROM stamp st0 JOIN events e0 ON e0.name = st0.description WHERE st0.id = su0.stamp AND e0.owner = su0.user
                       AND NOT EXISTS (SELECT 1 FROM events e1 WHERE e1.name = st0.description AND e1.owner != su0.user
                                       AND abs(julianday(su0.created) - julianday(e1.when_start)) < abs(julianday(su0.created) - julianday(e0.when_start))))
       -- lo staff regionale (local_offices_admins) non conta i timbri degli
@@ -140,7 +158,8 @@ LEFT JOIN (
     FROM (SELECT su0.id, su0.stamp, su0.user, su0.created FROM stamp_users su0
     -- fuori il timbro di chi ha organizzato l'edizione piu' vicina nel tempo
     -- al timbro, le edizioni di altri, prima o dopo la sua, contano
-    WHERE NOT EXISTS (SELECT 1 FROM stamp st0 JOIN events e0 ON e0.name = st0.description WHERE st0.id = su0.stamp AND e0.owner = su0.user
+    WHERE su0.created >= {:start} AND su0.created < {:end}
+      AND NOT EXISTS (SELECT 1 FROM stamp st0 JOIN events e0 ON e0.name = st0.description WHERE st0.id = su0.stamp AND e0.owner = su0.user
                       AND NOT EXISTS (SELECT 1 FROM events e1 WHERE e1.name = st0.description AND e1.owner != su0.user
                                       AND abs(julianday(su0.created) - julianday(e1.when_start)) < abs(julianday(su0.created) - julianday(e0.when_start))))
       -- lo staff regionale (local_offices_admins) non conta i timbri degli
@@ -221,7 +240,8 @@ LEFT JOIN (
         FROM (SELECT su0.id, su0.stamp, su0.user, su0.created FROM stamp_users su0
     -- fuori il timbro di chi ha organizzato l'edizione piu' vicina nel tempo
     -- al timbro, le edizioni di altri, prima o dopo la sua, contano
-    WHERE NOT EXISTS (SELECT 1 FROM stamp st0 JOIN events e0 ON e0.name = st0.description WHERE st0.id = su0.stamp AND e0.owner = su0.user
+    WHERE su0.created >= {:start} AND su0.created < {:end}
+      AND NOT EXISTS (SELECT 1 FROM stamp st0 JOIN events e0 ON e0.name = st0.description WHERE st0.id = su0.stamp AND e0.owner = su0.user
                       AND NOT EXISTS (SELECT 1 FROM events e1 WHERE e1.name = st0.description AND e1.owner != su0.user
                                       AND abs(julianday(su0.created) - julianday(e1.when_start)) < abs(julianday(su0.created) - julianday(e0.when_start))))
       -- lo staff regionale (local_offices_admins) non conta i timbri degli
@@ -307,7 +327,8 @@ LEFT JOIN (
       FROM (SELECT su0.id, su0.stamp, su0.user, su0.created FROM stamp_users su0
     -- fuori il timbro di chi ha organizzato l'edizione piu' vicina nel tempo
     -- al timbro, le edizioni di altri, prima o dopo la sua, contano
-    WHERE NOT EXISTS (SELECT 1 FROM stamp st0 JOIN events e0 ON e0.name = st0.description WHERE st0.id = su0.stamp AND e0.owner = su0.user
+    WHERE su0.created >= {:start} AND su0.created < {:end}
+      AND NOT EXISTS (SELECT 1 FROM stamp st0 JOIN events e0 ON e0.name = st0.description WHERE st0.id = su0.stamp AND e0.owner = su0.user
                       AND NOT EXISTS (SELECT 1 FROM events e1 WHERE e1.name = st0.description AND e1.owner != su0.user
                                       AND abs(julianday(su0.created) - julianday(e1.when_start)) < abs(julianday(su0.created) - julianday(e0.when_start))))
       -- lo staff regionale (local_offices_admins) non conta i timbri degli
@@ -376,9 +397,11 @@ LEFT JOIN (
 ) se ON se.user = u.id
 
 LEFT JOIN (
-  SELECT user, SUM(rk <= 10) AS stamps_pioneer
+  -- Pioniere: tra i primi dieci a prendere quel timbro (graduatoria su tutti
+  -- i timbri validi, a vita), contano quelli presi dal socio nella stagione.
+  SELECT user, SUM(rk <= 10 AND created >= {:start} AND created < {:end}) AS stamps_pioneer
   FROM (
-    SELECT user, ROW_NUMBER() OVER (PARTITION BY stamp ORDER BY created) AS rk
+    SELECT user, created, ROW_NUMBER() OVER (PARTITION BY stamp ORDER BY created) AS rk
     FROM (SELECT su0.id, su0.stamp, su0.user, su0.created FROM stamp_users su0
     -- fuori il timbro di chi ha organizzato l'edizione piu' vicina nel tempo
     -- al timbro, le edizioni di altri, prima o dopo la sua, contano
@@ -458,7 +481,8 @@ LEFT JOIN (
   FROM (SELECT su0.id, su0.stamp, su0.user, su0.created FROM stamp_users su0
     -- fuori il timbro di chi ha organizzato l'edizione piu' vicina nel tempo
     -- al timbro, le edizioni di altri, prima o dopo la sua, contano
-    WHERE NOT EXISTS (SELECT 1 FROM stamp st0 JOIN events e0 ON e0.name = st0.description WHERE st0.id = su0.stamp AND e0.owner = su0.user
+    WHERE su0.created >= {:start} AND su0.created < {:end}
+      AND NOT EXISTS (SELECT 1 FROM stamp st0 JOIN events e0 ON e0.name = st0.description WHERE st0.id = su0.stamp AND e0.owner = su0.user
                       AND NOT EXISTS (SELECT 1 FROM events e1 WHERE e1.name = st0.description AND e1.owner != su0.user
                                       AND abs(julianday(su0.created) - julianday(e1.when_start)) < abs(julianday(su0.created) - julianday(e0.when_start))))
       -- lo staff regionale (local_offices_admins) non conta i timbri degli

@@ -84,8 +84,12 @@ func TestMedalsTableReplacesView(t *testing.T) {
 			t.Errorf("campo %s: i contatori sono interi", name)
 		}
 	}
-	if n := len(c.Fields); n != 34 {
-		t.Errorf("%d campi, attesi 34 (id compreso)", n)
+	// I 34 dell'export piu' season, che la migrazione della stagione aggiunge.
+	if n := len(c.Fields); n != 35 {
+		t.Errorf("%d campi, attesi 35 (id e season compresi)", n)
+	}
+	if f, ok := c.Fields.GetByName("season").(*core.NumberField); !ok || !f.OnlyInt {
+		t.Errorf("season: %+v", c.Fields.GetByName("season"))
 	}
 
 	id, ok := c.Fields.GetByName("id").(*core.TextField)

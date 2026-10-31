@@ -8,6 +8,7 @@ import (
 
 	"mensadb/tools/dbtools"
 	"mensadb/tools/leaderboard"
+	"mensadb/tools/season"
 
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
@@ -133,16 +134,19 @@ type snapshotRow struct {
 
 // historyRow ritorna la riga di quindici giorni fa del socio, o la piu'
 // vicina a quella data fra quelle con almeno 14 giorni, o niente se lo
-// storico e' piu' corto.
+// storico della stagione in corso e' piu' corto.
 func historyRow(app core.App, userID string, now time.Time) (snapshotRow, bool, error) {
 	var rows []snapshotRow
 	err := app.DB().NewQuery(`
 		SELECT day, position, score FROM ` + leaderboard.HistoryTable + `
-		WHERE board = 'members' AND subject = {:subject} AND day <= {:latest}
+		WHERE board = 'members' AND subject = {:subject} AND day <= {:latest} AND day >= {:since}
 		ORDER BY day DESC
 	`).Bind(dbx.Params{
 		"subject": userID,
 		"latest":  now.AddDate(0, 0, -fortnightlyMinHistoryDays).Format("2006-01-02"),
+		// solo la stagione in corso: nelle prime due settimane di ottobre
+		// non si confronta con la classifica della stagione chiusa
+		"since": season.FirstDay(season.Of(now)),
 	}).All(&rows)
 	if err != nil {
 		return snapshotRow{}, false, fmt.Errorf("storico: %w", err)
