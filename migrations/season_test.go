@@ -141,13 +141,20 @@ func TestSeasonSchema(t *testing.T) {
 		}
 	}
 	region, _ := app.FindCollectionByNameOrId(regionmedals.Table)
-	if region.Fields.GetByName("year") != nil {
-		t.Error("year deve sparire dalle medaglie di regione")
+	if region.Fields.GetByName("year") == nil || region.Fields.GetByName("season") == nil {
+		t.Error("le medaglie di regione tengono year (alias per l'app 22.4.0) accanto a season")
 	}
 	for _, idx := range region.Indexes {
 		if strings.Contains(idx, "year") {
 			t.Errorf("indice con year: %s", idx)
 		}
+	}
+	var mismatched int
+	if err := app.DB().NewQuery(`SELECT COUNT(*) FROM ` + regionmedals.Table + ` WHERE year != season`).Row(&mismatched); err != nil {
+		t.Fatal(err)
+	}
+	if mismatched != 0 {
+		t.Errorf("%d righe con year diverso da season", mismatched)
 	}
 
 	// Albo d'oro.
@@ -761,11 +768,11 @@ func TestSeasonMigrationUpgradesLegacyData(t *testing.T) {
 		t.Errorf("collezionista: %d righe di stato", n)
 	}
 
-	// Medaglie di regione: year e' diventato season, la 2024 resta, la 2025
+	// Medaglie di regione: season accanto a year, la 2024 resta, la 2025
 	// e la stagione in corso sono state rifatte (10 medaglie per sede).
 	region, _ := app.FindCollectionByNameOrId(regionmedals.Table)
-	if region.Fields.GetByName("year") != nil || region.Fields.GetByName("season") == nil {
-		t.Error("year deve diventare season")
+	if region.Fields.GetByName("year") == nil || region.Fields.GetByName("season") == nil {
+		t.Error("season si aggiunge e year resta come alias")
 	}
 	old, err := app.FindFirstRecordByFilter(regionmedals.Table, "season = 2024 && medal = 'relay'")
 	if err != nil || old.GetString("tier") != "silver" {

@@ -133,9 +133,9 @@ func seasonNotifyState(app core.App, current int) error {
 	return nil
 }
 
-// seasonRegionMedals rinomina year in season nelle medaglie di regione: il
-// campo nuovo si aggiunge, si copia il valore, il vecchio si toglie con i
-// suoi indici, e se ne creano di nuovi su season. Le righe della 2025 e della
+// seasonRegionMedals aggiunge season alle medaglie di regione: il campo
+// nuovo si aggiunge, si copia il valore da year, gli indici passano su
+// season; year resta come alias (lo legge l'app 22.4.0). Le righe della 2025 e della
 // stagione in corso si cancellano: l'anno di calendario non e' la stagione,
 // le rifa' il riempimento in fondo.
 func seasonRegionMedals(app core.App, current int) error {
@@ -159,9 +159,8 @@ func seasonRegionMedals(app core.App, current int) error {
 			return err
 		}
 	}
-	if c.Fields.GetByName("year") != nil {
-		c.Fields.RemoveByName("year")
-	}
+	// year resta, con lo stesso valore di season: l'app 22.4.0 in produzione
+	// lo legge ancora. Si toglie quando quella versione non e' piu' in giro.
 	c.AddIndex("idx_leaderboard_region_medals_key", true, "local_office, season, medal", "")
 	c.AddIndex("idx_leaderboard_region_medals_season", false, "season", "")
 	if err := app.Save(c); err != nil {

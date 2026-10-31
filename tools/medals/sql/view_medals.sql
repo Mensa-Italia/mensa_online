@@ -317,7 +317,11 @@ LEFT JOIN (
     FROM (
       SELECT
         user,
-        STRFTIME('%Y', DATETIME(created, '+2 hours')) AS y,
+        -- l'anno della stagione (da ottobre si conta sull'anno dopo), cosi'
+        -- autunno, inverno, primavera ed estate dello stesso campionato
+        -- stanno insieme e le quattro stagioni si possono fare in una
+        CAST(STRFTIME('%Y', DATETIME(created, '+2 hours')) AS INTEGER)
+          + (CAST(STRFTIME('%m', DATETIME(created, '+2 hours')) AS INTEGER) >= 10) AS y,
         CASE CAST(STRFTIME('%m', DATETIME(created, '+2 hours')) AS INTEGER)
           WHEN 12 THEN 1 WHEN 1 THEN 1 WHEN 2 THEN 1
           WHEN 3 THEN 2 WHEN 4 THEN 2 WHEN 5 THEN 2

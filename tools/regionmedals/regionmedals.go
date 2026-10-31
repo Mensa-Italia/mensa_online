@@ -288,6 +288,10 @@ func (r *run) upsert(record *core.Record, t target, def definition, rd reading, 
 		_ = record.UnmarshalJSONField("witnesses", &witnesses)
 	}
 
+	if r.collection.Fields.GetByName("year") != nil {
+		// alias di season per l'app 22.4.0, finche' e' in giro
+		record.Set("year", s)
+	}
 	best := max(rank(previous), rank(rd.current))
 	for level := 1; level <= best; level++ {
 		tier := tierAt(level)
