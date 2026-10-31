@@ -20,7 +20,7 @@ func regionFixture(t *testing.T) *fixture {
 	}
 	f.record("members_registry", "600", map[string]any{"area": "Regione B", "is_active": true})
 	for _, id := range []string{"500", "502", "503", "504", "505", "600"} {
-		f.record("stamp_users", "", map[string]any{"user": id, "stamp": "s1"})
+		f.stamped(id)
 	}
 	for _, id := range []string{"500", "501", "502", "503", "505", "600"} {
 		f.record("users_devices", "", map[string]any{"user": id, "firebase_id": "tok-" + id, "language": "it"})
@@ -109,7 +109,7 @@ func TestRegionMedalUnlockedSwitches(t *testing.T) {
 func TestRegionMedalUnlockedOffWithoutConfig(t *testing.T) {
 	f := newFixture(t)
 	f.record("members_registry", "500", map[string]any{"area": "Regione A", "is_active": true})
-	f.record("stamp_users", "", map[string]any{"user": "500", "stamp": "s1"})
+	f.stamped("500")
 	f.record("users_devices", "", map[string]any{"user": "500", "firebase_id": "tok", "language": "it"})
 	if n := RegionMedalUnlocked(f.app, "loA", "Regione A", "host", "gold"); n != 0 {
 		t.Fatalf("senza la chiave in configs non si manda: %d", n)

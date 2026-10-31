@@ -93,6 +93,14 @@ func newFixture(t *testing.T) *fixture {
 	freeID(c)
 	c.Fields.Add(&core.TextField{Name: "area"}, &core.BoolField{Name: "is_active"})
 	save(c)
+	c = core.NewBaseCollection("view_medals")
+	freeID(c)
+	numbers(c, "stamps_total")
+	save(c)
+	c = core.NewBaseCollection("medals_history")
+	c.Fields.Add(&core.TextField{Name: "user"}, &core.TextField{Name: "medal"})
+	numbers(c, "value")
+	save(c)
 
 	if err := EnsureStateCollection(app); err != nil {
 		t.Fatal(err)
@@ -127,6 +135,14 @@ func (f *fixture) record(collection string, id string, values map[string]any) *c
 	return r
 }
 
+// stamped da' al socio un timbro valido nella stagione (riga di view_medals).
+func (f *fixture) stamped(id string) {
+	if existing, _ := f.app.FindRecordById("view_medals", id); existing != nil {
+		return
+	}
+	f.record("view_medals", id, map[string]any{"stamps_total": 1})
+}
+
 func (f *fixture) config(key, value string) {
 	f.record("configs", "", map[string]any{"key": key, "value": value})
 }
@@ -135,7 +151,7 @@ func (f *fixture) config(key, value string) {
 // ricevere notifiche: timbro, dispositivo, utente iscritto il giorno dato.
 func (f *fixture) member(id string, position, score int, created time.Time) {
 	f.board(leaderboard.MembersTable, id, position, score, 3)
-	f.record("stamp_users", "", map[string]any{"user": id, "stamp": "s1"})
+	f.stamped(id)
 	f.record("users_devices", "", map[string]any{"user": id, "firebase_id": "tok-" + id, "language": "it"})
 	f.user(id, created)
 }
@@ -336,7 +352,7 @@ func TestThresholdsExclusions(t *testing.T) {
 		id    string
 		setup func(id string)
 	}{
-		{"400", func(id string) { // zero timbri in stamp_users
+		{"400", func(id string) { // nessun timbro valido (niente riga in view_medals)
 			f.board(leaderboard.MembersTable, id, 12, 40, 3)
 			f.record("users_devices", "", map[string]any{"user": id, "firebase_id": "tok"})
 		}},
@@ -350,7 +366,7 @@ func TestThresholdsExclusions(t *testing.T) {
 		}},
 		{"403", func(id string) { // senza dispositivi
 			f.board(leaderboard.MembersTable, id, 12, 40, 3)
-			f.record("stamp_users", "", map[string]any{"user": id, "stamp": "s1"})
+			f.stamped(id)
 		}},
 		{"404", func(id string) { // notifiche generali spente
 			f.member(id, 12, 40, day)
@@ -439,12 +455,9 @@ func TestThresholdsRegionsToOfficers(t *testing.T) {
 	f.member("600", 50, 5, noon) // segretario, con timbro e dispositivo
 	f.member("601", 51, 5, noon) // collaboratore, non segretario
 	f.member("602", 52, 5, noon) // segretario senza timbri
-	stamps, _ := f.app.FindAllRecords("stamp_users")
-	for _, s := range stamps {
-		if s.GetString("user") == "602" {
-			if err := f.app.Delete(s); err != nil {
-				t.Fatal(err)
-			}
+	if row, _ := f.app.FindRecordById("view_medals", "602"); row != nil {
+		if err := f.app.Delete(row); err != nil {
+			t.Fatal(err)
 		}
 	}
 	f.record("local_offices_admins", "", map[string]any{"user": "600", "local_office": "lo1", "is_the_officer": true})

@@ -14,7 +14,7 @@ func medalFixture(t *testing.T) *fixture {
 	f := newFixture(t)
 	f.config(medalsEnabledKey, "true")
 	for _, id := range []string{"500", "502", "503", "504", "505"} {
-		f.record("stamp_users", "", map[string]any{"user": id, "stamp": "s1"})
+		f.stamped(id)
 	}
 	for _, id := range []string{"500", "501", "502", "503", "505"} {
 		f.record("users_devices", "", map[string]any{"user": id, "firebase_id": "tok-" + id, "language": "it"})
@@ -91,7 +91,7 @@ func TestMedalsChangedManyCollapses(t *testing.T) {
 
 	// Il conteggio e' per socio: due soci con tre medaglie ciascuno ne
 	// ricevono tre a testa, non una riassuntiva.
-	f.record("stamp_users", "", map[string]any{"user": "506", "stamp": "s2"})
+	f.stamped("506")
 	f.record("users_devices", "", map[string]any{"user": "506", "firebase_id": "tok-506", "language": "it"})
 	var two []medals.Change
 	for _, c := range changes[:3] {
@@ -111,7 +111,7 @@ func TestMedalsChangedSwitch(t *testing.T) {
 	change := []medals.Change{{UserID: "500", Medal: "collector", Title: "Collezionista", From: medals.TierNone, To: medals.TierBronze}}
 
 	f := newFixture(t)
-	f.record("stamp_users", "", map[string]any{"user": "500", "stamp": "s1"})
+	f.stamped("500")
 	f.record("users_devices", "", map[string]any{"user": "500", "firebase_id": "tok", "language": "it"})
 	if n := MedalsChanged(f.app, change); n != 0 || len(f.take()) != 0 {
 		t.Fatalf("senza la chiave in configs non si manda: %d", n)

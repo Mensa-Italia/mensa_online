@@ -119,7 +119,7 @@ func EnsureStateCollection(app core.App) error {
 // recipients sa chi puo' ricevere queste notifiche. Caricato una volta per
 // giro, con quattro query in tutto invece di quattro per socio.
 type recipients struct {
-	stamped map[string]bool     // almeno una riga in stamp_users
+	stamped map[string]bool     // almeno un timbro valido: nella stagione (view_medals) o in una chiusa (medals_history)
 	hidden  map[string]bool     // leaderboard_hidden = true
 	devices map[string]bool     // almeno un dispositivo con token
 	off     map[string]bool     // notify_general o notify_leaderboard = false
@@ -132,8 +132,13 @@ func loadRecipients(app core.App) (*recipients, error) {
 		off: map[string]bool{}, regions: map[string][]string{},
 	}
 	var ids []string
-	if err := app.DB().NewQuery(`SELECT DISTINCT user FROM stamp_users WHERE user != ''`).Column(&ids); err != nil {
-		return nil, fmt.Errorf("stamp_users: %w", err)
+	// Un timbro preso non basta: deve essere valido (contato dal gate di
+	// view_medals), nella stagione in corso o in una stagione chiusa. Chi ha
+	// solo timbri che non contano (i propri eventi, la propria regione da
+	// staff) e' fuori come chi non ne ha.
+	if err := app.DB().NewQuery(`SELECT id FROM view_medals WHERE stamps_total > 0
+		UNION SELECT user FROM medals_history WHERE medal = 'collector' AND value > 0`).Column(&ids); err != nil {
+		return nil, fmt.Errorf("timbri validi: %w", err)
 	}
 	for _, id := range ids {
 		r.stamped[id] = true
