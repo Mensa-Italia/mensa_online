@@ -7,6 +7,7 @@ import (
 	"mensadb/importers"
 	"mensadb/main/api/cs/exapp"
 	"mensadb/main/cmd/searchcmd"
+	"mensadb/main/crons/birthdaynotify"
 	"mensadb/main/crons/eventslobackfill"
 	"mensadb/main/crons/quidnotify"
 	"mensadb/main/crons/searchrec"
@@ -191,6 +192,15 @@ func CronTasks(app core.App) {
 	app.Cron().MustAdd("Leaderboard fortnightly notify", "0 18 * * *", func() {
 		if _, err := leaderboardnotify.Fortnightly(app, time.Now()); err != nil {
 			app.Logger().Error("[CRON] leaderboard fortnightly notify", "err", err)
+		}
+	})
+
+	// Gli auguri ai soci che compiono gli anni oggi, la mattina alle 9 (il
+	// giorno lo decide il fuso di Roma). Spento finche` la config
+	// notify_birthdays non vale "true".
+	app.Cron().MustAdd("Birthday wishes notify", "0 9 * * *", func() {
+		if _, err := birthdaynotify.Run(app, time.Now()); err != nil {
+			app.Logger().Error("[CRON] birthday wishes notify", "err", err)
 		}
 	})
 
