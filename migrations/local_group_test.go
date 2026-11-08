@@ -52,10 +52,20 @@ func TestLocalGroupSchema(t *testing.T) {
 		t.Errorf("local_offices_admins.listRule cambiata: %v", admins.ListRule)
 	}
 
+	orgMembers, err := f.app.FindCollectionByNameOrId("org_chart_members")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if orgMembers.ListRule == nil || *orgMembers.ListRule != `@request.auth.id != ""` || orgMembers.ViewRule == nil || *orgMembers.ViewRule != `@request.auth.id != ""` {
+		t.Errorf("org_chart_members: regole di lettura %v %v, attese con il login", orgMembers.ListRule, orgMembers.ViewRule)
+	}
+
 	for name, rule := range map[string]string{
-		memberchanges.Table:      memberchanges.ChangesReadRule,
-		officestats.Table:        `@request.auth.id != ""`,
-		officestats.MonthlyTable: memberchanges.AdminReadRule,
+		memberchanges.Table:                 memberchanges.ChangesReadRule,
+		officestats.Table:                   `@request.auth.id != ""`,
+		officestats.MonthlyTable:            memberchanges.AdminReadRule,
+		officestats.AssociationTable:        officestats.BoardReadRule,
+		officestats.AssociationMonthlyTable: officestats.BoardReadRule,
 	} {
 		c, err := f.app.FindCollectionByNameOrId(name)
 		if err != nil {
@@ -193,6 +203,33 @@ func TestLocalOfficeStats(t *testing.T) {
 	}
 	check(monthly[0], map[string]int{"events": 0, "attendance": 0, "distinct_attendees": 0, "members_new": 0, "members_left": 2, "members_active": 1})
 	check(monthly[1], map[string]int{"events": 1, "attendance": 2, "distinct_attendees": 2, "members_new": 2, "members_left": 0, "members_active": 3})
+
+	// Tutta l'associazione: quattro attivi (anche il Lazio), gli eventi di
+	// entrambe le regioni, le convenzioni locali e nazionali non scadute.
+	assoc, err := app.FindRecordById(officestats.AssociationTable, officestats.AssociationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for field, n := range map[string]int{
+		"members_active": 4, "members_new_7d": 1, "members_new_30d": 2, "members_left_30d": 1,
+		"events_season": 2, "events_upcoming": 1, "attendance_season": 3, "deals_active": 3, "offices": 2,
+	} {
+		if got := assoc.GetInt(field); got != n {
+			t.Errorf("associazione.%s = %d, atteso %d", field, got, n)
+		}
+	}
+	if assoc.GetString("season") != "2026/27" {
+		t.Errorf("associazione: stagione %q", assoc.GetString("season"))
+	}
+	assocMonthly, _ := app.FindRecordsByFilter(officestats.AssociationMonthlyTable, "1=1", "month", 0, 0)
+	if len(assocMonthly) != 14 || assocMonthly[0].Id != "association_2025-10" {
+		t.Fatalf("mesi dell'associazione: %v", ids(assocMonthly))
+	}
+	// settembre 2026: l'evento e3 della stagione scorsa, nella finestra
+	if got := assocMonthly[11]; got.Id != "association_2026-09" || got.GetInt("events") != 1 || got.GetString("season") != "2025/26" {
+		t.Errorf("settembre: %v", got.PublicExport())
+	}
+	check(assocMonthly[13], map[string]int{"events": 2, "attendance": 3, "distinct_attendees": 2, "members_new": 2, "members_left": 0, "members_active": 4})
 
 	// Il Lazio: un evento, un timbratore, nessun movimento.
 	lazio, err := app.FindRecordById(officestats.Table, "loLA")

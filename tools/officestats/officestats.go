@@ -3,7 +3,9 @@
 // (leggibile da ogni socio loggato) e una riga per sede e mese, dall'inizio
 // della stagione precedente a oggi, in local_office_stats_monthly (solo
 // admin della sede e super): i grafici dell'area segreteria confrontano la
-// stagione con quella prima.
+// stagione con quella prima. Le stesse cifre per tutta l'associazione (ogni
+// socio, evento e convenzione, anche senza regione) stanno in
+// association_stats e association_stats_monthly, per il consiglio e i super.
 //
 // Si ricalcola nella catena del refresh delle classifiche, ogni quarto
 // d'ora (main/crons, leaderboard.AfterRefresh), in una sola transazione:
@@ -51,7 +53,19 @@ const (
 	// MonthlyTable ha una riga per sede e mese della stagione, id =
 	// <id sede>_<AAAA-MM>.
 	MonthlyTable = "local_office_stats_monthly"
+	// AssociationTable ha una riga sola, id AssociationID: le cifre di
+	// tutta l'associazione.
+	AssociationTable = "association_stats"
+	// AssociationMonthlyTable ha una riga per mese, id association_<AAAA-MM>.
+	AssociationMonthlyTable = "association_stats_monthly"
+	// AssociationID e' l'id della riga di AssociationTable.
+	AssociationID = "association"
 )
+
+// BoardReadRule e' la regola di lettura delle cifre dell'associazione: i
+// super e i consiglieri, cioe' chi ha una riga attiva nel gruppo
+// "consiglio" dell'organigramma (org_chart_members, user = il socio).
+const BoardReadRule = `@request.auth.id != "" && (@request.auth.powers:each ?= "super" || (@collection.org_chart_members.user ?= @request.auth.id && @collection.org_chart_members.inactive ?= false && @collection.org_chart_members.group.title ?= "consiglio"))`
 
 // Un ricalcolo alla volta: la catena del cron e l'hook dell'opt-out
 // possono sovrapporsi.
@@ -86,7 +100,7 @@ func EnsureCollections(app core.App) error {
 	}); err != nil {
 		return err
 	}
-	return ensureTable(app, MonthlyTable, memberchanges.AdminReadRule, func(c *core.Collection) {
+	if err := ensureTable(app, MonthlyTable, memberchanges.AdminReadRule, func(c *core.Collection) {
 		c.Fields.Add(
 			&core.RelationField{Name: "local_office", CollectionId: offices.Id, MaxSelect: 1},
 			&core.TextField{Name: "region_key"},
@@ -95,6 +109,25 @@ func EnsureCollections(app core.App) error {
 		)
 		addNumbers(c, monthlyNumbers)
 		c.AddIndex("idx_local_office_stats_monthly_office_month", false, "local_office, month", "")
+	}); err != nil {
+		return err
+	}
+	if err := ensureTable(app, AssociationTable, BoardReadRule, func(c *core.Collection) {
+		addNumbers(c, statsNumbers)
+		c.Fields.Add(
+			&core.NumberField{Name: "offices", OnlyInt: true},
+			&core.TextField{Name: "season"},
+			&core.DateField{Name: "computed_at"},
+		)
+	}); err != nil {
+		return err
+	}
+	return ensureTable(app, AssociationMonthlyTable, BoardReadRule, func(c *core.Collection) {
+		c.Fields.Add(
+			&core.TextField{Name: "month"},
+			&core.TextField{Name: "season"},
+		)
+		addNumbers(c, monthlyNumbers)
 	})
 }
 
@@ -143,20 +176,30 @@ func RefreshAt(app core.App, now time.Time) error {
 	if err != nil {
 		return err
 	}
-	stats, monthly := compute(in, now, current)
+	out := compute(in, now, current)
 
 	err = app.RunInTransaction(func(tx core.App) error {
-		if err := write(tx, Table, stats); err != nil {
-			return err
+		for table, rows := range map[string][]row{
+			Table: out.stats, MonthlyTable: out.monthly,
+			AssociationTable: out.association, AssociationMonthlyTable: out.associationMonthly,
+		} {
+			if err := write(tx, table, rows); err != nil {
+				return err
+			}
 		}
-		return write(tx, MonthlyTable, monthly)
+		return nil
 	})
 	if err != nil {
 		return err
 	}
 	app.Logger().Info("[officestats] statistiche delle sedi ricalcolate", "season", season.Label(current),
-		"offices", len(stats), "months", len(monthly), "in", time.Since(started).String())
+		"offices", len(out.stats), "months", len(out.monthly), "in", time.Since(started).String())
 	return nil
+}
+
+// computed sono le righe delle quattro tabelle.
+type computed struct {
+	stats, monthly, association, associationMonthly []row
 }
 
 type office struct {
@@ -175,12 +218,14 @@ type change struct {
 
 // input e' tutto quello che serve al calcolo, letto in poche query.
 type input struct {
-	offices   []office
-	active    map[string]int      // chiave di regione -> soci attivi
-	deals     map[string]int      // chiave di regione -> convenzioni attive
-	events    []event             // eventi dall'inizio della stagione precedente in poi
-	attendees map[string][]string // id evento -> timbratori
-	changes   []change            // movimenti dall'inizio della stagione precedente in poi
+	offices     []office
+	active      map[string]int      // chiave di regione -> soci attivi
+	activeTotal int                 // soci attivi in tutto, anche senza regione
+	deals       map[string]int      // chiave di regione -> convenzioni attive
+	dealsTotal  int                 // convenzioni attive in tutto, locali e nazionali
+	events      []event             // eventi dall'inizio della stagione precedente in poi
+	attendees   map[string][]string // id evento -> timbratori
+	changes     []change            // movimenti dall'inizio della stagione precedente in poi
 }
 
 func load(app core.App, now time.Time, current int) (*input, error) {
@@ -218,6 +263,9 @@ func load(app core.App, now time.Time, current int) (*input, error) {
 	for _, c := range counts {
 		in.active[c.Key] = c.N
 	}
+	if err := app.DB().NewQuery(`SELECT COUNT(*) FROM members_registry WHERE is_active`).Row(&in.activeTotal); err != nil {
+		return nil, fmt.Errorf("soci attivi in tutto: %w", err)
+	}
 
 	counts = nil
 	if err := app.DB().NewQuery(`
@@ -233,6 +281,12 @@ func load(app core.App, now time.Time, current int) (*input, error) {
 	}
 	for _, c := range counts {
 		in.deals[c.Key] = c.N
+	}
+	if err := app.DB().NewQuery(`
+		SELECT COUNT(*) FROM deals d
+		WHERE d.is_active AND (d.ending IS NULL OR d.ending = '' OR d.ending > {:now})
+	`).Bind(dbx.Params{"now": nowValue.String()}).Row(&in.dealsTotal); err != nil {
+		return nil, fmt.Errorf("convenzioni in tutto: %w", err)
 	}
 
 	var events []struct {
@@ -301,9 +355,9 @@ func load(app core.App, now time.Time, current int) (*input, error) {
 		Day    string `db:"day"`
 	}
 	if err := app.DB().NewQuery(`
-		SELECT local_office, kind, day
+		SELECT COALESCE(local_office, '') AS local_office, kind, day
 		FROM ` + memberchanges.Table + `
-		WHERE local_office != '' AND day >= {:since}
+		WHERE day >= {:since}
 	`).Bind(dbx.Params{"since": sinceValue.String()}).All(&changes); err != nil {
 		return nil, fmt.Errorf("movimenti: %w", err)
 	}
@@ -356,124 +410,176 @@ func seasonOfMonth(month string) string {
 
 const sqlLayout = "2006-01-02 15:04:05"
 
-func compute(in *input, now time.Time, current int) (stats, monthly []row) {
+// tally conta eventi, presenze e movimenti di una sede (o di tutta
+// l'associazione): i totali della stagione e le cifre mese per mese.
+type tally struct {
+	seasonEvents, upcoming, attendance int
+	new7, new30, left30                int
+	monthEvents, monthAttendance       map[string]int
+	monthDistinct                      map[string]map[string]bool
+	monthNew, monthLeft                map[string]int
+}
+
+func newTally() *tally {
+	return &tally{
+		monthEvents: map[string]int{}, monthAttendance: map[string]int{},
+		monthDistinct: map[string]map[string]bool{}, monthNew: map[string]int{}, monthLeft: map[string]int{},
+	}
+}
+
+// clock sono gli istanti con cui si conta: adesso, la stagione in corso e
+// l'inizio della finestra dei mesi (la stagione precedente).
+type clock struct {
+	now, start, end, windowStart, cutoff7, cutoff30 time.Time
+}
+
+func (t *tally) addEvent(e event, stampers []string, c clock) {
+	if e.when.After(c.now) {
+		t.upcoming++
+	} else if !e.when.Before(c.start) && e.when.Before(c.end) {
+		t.seasonEvents++
+		t.attendance += len(stampers)
+	}
+	if e.when.Before(c.windowStart) || !e.when.Before(c.end) {
+		return
+	}
+	m := monthOf(e.when)
+	t.monthEvents[m]++
+	t.monthAttendance[m] += len(stampers)
+	if t.monthDistinct[m] == nil {
+		t.monthDistinct[m] = map[string]bool{}
+	}
+	for _, u := range stampers {
+		t.monthDistinct[m][u] = true
+	}
+}
+
+func (t *tally) addChange(ch change, c clock) {
+	switch {
+	case isNew(ch.kind):
+		if ch.day.After(c.cutoff7) {
+			t.new7++
+		}
+		if ch.day.After(c.cutoff30) {
+			t.new30++
+		}
+	case isLeft(ch.kind):
+		if ch.day.After(c.cutoff30) {
+			t.left30++
+		}
+	}
+	if !ch.day.Before(c.windowStart) {
+		m := monthOf(ch.day)
+		if isNew(ch.kind) {
+			t.monthNew[m]++
+		} else if isLeft(ch.kind) {
+			t.monthLeft[m]++
+		}
+	}
+}
+
+// numbers sono i campi numerici della riga dei totali.
+func (t *tally) numbers(active, deals int) map[string]any {
+	return map[string]any{
+		"members_active":    active,
+		"members_new_7d":    t.new7,
+		"members_new_30d":   t.new30,
+		"members_left_30d":  t.left30,
+		"events_season":     t.seasonEvents,
+		"events_upcoming":   t.upcoming,
+		"attendance_season": t.attendance,
+		"deals_active":      deals,
+	}
+}
+
+// monthlyRows sono le righe dei mesi, id idPrefix_<AAAA-MM>, con extra in
+// ogni riga. I soci a fine mese si ricostruiscono all'indietro dal mese
+// corrente: a fine del mese m c'erano quelli di adesso meno il saldo dei
+// mesi dopo m.
+func (t *tally) monthlyRows(idPrefix string, months []string, active int, extra map[string]any) []row {
+	activeAt := make(map[string]int, len(months))
+	net := 0
+	for i := len(months) - 1; i >= 0; i-- {
+		m := months[i]
+		// mai sotto zero: i movimenti possono essere piu' vecchi del
+		// registro di adesso (soci cancellati, aree corrette a mano)
+		activeAt[m] = max(active-net, 0)
+		net += t.monthNew[m] - t.monthLeft[m]
+	}
+	out := make([]row, 0, len(months))
+	for _, m := range months {
+		values := map[string]any{
+			"month":              m,
+			"season":             seasonOfMonth(m),
+			"events":             t.monthEvents[m],
+			"attendance":         t.monthAttendance[m],
+			"distinct_attendees": len(t.monthDistinct[m]),
+			"members_new":        t.monthNew[m],
+			"members_left":       t.monthLeft[m],
+			"members_active":     activeAt[m],
+		}
+		for k, v := range extra {
+			values[k] = v
+		}
+		out = append(out, row{id: idPrefix + "_" + m, values: values})
+	}
+	return out
+}
+
+func compute(in *input, now time.Time, current int) computed {
 	start, end := season.Bounds(current)
 	windowStart, _ := season.Bounds(current - 1)
 	label := season.Label(current)
 	months := windowMonths(current, now)
 	today := memberchanges.Day(now)
-	cutoff7, cutoff30 := today.AddDate(0, 0, -7), today.AddDate(0, 0, -30)
+	c := clock{now: now, start: start, end: end, windowStart: windowStart,
+		cutoff7: today.AddDate(0, 0, -7), cutoff30: today.AddDate(0, 0, -30)}
 	computedAt, _ := types.ParseDateTime(now)
 
+	var out computed
 	for _, o := range in.offices {
-		var (
-			seasonEvents, upcoming, attendance int
-			new7, new30, left30                int
-		)
-		monthEvents := map[string]int{}
-		monthAttendance := map[string]int{}
-		monthDistinct := map[string]map[string]bool{}
-		monthNew := map[string]int{}
-		monthLeft := map[string]int{}
-
+		t := newTally()
 		for _, e := range in.events {
 			if e.office != o.id && (o.key == "" || e.key != o.key) {
 				continue
 			}
-			stampers := in.attendees[e.id]
-			if e.when.After(now) {
-				upcoming++
-			} else if !e.when.Before(start) && e.when.Before(end) {
-				seasonEvents++
-				attendance += len(stampers)
-			}
-			if e.when.Before(windowStart) || !e.when.Before(end) {
-				continue
-			}
-			m := monthOf(e.when)
-			monthEvents[m]++
-			monthAttendance[m] += len(stampers)
-			if monthDistinct[m] == nil {
-				monthDistinct[m] = map[string]bool{}
-			}
-			for _, u := range stampers {
-				monthDistinct[m][u] = true
+			t.addEvent(e, in.attendees[e.id], c)
+		}
+		for _, ch := range in.changes {
+			if ch.office == o.id {
+				t.addChange(ch, c)
 			}
 		}
-
-		for _, c := range in.changes {
-			if c.office != o.id {
-				continue
-			}
-			switch {
-			case isNew(c.kind):
-				if c.day.After(cutoff7) {
-					new7++
-				}
-				if c.day.After(cutoff30) {
-					new30++
-				}
-			case isLeft(c.kind):
-				if c.day.After(cutoff30) {
-					left30++
-				}
-			}
-			if !c.day.Before(windowStart) {
-				m := monthOf(c.day)
-				if isNew(c.kind) {
-					monthNew[m]++
-				} else if isLeft(c.kind) {
-					monthLeft[m]++
-				}
-			}
-		}
-
 		active := 0
 		if o.key != "" {
 			active = in.active[o.key]
 		}
-		stats = append(stats, row{id: o.id, values: map[string]any{
-			"local_office":      o.id,
-			"region_key":        o.key,
-			"members_active":    active,
-			"members_new_7d":    new7,
-			"members_new_30d":   new30,
-			"members_left_30d":  left30,
-			"events_season":     seasonEvents,
-			"events_upcoming":   upcoming,
-			"attendance_season": attendance,
-			"deals_active":      in.deals[o.key],
-			"season":            label,
-			"computed_at":       computedAt,
-		}})
-
-		// Soci a fine mese, all'indietro dal mese corrente: a fine del mese m
-		// c'erano quelli di adesso meno il saldo dei mesi dopo m.
-		activeAt := make(map[string]int, len(months))
-		net := 0
-		for i := len(months) - 1; i >= 0; i-- {
-			m := months[i]
-			// mai sotto zero: i movimenti possono essere piu' vecchi del
-			// registro di adesso (soci cancellati, aree corrette a mano)
-			activeAt[m] = max(active-net, 0)
-			net += monthNew[m] - monthLeft[m]
-		}
-		for _, m := range months {
-			monthly = append(monthly, row{id: o.id + "_" + m, values: map[string]any{
-				"local_office":       o.id,
-				"region_key":         o.key,
-				"month":              m,
-				"season":             seasonOfMonth(m),
-				"events":             monthEvents[m],
-				"attendance":         monthAttendance[m],
-				"distinct_attendees": len(monthDistinct[m]),
-				"members_new":        monthNew[m],
-				"members_left":       monthLeft[m],
-				"members_active":     activeAt[m],
-			}})
-		}
+		values := t.numbers(active, in.deals[o.key])
+		values["local_office"] = o.id
+		values["region_key"] = o.key
+		values["season"] = label
+		values["computed_at"] = computedAt
+		out.stats = append(out.stats, row{id: o.id, values: values})
+		out.monthly = append(out.monthly, t.monthlyRows(o.id, months, active,
+			map[string]any{"local_office": o.id, "region_key": o.key})...)
 	}
-	return stats, monthly
+
+	// Tutta l'associazione: ogni evento, ogni movimento e ogni socio attivo,
+	// anche quelli senza regione; le convenzioni locali e nazionali.
+	t := newTally()
+	for _, e := range in.events {
+		t.addEvent(e, in.attendees[e.id], c)
+	}
+	for _, ch := range in.changes {
+		t.addChange(ch, c)
+	}
+	values := t.numbers(in.activeTotal, in.dealsTotal)
+	values["offices"] = len(in.offices)
+	values["season"] = label
+	values["computed_at"] = computedAt
+	out.association = []row{{id: AssociationID, values: values}}
+	out.associationMonthly = t.monthlyRows(AssociationID, months, in.activeTotal, nil)
+	return out
 }
 
 // write riscrive una tabella: upsert per id, cancellazione delle righe che
