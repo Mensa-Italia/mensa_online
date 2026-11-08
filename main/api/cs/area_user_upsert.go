@@ -7,6 +7,7 @@ import (
 	"mensadb/area32"
 	"mensadb/importers"
 	"mensadb/tools/generic"
+	"mensadb/tools/integrity"
 	"mensadb/tools/payment"
 	"mensadb/tools/zauth"
 	"slices"
@@ -36,6 +37,8 @@ func upsertUserFromAreaUser(app core.App, areaUser *area32.Area32User, email, pa
 		newUser.Set("name", areaUser.Fullname)
 		newUser.Set("expire_membership", areaUser.ExpireDate)
 		newUser.Set("is_membership_active", areaUser.IsMembershipActive)
+		// I nuovi soci nascono "watched": il livello "free" si da` solo a mano.
+		newUser.Set("access_level", string(integrity.LevelWatched))
 
 		powerList := []string{}
 		if areaUser.IsATestMaker {
