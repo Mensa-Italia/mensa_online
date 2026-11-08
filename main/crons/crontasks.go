@@ -18,6 +18,8 @@ import (
 	"mensadb/tools/leaderboardnotify"
 	"mensadb/tools/localofficesync"
 	"mensadb/tools/medals"
+	"mensadb/tools/memberchanges"
+	"mensadb/tools/officestats"
 	"mensadb/tools/podcastsync"
 	"mensadb/tools/quidsync"
 	"mensadb/tools/regionmedals"
@@ -126,7 +128,7 @@ func CronTasks(app core.App) {
 	})
 
 	// Dopo ogni ricalcolo (cron o opt-out) prima le medaglie di regione
-	// (tools/regionmedals), poi le notifiche: quelle di soglia, "sei entrato
+	// (tools/regionmedals) e le statistiche delle sedi, poi le notifiche: quelle di soglia, "sei entrato
 	// nei primi dieci" e simili, e quelle dei metalli appena sbloccati, vedi
 	// tools/leaderboardnotify. Un errore delle medaglie finisce nel log e
 	// non ferma niente, il ricalcolo delle classifiche e' gia' fatto.
@@ -134,6 +136,11 @@ func CronTasks(app core.App) {
 		unlocks, err := regionmedals.RefreshUnlocks(app)
 		if err != nil {
 			app.Logger().Error("[regionmedals] ricalcolo dopo le classifiche", "err", err)
+		}
+		// Le statistiche dei gruppi locali (tools/officestats), stesso giro:
+		// un errore finisce nel log e non ferma le notifiche.
+		if err := officestats.Refresh(app); err != nil {
+			app.Logger().Error("[officestats] ricalcolo dopo le classifiche", "err", err)
 		}
 		leaderboardnotify.Thresholds(app)
 		for _, u := range unlocks {
@@ -228,6 +235,16 @@ func CronTasks(app core.App) {
 			added += n
 		}
 		app.Logger().Info("[CRON] Podcast sync ok", "podcasts", len(perPodcast), "new_episodes", added)
+	})
+
+	// Manual-only: il backfill dei movimenti del registro dagli snapshot S3
+	// (tools/memberchanges). Gira gia' da solo all'avvio del server finche'
+	// non e' riuscito una volta; per rifarlo da zero si cancellano le righe di
+	// members_registry_changes e la config local_group_changes_backfilled.
+	app.Cron().MustAdd("Member changes backfill (manual)", "0 0 31 2 *", func() {
+		if err := memberchanges.Backfill(app); err != nil {
+			app.Logger().Error("[CRON] member changes backfill", "err", err)
+		}
 	})
 
 	// Manual-only: assegna local_office agli eventi storici basandosi

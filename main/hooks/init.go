@@ -22,6 +22,10 @@ func Load(app core.App) {
 	// cosi` il campo viene committato insieme al resto della create.
 	app.OnRecordCreate("events").BindFunc(EventsAssignLocalOffice)
 
+	// Chiave di regione della sede (tools/regionkey), derivata da region.
+	app.OnRecordCreate("local_offices").BindFunc(LocalOfficeSetRegionKey)
+	app.OnRecordUpdate("local_offices").BindFunc(LocalOfficeSetRegionKey)
+
 	// Notify users when an event is created
 	app.OnRecordAfterCreateSuccess("events").BindFunc(EventsNotifyUsersAsync)
 	app.OnRecordAfterUpdateSuccess("events").BindFunc(EventsUpdateNotifyUsersAsync)

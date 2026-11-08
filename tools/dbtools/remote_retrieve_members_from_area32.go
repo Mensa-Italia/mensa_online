@@ -10,6 +10,7 @@ import (
 	"mensadb/importers"
 	"mensadb/tools/cdnfiles"
 	"mensadb/tools/env"
+	"mensadb/tools/memberchanges"
 	"strconv"
 	"strings"
 	"time"
@@ -66,6 +67,14 @@ func RemoteRetrieveMembersFromArea32(app core.App) {
 		return
 	}
 
+	// Fotografia del registro prima dell'aggiornamento: confrontata con
+	// quella dopo da' i movimenti del giorno (tools/memberchanges). Un errore
+	// qui finisce nel log e non ferma il sync.
+	before, beforeErr := memberchanges.Capture(app)
+	if beforeErr != nil {
+		app.Logger().Error("members sync: fotografia del registro prima del sync non riuscita", "err", beforeErr)
+	}
+
 	// Aggiorna i membri trovati su Area32
 	allMembersIDs := []string{}
 	for _, member := range newMembers {
@@ -114,6 +123,23 @@ func RemoteRetrieveMembersFromArea32(app core.App) {
 		}
 	}
 
+	if beforeErr == nil {
+		recordMemberChanges(app, before)
+	}
+}
+
+// recordMemberChanges confronta il registro di adesso con la fotografia di
+// prima del sync e scrive i movimenti con il giorno di oggi. Solo log: un
+// errore non fa fallire il sync.
+func recordMemberChanges(app core.App, before memberchanges.Snapshot) {
+	after, err := memberchanges.Capture(app)
+	if err != nil {
+		app.Logger().Error("members sync: fotografia del registro dopo il sync non riuscita", "err", err)
+		return
+	}
+	if err := memberchanges.Record(app, memberchanges.Diff(before, after), time.Now()); err != nil {
+		app.Logger().Error("members sync: registrazione dei movimenti non riuscita", "err", err)
+	}
 }
 
 // memberDataDigest racchiude in ordine deterministico i campi anagrafici

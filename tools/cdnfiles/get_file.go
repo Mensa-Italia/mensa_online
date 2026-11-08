@@ -175,3 +175,44 @@ func ListKeysInS3Prefix(app core.App, bucket, prefix string) (map[string]map[str
 
 	return result, nil
 }
+
+// ListKeysOnlyInS3Prefix ritorna le key degli oggetti sotto prefix, senza la
+// HeadObject per ognuna che fa ListKeysInS3Prefix: con migliaia di oggetti
+// (gli snapshot del registro) sono migliaia di chiamate risparmiate.
+func ListKeysOnlyInS3Prefix(app core.App, bucket, prefix string) ([]string, error) {
+	s3settings := app.Settings().S3
+	if !s3settings.Enabled {
+		return nil, errors.New("s3 is disabled")
+	}
+
+	prefix = strings.TrimSpace(prefix)
+	if prefix != "" && !strings.HasSuffix(prefix, "/") {
+		prefix += "/"
+	}
+
+	s3client, err := NewS3(s3settings.Region, s3settings.Endpoint, s3settings.AccessKey, s3settings.Secret, s3settings.ForcePathStyle)
+	if err != nil {
+		return nil, err
+	}
+
+	p := s3.NewListObjectsV2Paginator(s3client, &s3.ListObjectsV2Input{
+		Bucket: aws.String(bucket),
+		Prefix: aws.String(prefix),
+	})
+
+	ctx := context.Background()
+	var result []string
+	for p.HasMorePages() {
+		page, err := p.NextPage(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, obj := range page.Contents {
+			if obj.Key == nil || strings.TrimSpace(*obj.Key) == "" {
+				continue
+			}
+			result = append(result, *obj.Key)
+		}
+	}
+	return result, nil
+}

@@ -4,12 +4,12 @@ import (
 	"log"
 	"mensadb/importers"
 	"mensadb/main/api"
+	integrityapi "mensadb/main/api/integrity"
+	"mensadb/main/api/zitadelauth"
 	"mensadb/main/cmd/quidcmd"
 	"mensadb/main/cmd/searchcmd"
 	"mensadb/main/crons"
 	"mensadb/main/hooks"
-	integrityapi "mensadb/main/api/integrity"
-	"mensadb/main/api/zitadelauth"
 	"mensadb/main/links"
 	"mensadb/main/utilities"
 	"mensadb/mcp"
@@ -18,6 +18,7 @@ import (
 	"mensadb/tolgee"
 	"mensadb/tools/cdnfiles"
 	"mensadb/tools/env"
+	"mensadb/tools/memberchanges"
 	"mensadb/tools/search"
 	"net/http"
 	"os"
@@ -92,6 +93,21 @@ func main() {
 		if e.Server != nil {
 			mcp.SetServerAddr(e.Server.Addr)
 		}
+		// Backfill una tantum dei movimenti del registro dagli snapshot S3
+		// (tools/memberchanges): in background, l'avvio non aspetta. Se e'
+		// gia' stato fatto non fa niente; se S3 non c'e' riprova al prossimo
+		// avvio.
+		go func(app core.App) {
+			defer func() {
+				if r := recover(); r != nil {
+					app.Logger().Error("[memberchanges] backfill in panic", "panic", r)
+				}
+			}()
+			if err := memberchanges.Backfill(app); err != nil {
+				app.Logger().Error("[memberchanges] backfill non riuscito", "err", err)
+			}
+		}(e.App)
+
 		mcpHandler := mcp.Init(e.App)
 		e.Router.Any("/mcp", func(re *core.RequestEvent) error {
 			mcpHandler.ServeHTTP(re.Response, re.Request)

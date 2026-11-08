@@ -7,6 +7,7 @@ import (
 	"mensadb/main/api/cs/verify_signature"
 	"mensadb/main/api/cs/webhook"
 
+	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/router"
 )
@@ -48,5 +49,9 @@ func Load(e *router.RouterGroup[*core.RequestEvent]) {
 	e.GET("/members-hashed", MembersHashedHandler)
 	e.GET("/members-snapshots", MembersSnapshotsHandler)
 	e.GET("/members-snapshots/{key}", MemberSnapshotByKeyHandler)
+
+	// Gruppo locale: i soci della sede in Excel (entrati, usciti, attivi),
+	// solo per gli admin della sede e i super.
+	e.GET("/local-office/{id}/members-export", LocalOfficeMembersExportHandler).Bind(apis.RequireAuth())
 	webhook.Load(e.Group("/webhook"))
 }
