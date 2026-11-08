@@ -65,6 +65,13 @@ func Backfill(app core.App) error {
 // non fanno niente. Se gli snapshot non si possono elencare (S3 spento o
 // irraggiungibile) lo dice nel log e ritorna nil senza segnare niente: ci
 // riprova al prossimo avvio. Uno snapshot che non si legge si salta.
+//
+// Si salta anche uno snapshot con meno della meta' dei soci attivi
+// dell'ultimo accettato: e' la fotografia di un registro a meta' sync (il
+// 14 maggio 2026 ne aveva 25 su 2680), non una vera uscita di massa, e
+// confrontarlo darebbe migliaia di left e altrettanti joined il giorno
+// dopo. E' la stessa soglia con cui il sync dal vivo rifiuta una lista
+// Area32 troncata. Il confronto riparte dallo snapshot buono successivo.
 func BackfillFrom(app core.App, src SnapshotSource) error {
 	if !backfillMu.TryLock() {
 		app.Logger().Info("[memberchanges] backfill gia' in corso")
@@ -98,6 +105,11 @@ func BackfillFrom(app core.App, src SnapshotSource) error {
 			app.Logger().Warn("[memberchanges] backfill: snapshot non valido, saltato", "key", d.key, "err", err)
 			continue
 		}
+		if prev != nil && Implausible(prev, next) {
+			app.Logger().Warn("[memberchanges] backfill: snapshot con troppi pochi attivi, saltato",
+				"key", d.key, "active", ActiveCount(next), "before", ActiveCount(prev))
+			continue
+		}
 		used++
 		if prev != nil {
 			if err := Record(app, Diff(prev, next), d.day); err != nil {
@@ -122,6 +134,24 @@ func BackfillFrom(app core.App, src SnapshotSource) error {
 	}
 	app.Logger().Info("[memberchanges] backfill finito", "snapshots", used, "in", time.Since(started).String())
 	return nil
+}
+
+// ActiveCount e' il numero di soci attivi in una fotografia.
+func ActiveCount(s Snapshot) int {
+	n := 0
+	for _, st := range s {
+		if st.Active {
+			n++
+		}
+	}
+	return n
+}
+
+// Implausible dice se next non puo' essere il registro vero il giorno dopo
+// prev: meno della meta' dei soci attivi. Un registro a meta' sync, non un
+// movimento da registrare.
+func Implausible(prev, next Snapshot) bool {
+	return ActiveCount(next)*2 < ActiveCount(prev)
 }
 
 type daySnapshot struct {

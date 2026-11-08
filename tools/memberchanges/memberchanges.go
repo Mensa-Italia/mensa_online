@@ -12,7 +12,8 @@
 // tools/regionkey), local_office (la sede con quella chiave, vuota se la
 // regione non ne ha), kind e day (la mezzanotte di Roma del giorno del
 // movimento). I movimenti verso o dall'estero (area vuota o "NaN") non
-// scrivono la riga del lato senza regione.
+// scrivono la riga del lato senza regione, e un cambio di area da o verso
+// l'area vuota non e' un trasferimento (vedi Diff).
 package memberchanges
 
 import (
@@ -116,8 +117,12 @@ func EnsureCollection(app core.App) error {
 //   - attivo prima e dopo, con chiave di regione diversa: moved_out nella
 //     regione di prima e moved_in in quella di dopo.
 //
-// L'area vuota o "NaN" (estero, sconosciuta) ha chiave "": il movimento
-// c'e' lo stesso, con la chiave vuota da quel lato.
+// L'area vuota o "NaN" (estero, sconosciuta) ha chiave "". Per joined e
+// left il movimento c'e' lo stesso, con la chiave vuota (Record non lo
+// scrive). Un cambio di area da o verso la chiave vuota non e' un
+// trasferimento: l'area vuota e' quasi sempre un registro a meta' sync, non
+// un socio emigrato, e un trasferimento senza regione dall'altro lato non
+// direbbe niente a nessuna sede.
 func Diff(prev, next Snapshot) []Change {
 	ids := make([]string, 0, len(next)+len(prev))
 	for id := range next {
@@ -147,7 +152,7 @@ func Diff(prev, next Snapshot) []Change {
 			out = append(out, Change{Member: id, Name: name, Kind: Left, RegionKey: regionkey.OfRegistryArea(before.Area)})
 		case wasActive && isActive:
 			from, to := regionkey.OfRegistryArea(before.Area), regionkey.OfRegistryArea(after.Area)
-			if from != to {
+			if from != to && from != "" && to != "" {
 				out = append(out,
 					Change{Member: id, Name: name, Kind: MovedOut, RegionKey: from},
 					Change{Member: id, Name: name, Kind: MovedIn, RegionKey: to},

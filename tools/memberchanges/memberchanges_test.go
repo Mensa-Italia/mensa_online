@@ -51,8 +51,8 @@ func TestDiff(t *testing.T) {
 		"3": {Area: "Valle d'Aosta", Active: true, Name: "Tre"},  // Piemonte -> Lombardia
 		"4": {Area: "Basilicata", Active: true, Name: "Quattro"}, // stessa chiave (Puglia)
 		"5": {Area: "Lazio", Active: false, Name: "Cinque"},      // si riattiva
-		"6": {Area: "Toscana", Active: true, Name: "Sei"},        // va all'estero
-		"7": {Area: "NaN", Active: true, Name: "Sette"},          // torna dall'estero
+		"6": {Area: "Toscana", Active: true, Name: "Sei"},        // perde l'area: nessun movimento
+		"7": {Area: "NaN", Active: true, Name: "Sette"},          // acquista l'area: nessun movimento
 		"8": {Area: "Sicilia", Active: false, Name: "Otto"},      // resta non attivo
 		"9": {Area: "Marche", Active: true, Name: "Nove"},        // diventa non attivo
 	}
@@ -76,10 +76,7 @@ func TestDiff(t *testing.T) {
 		{Member: "3", Name: "Tre", Kind: "moved_out", RegionKey: "Piemonte"},
 		{Member: "3", Name: "Tre", Kind: "moved_in", RegionKey: "Lombardia"},
 		{Member: "5", Name: "Cinque", Kind: "joined", RegionKey: "Lazio"},
-		{Member: "6", Name: "Sei", Kind: "moved_out", RegionKey: "Toscana"},
-		{Member: "6", Name: "Sei", Kind: "moved_in", RegionKey: ""},
-		{Member: "7", Name: "Sette", Kind: "moved_out", RegionKey: ""},
-		{Member: "7", Name: "Sette", Kind: "moved_in", RegionKey: "Veneto"},
+		// 6 e 7: da o verso l'area vuota non e' un trasferimento
 		{Member: "9", Name: "Nove", Kind: "left", RegionKey: "Marche"},
 	}
 	if !slices.Equal(got, want) {
@@ -185,7 +182,9 @@ func TestBackfill(t *testing.T) {
 		"snapshot_members/2026-11-01_00-00-00.json.gz": `[{"id":"1","area":"Lazio","is_active":true}]`,
 		// secondo dello stesso giorno: ignorato
 		"snapshot_members/2026-11-01_09-00-00.json.gz": `[{"id":"1","area":"Lazio","is_active":true},{"id":"9","area":"Lazio","is_active":true}]`,
-		// entra 2
+		// registro a meta' sync (0 attivi su 1): saltato, niente left di 1
+		"snapshot_members/2026-11-02_00-00-00.json.gz": `[{"id":"1","area":"Lazio","is_active":false}]`,
+		// entra 2 (confrontato con il primo giorno, non con quello saltato)
 		"snapshot_members/2026-11-03_00-00-00.json.gz": `[{"id":"1","area":"Lazio","is_active":true},{"id":"2","area":"Lazio","is_active":true}]`,
 		"snapshot_members/altro.txt":                   `x`,
 	}}
@@ -202,7 +201,7 @@ func TestBackfill(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(rows) != 3 {
-		t.Fatalf("righe: %+v", rows)
+		t.Fatalf("righe: %+v (lo snapshot del 2 novembre va saltato)", rows)
 	}
 	if rows[0].Member != "2" || rows[0].Kind != "joined" || rows[0].Day != "2026-11-02 23:00:00.000Z" {
 		t.Errorf("primo movimento: %+v", rows[0])
