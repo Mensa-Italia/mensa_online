@@ -49,6 +49,12 @@ var Kinds = []string{Joined, Left, MovedIn, MovedOut}
 // (local_offices_admins). La collection deve avere il campo local_office.
 const AdminReadRule = `@request.auth.id != "" && (@request.auth.powers:each ?= "super" || (@collection.local_offices_admins.user ?= @request.auth.id && @collection.local_offices_admins.local_office ?= local_office))`
 
+// ChangesReadRule e' la regola di lettura di members_registry_changes: gli
+// arrivi (joined, moved_in) li legge ogni socio loggato, come il registro
+// soci che gia' vede, cosi' la pagina del gruppo locale mostra a tutti i
+// nuovi della settimana; le uscite restano agli admin della sede e ai super.
+const ChangesReadRule = `@request.auth.id != "" && (kind = "joined" || kind = "moved_in" || @request.auth.powers:each ?= "super" || (@collection.local_offices_admins.user ?= @request.auth.id && @collection.local_offices_admins.local_office ?= local_office))`
+
 // State e' lo stato di un socio in una fotografia del registro.
 type State struct {
 	Area   string
@@ -86,7 +92,7 @@ func EnsureCollection(app core.App) error {
 		return err
 	}
 	c := core.NewBaseCollection(Table)
-	rule := AdminReadRule
+	rule := ChangesReadRule
 	c.ListRule = &rule
 	c.ViewRule = &rule
 	c.Fields.Add(

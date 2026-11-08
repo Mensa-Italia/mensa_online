@@ -1,12 +1,14 @@
 // Package officestats materializza le statistiche dei gruppi locali, per la
 // pagina "Gruppo locale" dell'app: una riga per sede in local_office_stats
-// (leggibile da ogni socio loggato) e una riga per sede e mese della
-// stagione in local_office_stats_monthly (solo admin della sede e super).
+// (leggibile da ogni socio loggato) e una riga per sede e mese, dall'inizio
+// della stagione precedente a oggi, in local_office_stats_monthly (solo
+// admin della sede e super): i grafici dell'area segreteria confrontano la
+// stagione con quella prima.
 //
 // Si ricalcola nella catena del refresh delle classifiche, ogni quarto
 // d'ora (main/crons, leaderboard.AfterRefresh), in una sola transazione:
 // le righe si aggiornano per id, quelle che non servono piu' (una sede
-// sparita, i mesi della stagione chiusa) si cancellano.
+// sparita, i mesi usciti dalla finestra) si cancellano.
 //
 // Le regole, con region_key la chiave della sede (tools/regionkey):
 //
@@ -176,15 +178,17 @@ type input struct {
 	offices   []office
 	active    map[string]int      // chiave di regione -> soci attivi
 	deals     map[string]int      // chiave di regione -> convenzioni attive
-	events    []event             // eventi dall'inizio della stagione in poi
+	events    []event             // eventi dall'inizio della stagione precedente in poi
 	attendees map[string][]string // id evento -> timbratori
-	changes   []change            // movimenti dall'inizio della finestra
+	changes   []change            // movimenti dall'inizio della stagione precedente in poi
 }
 
 func load(app core.App, now time.Time, current int) (*input, error) {
 	in := &input{active: map[string]int{}, deals: map[string]int{}, attendees: map[string][]string{}}
-	params := season.Params(current)
-	start, _ := season.Bounds(current)
+	// la finestra: dall'inizio della stagione precedente alla fine di questa
+	windowStart, _ := season.Bounds(current - 1)
+	_, windowEnd := season.Bounds(current)
+	params := dbx.Params{"start": windowStart.Format(sqlLayout), "end": windowEnd.Format(sqlLayout)}
 	nowValue, err := types.ParseDateTime(now)
 	if err != nil {
 		return nil, err
@@ -284,8 +288,8 @@ func load(app core.App, now time.Time, current int) (*input, error) {
 	// Movimenti dall'inizio della stagione o degli ultimi 30 giorni, quale
 	// viene prima.
 	since := memberchanges.Day(now).AddDate(0, 0, -31)
-	if start.Before(since) {
-		since = start
+	if windowStart.Before(since) {
+		since = windowStart
 	}
 	sinceValue, err := types.ParseDateTime(since)
 	if err != nil {
@@ -324,16 +328,16 @@ func isLeft(kind string) bool { return kind == memberchanges.Left || kind == mem
 
 func monthOf(t time.Time) string { return season.Local(t).Format("2006-01") }
 
-// seasonMonths sono i mesi (ora di Roma, "AAAA-MM") dall'inizio della
-// stagione al mese di now compreso.
-func seasonMonths(current int, now time.Time) []string {
-	start, _ := season.Bounds(current)
+// windowMonths sono i mesi (ora di Roma, "AAAA-MM") dall'inizio della
+// stagione precedente a current al mese di now compreso: al massimo 24.
+func windowMonths(current int, now time.Time) []string {
+	start, _ := season.Bounds(current - 1)
 	first := season.Local(start)
 	last := monthOf(now)
 	var out []string
 	for m := time.Date(first.Year(), first.Month(), 1, 12, 0, 0, 0, first.Location()); ; m = m.AddDate(0, 1, 0) {
 		key := m.Format("2006-01")
-		if key > last || len(out) >= 12 {
+		if key > last || len(out) >= 24 {
 			break
 		}
 		out = append(out, key)
@@ -341,10 +345,22 @@ func seasonMonths(current int, now time.Time) []string {
 	return out
 }
 
+// seasonOfMonth e' l'etichetta della stagione di un mese "AAAA-MM".
+func seasonOfMonth(month string) string {
+	t, err := time.Parse("2006-01", month)
+	if err != nil {
+		return ""
+	}
+	return season.Label(season.Of(time.Date(t.Year(), t.Month(), 15, 12, 0, 0, 0, time.UTC)))
+}
+
+const sqlLayout = "2006-01-02 15:04:05"
+
 func compute(in *input, now time.Time, current int) (stats, monthly []row) {
 	start, end := season.Bounds(current)
+	windowStart, _ := season.Bounds(current - 1)
 	label := season.Label(current)
-	months := seasonMonths(current, now)
+	months := windowMonths(current, now)
 	today := memberchanges.Day(now)
 	cutoff7, cutoff30 := today.AddDate(0, 0, -7), today.AddDate(0, 0, -30)
 	computedAt, _ := types.ParseDateTime(now)
@@ -371,7 +387,7 @@ func compute(in *input, now time.Time, current int) (stats, monthly []row) {
 				seasonEvents++
 				attendance += len(stampers)
 			}
-			if e.when.Before(start) || !e.when.Before(end) {
+			if e.when.Before(windowStart) || !e.when.Before(end) {
 				continue
 			}
 			m := monthOf(e.when)
@@ -402,7 +418,7 @@ func compute(in *input, now time.Time, current int) (stats, monthly []row) {
 					left30++
 				}
 			}
-			if !c.day.Before(start) {
+			if !c.day.Before(windowStart) {
 				m := monthOf(c.day)
 				if isNew(c.kind) {
 					monthNew[m]++
@@ -447,7 +463,7 @@ func compute(in *input, now time.Time, current int) (stats, monthly []row) {
 				"local_office":       o.id,
 				"region_key":         o.key,
 				"month":              m,
-				"season":             label,
+				"season":             seasonOfMonth(m),
 				"events":             monthEvents[m],
 				"attendance":         monthAttendance[m],
 				"distinct_attendees": len(monthDistinct[m]),

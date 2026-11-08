@@ -53,7 +53,7 @@ func TestLocalGroupSchema(t *testing.T) {
 	}
 
 	for name, rule := range map[string]string{
-		memberchanges.Table:      memberchanges.AdminReadRule,
+		memberchanges.Table:      memberchanges.ChangesReadRule,
 		officestats.Table:        `@request.auth.id != ""`,
 		officestats.MonthlyTable: memberchanges.AdminReadRule,
 	} {
@@ -171,9 +171,18 @@ func TestLocalOfficeStats(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(monthly) != 2 || monthly[0].Id != "loPU_2026-10" || monthly[1].Id != "loPU_2026-11" {
+	// Dall'ottobre della stagione precedente al mese di adesso: 14 mesi,
+	// i primi dodici senza movimenti ne' eventi, con l'etichetta della loro stagione.
+	if len(monthly) != 14 || monthly[0].Id != "loPU_2025-10" || monthly[13].Id != "loPU_2026-11" {
 		t.Fatalf("mesi: %v", ids(monthly))
 	}
+	if monthly[0].GetString("season") != "2025/26" || monthly[12].GetString("season") != "2026/27" {
+		t.Errorf("stagione dei mesi: %s, %s", monthly[0].GetString("season"), monthly[12].GetString("season"))
+	}
+	if monthly[0].GetInt("events") != 0 || monthly[0].GetInt("members_active") != 3 {
+		t.Errorf("primo mese: %v", monthly[0].PublicExport())
+	}
+	monthly = monthly[12:]
 	check := func(r *core.Record, values map[string]int) {
 		t.Helper()
 		for field, n := range values {
@@ -194,12 +203,13 @@ func TestLocalOfficeStats(t *testing.T) {
 		t.Errorf("Lazio: %v", lazio.PublicExport())
 	}
 
-	// Nella stagione dopo i mesi vecchi spariscono.
+	// Nella stagione dopo la finestra scorre: restano i mesi della stagione
+	// appena chiusa e il primo della nuova, quelli piu' vecchi spariscono.
 	if err := officestats.RefreshAt(app, time.Date(2027, time.October, 2, 12, 0, 0, 0, time.UTC)); err != nil {
 		t.Fatal(err)
 	}
 	monthly, _ = app.FindRecordsByFilter(officestats.MonthlyTable, "local_office = 'loPU'", "month", 0, 0)
-	if len(monthly) != 1 || monthly[0].Id != "loPU_2027-10" {
+	if len(monthly) != 13 || monthly[0].Id != "loPU_2026-10" || monthly[12].Id != "loPU_2027-10" {
 		t.Errorf("mesi della stagione nuova: %v", ids(monthly))
 	}
 }
