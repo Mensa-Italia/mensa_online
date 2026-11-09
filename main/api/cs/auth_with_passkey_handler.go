@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"mensadb/main/api/zitadelauth"
+	"mensadb/tools/dbtools"
 	"mensadb/tools/zauth"
 
 	"github.com/pocketbase/pocketbase/apis"
@@ -105,6 +106,14 @@ func AuthWithPasskeyFinishHandler(e *core.RequestEvent) error {
 		// client ricade sulla password, che passa per Area32 e riprovisiona il
 		// record — cioe` il caso si auto-ripara invece di bloccare l'utente.
 		e.App.Logger().Warn("[passkey] nessun record PB per il sub", "sub", claims.Subject, "err", err)
+		return apis.NewApiError(http.StatusConflict, passkeyUnavailableMessage, nil)
+	}
+
+	// Area32 ha rifiutato la password di questo socio (cambiata sull'area soci
+	// o socio tolto): la passkey non passa da Area32, quindi qui non si sa
+	// ancora se puo` entrare. Stessa risposta di sopra: il client ricade sulla
+	// password, che passa per Area32 e, se giusta, toglie il segno.
+	if dbtools.Area32PasswordRejected(record) {
 		return apis.NewApiError(http.StatusConflict, passkeyUnavailableMessage, nil)
 	}
 

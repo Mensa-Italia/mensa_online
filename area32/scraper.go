@@ -36,6 +36,23 @@ const maxResumeConcurrency = 5
 var ErrUnableToConnect = errors.New("ErrUnableToConnect")
 var ErrInvalidCredentials = errors.New("ErrInvalidCredentials")
 
+// ErrUnexpectedPage: dopo il login la home non ha la tessera ma nemmeno il
+// modulo di login. Non e` una password sbagliata: e` Area32 che risponde con
+// una pagina che lo scraper non riconosce (manutenzione, layout cambiato).
+// Chi chiama la tratta come Area32 non disponibile, non come credenziali
+// rifiutate: altrimenti un cambio di layout chiuderebbe fuori tutti.
+var ErrUnexpectedPage = errors.New("ErrUnexpectedPage")
+
+// classifyHomeWithoutCard decide perche' la home dopo il login non ha il
+// numero di tessera: se c'e` ancora il campo password Area32 ha rimandato al
+// login, cioe` ha rifiutato le credenziali; altrimenti la pagina e` un'altra.
+func classifyHomeWithoutCard(homeRaw []byte) error {
+	if bytes.Contains(bytes.ToLower(homeRaw), []byte(`type="password"`)) {
+		return ErrInvalidCredentials
+	}
+	return ErrUnexpectedPage
+}
+
 type Area32User struct {
 	Id                 string
 	ImageUrl           string
@@ -227,7 +244,7 @@ func (api *ScraperApi) DoLoginAndRetrieveMain(email, password string) (*Area32Us
 			head = head[:400]
 		}
 		log.Printf("area32 login: empty userId, home head 400 chars: %q", string(head))
-		return nil, ErrInvalidCredentials
+		return nil, classifyHomeWithoutCard(homeRaw)
 	}
 	expireDate := retrieveExpireDate(doc)
 	fullName := retrieveFullName(doc)

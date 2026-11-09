@@ -67,6 +67,9 @@ func main() {
 		go importers.GetFullMailList()
 		tolgee.Load(env.GetTolgeeKey(), e.App)
 		e.Router.Bind(zitadelauth.LoadAuth())
+		// Password rifiutata da Area32 => 401 su tutto finche' non si rientra
+		// con quella giusta. La priority lo mette dopo entrambi i loader di auth.
+		e.Router.Bind(zitadelauth.RejectStaleArea32Password())
 		// Gate di integrita`: DEVE stare dopo i loader di auth (Zitadel e
 		// quello nativo di PocketBase) perche' legge e.Auth. La priority del
 		// middleware (appena dopo il rate limit) garantisce l'ordine a

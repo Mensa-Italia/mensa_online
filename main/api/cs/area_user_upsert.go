@@ -6,6 +6,7 @@ import (
 	"log"
 	"mensadb/area32"
 	"mensadb/importers"
+	"mensadb/tools/dbtools"
 	"mensadb/tools/generic"
 	"mensadb/tools/integrity"
 	"mensadb/tools/payment"
@@ -39,6 +40,7 @@ func upsertUserFromAreaUser(app core.App, areaUser *area32.Area32User, email, pa
 		newUser.Set("is_membership_active", areaUser.IsMembershipActive)
 		// I nuovi soci nascono "watched": il livello "free" si da` solo a mano.
 		newUser.Set("access_level", string(integrity.LevelWatched))
+		dbtools.ClearArea32PasswordRejected(newUser)
 
 		powerList := []string{}
 		if areaUser.IsATestMaker {
@@ -86,6 +88,9 @@ func upsertUserFromAreaUser(app core.App, areaUser *area32.Area32User, email, pa
 	byUser.Set("expire_membership", areaUser.ExpireDate)
 	byUser.SetPassword(password)
 	byUser.Set("is_membership_active", areaUser.IsMembershipActive)
+	// Area32 ha appena accettato questa password: se il socio era segnato
+	// per una password rifiutata, da qui torna a entrare.
+	dbtools.ClearArea32PasswordRejected(byUser)
 
 	powers := byUser.GetStringSlice("powers")
 	if areaUser.IsATestMaker && !slices.Contains(powers, "testmakers") {
