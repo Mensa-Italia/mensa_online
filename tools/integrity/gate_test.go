@@ -442,6 +442,52 @@ type stringGetter string
 
 func (s stringGetter) GetString(string) string { return string(s) }
 
+// memberRecord e` un record utente finto con livello, flag di Area32 e
+// scadenza della tessera.
+type memberRecord struct {
+	level  string
+	active bool
+	expire string
+}
+
+func (m memberRecord) GetString(key string) string {
+	switch key {
+	case "access_level":
+		return m.level
+	case "expire_membership":
+		return m.expire
+	}
+	return ""
+}
+
+func (m memberRecord) GetBool(key string) bool { return key == "is_membership_active" && m.active }
+
+func TestLevelOfDeactivated(t *testing.T) {
+	now := time.Date(2026, 11, 9, 12, 0, 0, 0, time.UTC)
+	future := "2027-08-25 22:00:00.000Z"
+	past := "2026-10-01 22:00:00.000Z"
+	cases := []struct {
+		name string
+		rec  memberRecord
+		want Level
+	}{
+		{"disattivato con tessera valida", memberRecord{"watched", false, future}, LevelBlocked},
+		{"disattivato anche se free a mano", memberRecord{"free", false, future}, LevelBlocked},
+		{"disattivato senza livello", memberRecord{"", false, future}, LevelBlocked},
+		{"attivo resta watched", memberRecord{"watched", true, future}, LevelWatched},
+		{"attivo resta free", memberRecord{"free", true, future}, LevelFree},
+		{"scaduto: ci pensa la pagina di rinnovo", memberRecord{"watched", false, past}, LevelWatched},
+		{"scadenza assente non blocca", memberRecord{"watched", false, ""}, LevelWatched},
+		{"scadenza illeggibile non blocca", memberRecord{"free", false, "boh"}, LevelFree},
+		{"blocked a mano resta blocked", memberRecord{"blocked", true, future}, LevelBlocked},
+	}
+	for _, c := range cases {
+		if got := levelAt(c.rec, now); got != c.want {
+			t.Errorf("%s: levelAt = %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
 func TestRequiresProof(t *testing.T) {
 	cases := []struct {
 		method, path string

@@ -34,9 +34,20 @@ const (
 
 // LevelOf legge il livello d'accesso da un record utente. Vuoto, assente (la
 // migrazione non e` ancora girata) o sconosciuto valgono "free".
+//
+// Un socio disattivato su Area32 (vedi [Deactivated]) vale "blocked"
+// qualunque sia il suo access_level, anche "free": la disattivazione decide
+// la segreteria e l'app non deve aprirsi finche' Area32 non lo riattiva.
 func LevelOf(rec interface{ GetString(string) string }) Level {
+	return levelAt(rec, time.Now())
+}
+
+func levelAt(rec interface{ GetString(string) string }, now time.Time) Level {
 	if rec == nil {
 		return LevelFree
+	}
+	if deactivatedAt(rec, now) {
+		return LevelBlocked
 	}
 	switch Level(rec.GetString("access_level")) {
 	case LevelWatched:
@@ -45,6 +56,35 @@ func LevelOf(rec interface{ GetString(string) string }) Level {
 		return LevelBlocked
 	}
 	return LevelFree
+}
+
+// expireLayout e` il formato con cui PocketBase rende i campi data
+// (types.DefaultDateLayout), ripetuto qui per non legare il pacchetto a PB.
+const expireLayout = "2006-01-02 15:04:05.000Z"
+
+// Deactivated dice se il socio e` stato disattivato su Area32 prima della
+// scadenza della tessera: users.is_membership_active e` false (Area32 non lo
+// da` piu` attivo: niente "Registro soci" al login, o assente dal registro
+// nel sync) ma users.expire_membership e` ancora nel futuro.
+//
+// La tessera semplicemente scaduta NON conta: quella la gestisce gia` l'app
+// con la pagina di rinnovo, guardando expire_membership. Una data assente o
+// illeggibile non blocca nessuno, e nemmeno un record che non sa dare il
+// flag: sbagliare qui chiude fuori un socio in regola.
+func Deactivated(rec interface{ GetString(string) string }) bool {
+	return deactivatedAt(rec, time.Now())
+}
+
+func deactivatedAt(rec interface{ GetString(string) string }, now time.Time) bool {
+	b, ok := rec.(interface{ GetBool(string) bool })
+	if !ok || b.GetBool("is_membership_active") {
+		return false
+	}
+	exp, err := time.Parse(expireLayout, rec.GetString("expire_membership"))
+	if err != nil || exp.IsZero() {
+		return false
+	}
+	return exp.After(now)
 }
 
 // IsMCP dice se il path e` quello del server MCP.

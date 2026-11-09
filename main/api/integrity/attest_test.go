@@ -59,6 +59,41 @@ func createUser(t *testing.T, app core.App, id string) *core.Record {
 	return r
 }
 
+// Il blocco dei soci disattivati legge flag e scadenza da un record PB vero:
+// questo test fissa che il formato della data e il bool arrivano come
+// tools.LevelOf se li aspetta.
+func TestLevelOfDeactivatedRealRecord(t *testing.T) {
+	app := migratedApp(t)
+	user := createUser(t, app, "usera0000000009")
+	user.Set("access_level", "watched")
+	user.Set("expire_membership", time.Now().AddDate(1, 0, 0))
+
+	user.Set("is_membership_active", true)
+	if got := tools.LevelOf(user); got != tools.LevelWatched {
+		t.Fatalf("attivo: %q, want watched", got)
+	}
+
+	user.Set("is_membership_active", false)
+	if got := tools.LevelOf(user); got != tools.LevelBlocked {
+		t.Fatalf("disattivato con tessera valida: %q, want blocked", got)
+	}
+	if err := app.Save(user); err != nil {
+		t.Fatal(err)
+	}
+	fresh, err := app.FindRecordById("users", user.Id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := tools.LevelOf(fresh); got != tools.LevelBlocked {
+		t.Fatalf("riletto dal DB: %q, want blocked", got)
+	}
+
+	fresh.Set("expire_membership", time.Now().AddDate(0, -1, 0))
+	if got := tools.LevelOf(fresh); got != tools.LevelWatched {
+		t.Fatalf("scaduto: %q, want watched (ci pensa la pagina di rinnovo)", got)
+	}
+}
+
 func TestPBKeyStore(t *testing.T) {
 	app := migratedApp(t)
 	user := createUser(t, app, "usera0000000001")
