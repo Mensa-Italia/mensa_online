@@ -63,6 +63,16 @@ func newExportApp(t testing.TB) (*tests.TestApp, map[string]string) {
 	if err := memberchanges.Record(app, []memberchanges.Change{{Member: "4005", Name: "Nuovo Socio", Kind: memberchanges.Joined, RegionKey: "Puglia"}}, time.Now()); err != nil {
 		t.Fatal(err)
 	}
+	// Due usciti della sede: uno di 10 giorni fa, fuori dai 7 che vedono
+	// gli admin della sede, e uno di 2 giorni fa.
+	save("members_registry", "4006", map[string]any{"name": "Uscito Vecchio", "area": "Puglia", "is_active": false})
+	save("members_registry", "4007", map[string]any{"name": "Uscito Recente", "area": "Puglia", "is_active": false})
+	for member, ago := range map[string]int{"4006": 10, "4007": 2} {
+		name := map[string]string{"4006": "Uscito Vecchio", "4007": "Uscito Recente"}[member]
+		if err := memberchanges.Record(app, []memberchanges.Change{{Member: member, Name: name, Kind: memberchanges.Left, RegionKey: "Puglia"}}, time.Now().AddDate(0, 0, -ago)); err != nil {
+			t.Fatal(err)
+		}
+	}
 
 	users, err := app.FindCollectionByNameOrId("users")
 	if err != nil {
@@ -114,6 +124,61 @@ func readSheet(t testing.TB, res *http.Response) [][]string {
 		t.Fatal(err)
 	}
 	return rows
+}
+
+// sheetMembers ritorna le tessere del foglio Soci, senza intestazione,
+// separate da virgola.
+func sheetMembers(t testing.TB, res *http.Response) string {
+	t.Helper()
+	var got []string
+	for _, r := range readSheet(t, res)[1:] {
+		got = append(got, r[0])
+	}
+	return strings.Join(got, ",")
+}
+
+// La collection members_registry_changes: gli arrivi li vede ogni socio, le
+// uscite il segretario della sede solo degli ultimi 7 giorni, il super
+// tutte.
+func TestMembersRegistryChangesExitsWindow(t *testing.T) {
+	first, tokens := newExportApp(t)
+	first.Cleanup()
+	factory := func(t testing.TB) *tests.TestApp {
+		app, _ := newExportApp(t)
+		return app
+	}
+	url := "/api/collections/" + memberchanges.Table + "/records?sort=member&fields=member&perPage=50"
+	scenarios := []tests.ApiScenario{
+		{
+			Name:            "socio qualunque: solo gli arrivi",
+			Method:          http.MethodGet,
+			URL:             url,
+			Headers:         map[string]string{"Authorization": tokens["4002"]},
+			ExpectedStatus:  http.StatusOK,
+			ExpectedContent: []string{`"totalItems":1`, `"member":"4005"`},
+		},
+		{
+			Name:               "segretario: arrivi e uscite degli ultimi 7 giorni",
+			Method:             http.MethodGet,
+			URL:                url,
+			Headers:            map[string]string{"Authorization": tokens["4001"]},
+			ExpectedStatus:     http.StatusOK,
+			ExpectedContent:    []string{`"totalItems":2`, `"member":"4005"`, `"member":"4007"`},
+			NotExpectedContent: []string{`"member":"4006"`},
+		},
+		{
+			Name:            "super: tutto",
+			Method:          http.MethodGet,
+			URL:             url,
+			Headers:         map[string]string{"Authorization": tokens["4003"]},
+			ExpectedStatus:  http.StatusOK,
+			ExpectedContent: []string{`"totalItems":3`, `"member":"4005"`, `"member":"4006"`, `"member":"4007"`},
+		},
+	}
+	for _, s := range scenarios {
+		s.TestAppFactory = factory
+		s.Test(t)
+	}
 }
 
 func TestLocalOfficeMembersExport(t *testing.T) {
@@ -182,15 +247,54 @@ func TestLocalOfficeMembersExport(t *testing.T) {
 			},
 		},
 		{
-			Name:            "segretario: usciti, nessuno",
+			Name:            "segretario: usciti, solo gli ultimi 7 giorni",
 			Method:          http.MethodGet,
 			URL:             url + "?kind=left",
 			Headers:         map[string]string{"Authorization": tokens["4001"]},
 			ExpectedStatus:  http.StatusOK,
 			ExpectedContent: []string{"PK"},
 			AfterTestFunc: func(t testing.TB, app *tests.TestApp, res *http.Response) {
-				if rows := readSheet(t, res); len(rows) != 1 {
-					t.Errorf("righe: %v", rows)
+				if got := sheetMembers(t, res); got != "4007" {
+					t.Errorf("usciti: %q, atteso 4007", got)
+				}
+			},
+		},
+		{
+			Name:            "segretario: usciti, from vecchio non allarga",
+			Method:          http.MethodGet,
+			URL:             url + "?kind=left&from=" + time.Now().AddDate(0, 0, -60).Format("2006-01-02"),
+			Headers:         map[string]string{"Authorization": tokens["4001"]},
+			ExpectedStatus:  http.StatusOK,
+			ExpectedContent: []string{"PK"},
+			AfterTestFunc: func(t testing.TB, app *tests.TestApp, res *http.Response) {
+				if got := sheetMembers(t, res); got != "4007" {
+					t.Errorf("usciti: %q, atteso 4007", got)
+				}
+			},
+		},
+		{
+			Name:            "segretario: usciti, periodo tutto vecchio",
+			Method:          http.MethodGet,
+			URL:             url + "?kind=left&from=" + time.Now().AddDate(0, 0, -12).Format("2006-01-02") + "&to=" + time.Now().AddDate(0, 0, -9).Format("2006-01-02"),
+			Headers:         map[string]string{"Authorization": tokens["4001"]},
+			ExpectedStatus:  http.StatusOK,
+			ExpectedContent: []string{"PK"},
+			AfterTestFunc: func(t testing.TB, app *tests.TestApp, res *http.Response) {
+				if got := sheetMembers(t, res); got != "" {
+					t.Errorf("usciti: %q, atteso nessuno", got)
+				}
+			},
+		},
+		{
+			Name:            "super: usciti, tutti",
+			Method:          http.MethodGet,
+			URL:             url + "?kind=left",
+			Headers:         map[string]string{"Authorization": tokens["4003"]},
+			ExpectedStatus:  http.StatusOK,
+			ExpectedContent: []string{"PK"},
+			AfterTestFunc: func(t testing.TB, app *tests.TestApp, res *http.Response) {
+				if got := sheetMembers(t, res); got != "4006,4007" && got != "4007,4006" {
+					t.Errorf("usciti: %q, attesi 4006 e 4007", got)
 				}
 			},
 		},

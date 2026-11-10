@@ -49,11 +49,22 @@ var Kinds = []string{Joined, Left, MovedIn, MovedOut}
 // (local_offices_admins). La collection deve avere il campo local_office.
 const AdminReadRule = `@request.auth.id != "" && (@request.auth.powers:each ?= "super" || (@collection.local_offices_admins.user ?= @request.auth.id && @collection.local_offices_admins.local_office ?= local_office))`
 
+// ExitsWindowDays sono i giorni di uscite (left, moved_out) che gli admin di
+// una sede vedono: oggi e i 6 giorni prima. I super le vedono tutte.
+const ExitsWindowDays = 7
+
 // ChangesReadRule e' la regola di lettura di members_registry_changes: gli
 // arrivi (joined, moved_in) li legge ogni socio loggato, come il registro
 // soci che gia' vede, cosi' la pagina del gruppo locale mostra a tutti i
-// nuovi della settimana; le uscite restano agli admin della sede e ai super.
-const ChangesReadRule = `@request.auth.id != "" && (kind = "joined" || kind = "moved_in" || @request.auth.powers:each ?= "super" || (@collection.local_offices_admins.user ?= @request.auth.id && @collection.local_offices_admins.local_office ?= local_office))`
+// nuovi della settimana. Le uscite le vedono i super, tutte, e gli admin
+// della sede, solo quelle degli ultimi ExitsWindowDays giorni: day e' la
+// mezzanotte di Roma in UTC, e da adesso meno 7 giorni restano proprio
+// oggi e i 6 giorni prima.
+const ChangesReadRule = `@request.auth.id != "" && (kind = "joined" || kind = "moved_in" || @request.auth.powers:each ?= "super" || (day >= strftime('%Y-%m-%d %H:%M:%fZ', 'now', '-7 days') && @collection.local_offices_admins.user ?= @request.auth.id && @collection.local_offices_admins.local_office ?= local_office))`
+
+// ChangesReadRuleBefore7Days e' la ChangesReadRule di prima del limite di 7
+// giorni, per la down della migrazione 1794100004.
+const ChangesReadRuleBefore7Days = `@request.auth.id != "" && (kind = "joined" || kind = "moved_in" || @request.auth.powers:each ?= "super" || (@collection.local_offices_admins.user ?= @request.auth.id && @collection.local_offices_admins.local_office ?= local_office))`
 
 // State e' lo stato di un socio in una fotografia del registro.
 type State struct {

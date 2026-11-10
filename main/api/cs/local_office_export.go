@@ -47,7 +47,9 @@ type exportRow struct {
 // l'area segreteria dell'app.
 //
 //   - kind=new (predefinito): i movimenti joined e moved_in della sede;
-//   - kind=left: i movimenti left e moved_out;
+//   - kind=left: i movimenti left e moved_out; agli admin della sede solo
+//     quelli degli ultimi memberchanges.ExitsWindowDays giorni, qualunque
+//     from chiedano;
 //   - kind=active: i soci attivi della regione, per nome (from e to non
 //     contano).
 //
@@ -91,6 +93,9 @@ func LocalOfficeMembersExportHandler(e *core.RequestEvent) error {
 		kinds := []any{memberchanges.Joined, memberchanges.MovedIn}
 		if kind == "left" {
 			kinds = []any{memberchanges.Left, memberchanges.MovedOut}
+			if !isSuperExporter(e.Auth) {
+				from, to = clampExitsPeriod(from, to, now)
+			}
 		}
 		rows, err = exportChanges(e.App, officeID, kinds, from, to)
 	}
@@ -130,6 +135,26 @@ func canExportOffice(app core.App, auth *core.Record, officeID string) bool {
 	admin, err := app.FindFirstRecordByFilter("local_offices_admins", "local_office = {:o} && user = {:u}",
 		dbx.Params{"o": officeID, "u": auth.Id})
 	return err == nil && admin != nil
+}
+
+// isSuperExporter dice se auth vede tutte le uscite: un superuser di
+// PocketBase o un utente con powers super.
+func isSuperExporter(auth *core.Record) bool {
+	return auth.IsSuperuser() || (auth.Collection().Name == "users" && dbtools.HasPower(auth, "super"))
+}
+
+// clampExitsPeriod restringe [from, to) agli ultimi
+// memberchanges.ExitsWindowDays giorni (oggi compreso): le uscite che gli
+// admin della sede possono esportare. Un periodo tutto prima resta vuoto.
+func clampExitsPeriod(from, to, now time.Time) (time.Time, time.Time) {
+	first := memberchanges.Day(now).AddDate(0, 0, -(memberchanges.ExitsWindowDays - 1))
+	if from.Before(first) {
+		from = first
+	}
+	if to.Before(from) {
+		to = from
+	}
+	return from, to
 }
 
 // exportPeriod ritorna gli istanti [from, to) dei giorni from e to (ora di
